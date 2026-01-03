@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { Plus, Connection, Delete, VideoCamera, Monitor } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
@@ -28,18 +27,17 @@ const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
 
 const form = ref({
-  name: '',
-  location: '',
-  ip: '',
-  rtspPort: 554,
-  username: '',
-  password: '',
-  rtspPath: '/ISAPI/Streaming/Channels/101',
+  name: 'children',
+  location: '1',
+  ip: '188.0.191.153',
+  rtspPort: 8554,
+  username: 'aikeen',
+  password: 'aikeen',
+  rtspPath: '/user=admin_password=admin_channel=1_stream=0',
   recognitionEnabled: true,
 })
 
 const editingCameraId = ref<number | null>(null)
-const router = useRouter()
 
 onMounted(async () => {
   await loadCameras()
@@ -171,13 +169,13 @@ function startEdit(camera: Camera) {
 
 function resetFormFields() {
   form.value = {
-    name: '',
-    location: '',
-    ip: '',
-    rtspPort: 554,
-    username: '',
-    password: '',
-    rtspPath: '/ISAPI/Streaming/Channels/101',
+    name: 'children',
+    location: '1',
+    ip: '188.0.191.153',
+    rtspPort: 8554,
+    username: 'aikeen',
+    password: 'aikeen',
+    rtspPath: '/user=admin_password=admin_channel=1_stream=0',
     recognitionEnabled: true,
   }
   isEditing.value = false
