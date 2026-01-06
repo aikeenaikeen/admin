@@ -26,6 +26,13 @@ const streamUrl = ref('')
 const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
 
+function getRecognitionStreamUrl(cameraId: number): string {
+  const host = (import.meta as any).env?.VITE_RECOGNITION_STREAM_HOST || window.location.hostname
+  const basePortRaw = (import.meta as any).env?.VITE_RECOGNITION_STREAM_BASE_PORT
+  const basePort = Number(basePortRaw ?? 15000)
+  return `http://${host}:${basePort + cameraId}/video_feed?ts=${Date.now()}`
+}
+
 const form = ref({
   name: 'children',
   location: '1',
@@ -126,7 +133,7 @@ async function viewStream(id: number, withRecognition = false) {
     showRecognition.value = withRecognition
     
     if (withRecognition) {
-      streamUrl.value = `http://localhost:${5000 + id}/video_feed?ts=${Date.now()}`
+      streamUrl.value = getRecognitionStreamUrl(id)
     } else {
       const response = await apiClient.get(`/api/cameras/${id}/stream-url`)
       streamUrl.value = `${response.data.mjpegUrl}?ts=${Date.now()}`
