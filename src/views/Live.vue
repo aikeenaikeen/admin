@@ -19,6 +19,13 @@ const streamUrls = ref<Record<number, string>>({})
 const showRecognition = ref(false)
 const dialogVisible = ref(false)
 
+function getRecognitionStreamUrl(cameraId: number): string {
+  const host = (import.meta as any).env?.VITE_RECOGNITION_STREAM_HOST || window.location.hostname
+  const basePortRaw = (import.meta as any).env?.VITE_RECOGNITION_STREAM_BASE_PORT
+  const basePort = Number(basePortRaw ?? 15000)
+  return `http://${host}:${basePort + cameraId}/video_feed?ts=${Date.now()}`
+}
+
 onMounted(async () => {
   await loadCameras()
 })
@@ -40,7 +47,7 @@ async function openStream(cameraId: number, withRecognition = false) {
     showRecognition.value = withRecognition
     
     if (withRecognition) {
-      streamUrls.value[cameraId] = `http://localhost:${5000 + cameraId}/video_feed?ts=${Date.now()}`
+      streamUrls.value[cameraId] = getRecognitionStreamUrl(cameraId)
     } else {
       const response = await apiClient.get(`/api/cameras/${cameraId}/stream-url`)
       streamUrls.value[cameraId] = `${response.data.mjpegUrl}?ts=${Date.now()}`
