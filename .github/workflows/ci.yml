@@ -44,7 +44,7 @@ jobs:
       - name: Сборка приложения
         run: npm run build
         env:
-          VITE_API_BASE_URL: http://localhost:3000
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'https://admin.ai-keen.com' }}
       - name: Запуск тестов
         run: npm test --if-present
         continue-on-error: true
