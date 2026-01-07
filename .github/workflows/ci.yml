@@ -103,3 +103,10 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
         continue-on-error: true
+      - name: Запуск деплоя
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.INFRA_DEPLOY_TOKEN }}
+          repository: ${{ github.repository_owner }}/infra
+          event-type: image-updated
+          client-payload: '{"service": "admin", "image": "${{ env.IMAGE_NAME }}", "sha": "${{ github.sha }}"}'
