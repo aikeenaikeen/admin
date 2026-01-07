@@ -109,7 +109,6 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
-      url: https://your-domain.com
     steps:
       - name: Деплой уведомление
         run: |
@@ -118,7 +117,7 @@ jobs:
           echo ""
           echo "Для деплоя выполните на сервере:"
           echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          echo "docker-compose up -d admin"
+          echo "docker-compose up -d infra-admin-1"
 
       - name: Деплой на сервер
         uses: appleboy/ssh-action@master
@@ -127,6 +126,6 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /path/to/infra
-            docker-compose pull admin
-            docker-compose up -d admin
+            cd /opt/aikeen/infra
+            docker-compose pull infra-admin-1
+            docker-compose up -d infra-admin-1
