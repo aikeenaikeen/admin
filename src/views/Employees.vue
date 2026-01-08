@@ -220,7 +220,9 @@ async function deleteEmployee(id: number) {
 
       <template #footer>
         <el-button @click="dialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="handleSubmit">Создать</el-button>
+        <el-button type="primary" @click="handleSubmit">
+          {{ isEditing ? 'Сохранить' : 'Создать' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
