@@ -20,10 +20,8 @@ const showRecognition = ref(false)
 const dialogVisible = ref(false)
 
 function getRecognitionStreamUrl(cameraId: number): string {
-  const host = (import.meta as any).env?.VITE_RECOGNITION_STREAM_HOST || window.location.hostname
-  const basePortRaw = (import.meta as any).env?.VITE_RECOGNITION_STREAM_BASE_PORT
-  const basePort = Number(basePortRaw ?? 15000)
-  return `http://${host}:${basePort + cameraId}/video_feed?ts=${Date.now()}`
+  const streamUrl = (import.meta as any).env?.VITE_RECOGNITION_STREAM_URL || 'http://localhost:5001'
+  return `${streamUrl}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
 }
 
 onMounted(async () => {

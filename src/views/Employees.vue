@@ -164,7 +164,7 @@ async function deleteEmployee(id: number) {
           </template>
         </el-table-column>
         
-        <el-table-column label="Действия" width="200" fixed="right">
+        <el-table-column label="Действия" width="300" fixed="right">
           <template #default="{ row }">
             <el-button
               size="small"
