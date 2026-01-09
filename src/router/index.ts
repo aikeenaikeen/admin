@@ -58,6 +58,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Companies.vue'),
         meta: { requiresSuperAdmin: true },
       },
+      {
+        path: '/users',
+        name: 'Users',
+        component: () => import('@/views/Users.vue'),
+        meta: { requiresSuperAdmin: true },
+      },
     ],
   },
 ]
@@ -68,7 +74,7 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {

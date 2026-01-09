@@ -7,6 +7,10 @@ WORKDIR /app
 ARG VITE_API_BASE_URL=http://localhost:3000
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
+# Позволяет переопределять URL recognition streaming API на этапе сборки (Vite build-time)
+ARG VITE_RECOGNITION_STREAM_URL=http://localhost:5001
+ENV VITE_RECOGNITION_STREAM_URL=$VITE_RECOGNITION_STREAM_URL
+
 COPY package*.json ./
 RUN npm ci
 

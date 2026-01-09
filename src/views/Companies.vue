@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, OfficeBuilding } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 
@@ -19,7 +19,22 @@ const dialogVisible = ref(false)
 const form = ref({
   name: '',
   slug: '',
+  recognitionConfig: {
+    quality: { minFaceHeight: 20, minBlurVar: 50 },
+    insightface: { threshold: 0.2 },
+    faceTracking: { minEmbeddings: 2, trackMaxAgeSeconds: 2.0 },
+    personTracking: { enabled: true },
+    presence: { observationMode: true, observationIntervalSeconds: 2.0 },
+    optimization: { 
+      personDetectMode: 'on_demand' as const,
+      personDetIntervalFrames: 10,
+      personDetOnNewFace: true,
+    },
+    streaming: { streamFps: 15, streamJpegQuality: 85 },
+  },
 })
+
+const showAdvanced = ref(false)
 
 onMounted(async () => {
   await loadCompanies()
@@ -42,7 +57,23 @@ async function handleSubmit() {
     await apiClient.post('/api/companies', form.value)
     ElMessage.success('Компания успешно создана')
     dialogVisible.value = false
-    form.value = { name: '', slug: '' }
+    form.value = {
+      name: '',
+      slug: '',
+      recognitionConfig: {
+        quality: { minFaceHeight: 20, minBlurVar: 50 },
+        insightface: { threshold: 0.2 },
+        faceTracking: { minEmbeddings: 2, trackMaxAgeSeconds: 2.0 },
+        personTracking: { enabled: true },
+        presence: { observationMode: true, observationIntervalSeconds: 2.0 },
+        optimization: { 
+          personDetectMode: 'on_demand' as const,
+          personDetIntervalFrames: 10,
+          personDetOnNewFace: true,
+        },
+        streaming: { streamFps: 15, streamJpegQuality: 85 },
+      },
+    }
     await loadCompanies()
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || 'Не удалось создать компанию')
@@ -147,6 +178,74 @@ function generateSlug() {
             </span>
           </template>
         </el-form-item>
+
+        <el-divider content-position="left">Настройки распознавания</el-divider>
+
+        <el-form-item label="Person Tracking">
+          <el-switch v-model="form.recognitionConfig.personTracking.enabled" />
+        </el-form-item>
+
+        <el-form-item label="Observation Mode">
+          <el-switch v-model="form.recognitionConfig.presence.observationMode" />
+        </el-form-item>
+
+        <el-form-item label="Режим YOLO">
+          <el-select v-model="form.recognitionConfig.optimization.personDetectMode">
+            <el-option label="On Demand (рекомендуется)" value="on_demand" />
+            <el-option label="Always" value="always" />
+          </el-select>
+        </el-form-item>
+
+        <el-link type="primary" @click="showAdvanced = !showAdvanced" style="margin-bottom: 16px">
+          {{ showAdvanced ? 'Скрыть' : 'Показать' }} расширенные настройки
+        </el-link>
+
+        <div v-show="showAdvanced">
+          <el-collapse>
+            <el-collapse-item title="Качество" name="quality">
+              <el-form-item label="Min Face Height">
+                <el-input-number v-model="form.recognitionConfig.quality.minFaceHeight" :min="10" :max="200" />
+              </el-form-item>
+              <el-form-item label="Min Blur Var">
+                <el-input-number v-model="form.recognitionConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
+              </el-form-item>
+            </el-collapse-item>
+            <el-collapse-item title="InsightFace" name="insightface">
+              <el-form-item label="Threshold">
+                <el-input-number v-model="form.recognitionConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
+              </el-form-item>
+            </el-collapse-item>
+            <el-collapse-item title="Face Tracking" name="faceTracking">
+              <el-form-item label="Min Embeddings">
+                <el-input-number v-model="form.recognitionConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
+              </el-form-item>
+              <el-form-item label="Track Max Age (сек)">
+                <el-input-number v-model="form.recognitionConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
+              </el-form-item>
+            </el-collapse-item>
+            <el-collapse-item title="Presence/Observations" name="presence">
+              <el-form-item label="Observation Interval (сек)">
+                <el-input-number v-model="form.recognitionConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
+              </el-form-item>
+            </el-collapse-item>
+            <el-collapse-item title="Optimization" name="optimization">
+              <el-form-item label="YOLO Interval (кадры)">
+                <el-input-number v-model="form.recognitionConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
+              </el-form-item>
+              <el-form-item label="YOLO on New Face">
+                <el-switch v-model="form.recognitionConfig.optimization.personDetOnNewFace" />
+              </el-form-item>
+            </el-collapse-item>
+            <el-collapse-item title="Streaming" name="streaming">
+              <el-form-item label="Stream FPS">
+                <el-input-number v-model="form.recognitionConfig.streaming.streamFps" :min="1" :max="30" />
+              </el-form-item>
+              <el-form-item label="JPEG Quality">
+                <el-input-number v-model="form.recognitionConfig.streaming.streamJpegQuality" :min="30" :max="95" />
+              </el-form-item>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
       </el-form>
 
       <template #footer>

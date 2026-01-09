@@ -27,11 +27,8 @@ const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
 
 function getRecognitionStreamUrl(cameraId: number): string {
-  const host = (import.meta as any).env?.VITE_RECOGNITION_STREAM_HOST || window.location.hostname
-  const basePortRaw = (import.meta as any).env?.VITE_RECOGNITION_STREAM_BASE_PORT
-  const basePort = Number(basePortRaw ?? 15000)
-  const protocol = window.location.protocol === 'https:' ? 'https' : 'http'
-  return `${protocol}://${host}:${basePort + cameraId}/video_feed?ts=${Date.now()}`
+  const streamUrl = (import.meta as any).env?.VITE_RECOGNITION_STREAM_URL || 'http://localhost:5001'
+  return `${streamUrl}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
 }
 
 const form = ref({

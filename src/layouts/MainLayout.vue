@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
-  Menu as IconMenu,
   Location,
   Document,
   Setting,
   User,
   VideoCamera,
-  View,
   TrendCharts,
   OfficeBuilding,
   Monitor,
@@ -34,6 +32,7 @@ const menuItems = computed(() => {
   
   if (authStore.isSuperAdmin) {
     items.push({ index: '/companies', title: 'Компании', icon: OfficeBuilding })
+    items.push({ index: '/users', title: 'Пользователи', icon: Setting })
   }
   
   return items

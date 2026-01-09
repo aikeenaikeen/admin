@@ -36,8 +36,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshToken.value = response.data.refreshToken
     user.value = response.data.user
 
-    localStorage.setItem('accessToken', accessToken.value)
-    localStorage.setItem('refreshToken', refreshToken.value)
+    if (accessToken.value) localStorage.setItem('accessToken', accessToken.value)
+    if (refreshToken.value) localStorage.setItem('refreshToken', refreshToken.value)
     localStorage.setItem('user', JSON.stringify(user.value))
   }
 
@@ -51,7 +51,7 @@ export const useAuthStore = defineStore('auth', () => {
     })
 
     accessToken.value = response.data.accessToken
-    localStorage.setItem('accessToken', accessToken.value)
+    if (accessToken.value) localStorage.setItem('accessToken', accessToken.value)
   }
 
   function logout() {
