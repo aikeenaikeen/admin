@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { VideoCamera, Monitor } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
+import { resolveBaseUrl } from '@/utils/baseUrl'
 
 interface Camera {
   id: number
@@ -20,8 +21,8 @@ const showRecognition = ref(false)
 const dialogVisible = ref(false)
 
 function getRecognitionStreamUrl(cameraId: number): string {
-  const streamUrl = (import.meta as any).env?.VITE_RECOGNITION_STREAM_URL || 'http://localhost:5001'
-  return `${streamUrl}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
+  const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
+  return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
 }
 
 onMounted(async () => {

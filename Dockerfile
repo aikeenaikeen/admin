@@ -3,12 +3,14 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Позволяет переопределять API эндпоинт на этапе сборки (Vite читает его во время build)
-ARG VITE_API_BASE_URL=http://localhost:3000
+# Позволяет переопределять API эндпоинт на этапе сборки (Vite читает его во время build).
+# Пустое значение = использовать текущий origin (через runtime fallback в коде).
+ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
 # Позволяет переопределять URL recognition streaming API на этапе сборки (Vite build-time)
-ARG VITE_RECOGNITION_STREAM_URL=http://localhost:5001
+# Пустое значение = использовать текущий origin (через nginx `/video_feed`).
+ARG VITE_RECOGNITION_STREAM_URL=
 ENV VITE_RECOGNITION_STREAM_URL=$VITE_RECOGNITION_STREAM_URL
 
 COPY package*.json ./

@@ -4,6 +4,7 @@ import { Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { io, Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
+import { resolveBaseUrl } from '@/utils/baseUrl'
 
 interface PresenceStatus {
   id: number
@@ -43,7 +44,7 @@ async function loadPresence() {
 }
 
 function connectSocket() {
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+  const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_API_BASE_URL)
   
   socket = io(API_BASE_URL, {
     path: '/ws',

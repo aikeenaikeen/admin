@@ -1,8 +1,9 @@
 import axios, { AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
+import { resolveBaseUrl } from '@/utils/baseUrl'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000'
+const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -35,11 +36,11 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true
 
       const authStore = useAuthStore()
-      
+
       try {
         // Try to refresh token
         await authStore.refreshTokenFn()
-        
+
         // Retry original request
         return apiClient(originalRequest)
       } catch (refreshError) {
