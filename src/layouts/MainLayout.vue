@@ -11,6 +11,8 @@ import {
   TrendCharts,
   OfficeBuilding,
   Monitor,
+  Operation,
+  Briefcase,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -23,14 +25,17 @@ const menuItems = computed(() => {
   const items = [
     { index: '/dashboard', title: 'Дашборд', icon: TrendCharts },
     { index: '/employees', title: 'Сотрудники', icon: User },
+    { index: '/templates', title: 'Шаблоны', icon: Briefcase },
     { index: '/cameras', title: 'Камеры', icon: VideoCamera },
     { index: '/presence', title: 'Присутствие', icon: Location },
     { index: '/events', title: 'События', icon: Document },
     { index: '/statistics', title: 'Статистика', icon: TrendCharts },
+    { index: '/employee-activities', title: 'Активности сотрудников', icon: Operation },
     { index: '/live', title: 'Прямые трансляции', icon: Monitor },
   ]
   
   if (authStore.isSuperAdmin) {
+    items.push({ index: '/activities', title: 'Активности', icon: Operation })
     items.push({ index: '/companies', title: 'Компании', icon: OfficeBuilding })
     items.push({ index: '/users', title: 'Пользователи', icon: Setting })
   }

@@ -64,6 +64,22 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Users.vue'),
         meta: { requiresSuperAdmin: true },
       },
+      {
+        path: '/activities',
+        name: 'Activities',
+        component: () => import('@/views/Activities.vue'),
+        meta: { requiresSuperAdmin: true },
+      },
+      {
+        path: '/templates',
+        name: 'Templates',
+        component: () => import('@/views/Templates.vue'),
+      },
+      {
+        path: '/employee-activities',
+        name: 'EmployeeActivities',
+        component: () => import('@/views/EmployeeActivities.vue'),
+      },
     ],
   },
 ]

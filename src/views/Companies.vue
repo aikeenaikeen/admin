@@ -56,6 +56,16 @@ const form = ref({
       drawPersonBoxes: true,
       drawNames: true,
     },
+    actionRecognition: {
+      startThreshold: 0.7,
+      endThreshold: 0.4,
+      gapSeconds: 2.0,
+      minDurationSeconds: 1.0,
+      maxIntervalSeconds: 0.0,
+      fps: 8.0,
+      maxFrames: 64,
+      debug: false,
+    },
   },
 })
 
@@ -92,6 +102,16 @@ const editConfig = ref({
     drawPersonBoxes: true,
     drawNames: true,
   },
+  actionRecognition: {
+    startThreshold: 0.7,
+    endThreshold: 0.4,
+    gapSeconds: 2.0,
+    minDurationSeconds: 1.0,
+    maxIntervalSeconds: 0.0,
+    fps: 8.0,
+    maxFrames: 64,
+    debug: false,
+  },
 })
 
 // Helper для получения дефолтного конфига (DRY)
@@ -125,6 +145,16 @@ function getDefaultConfig() {
       drawFaceBoxes: true,
       drawPersonBoxes: true,
       drawNames: true,
+    },
+    actionRecognition: {
+      startThreshold: 0.7,
+      endThreshold: 0.4,
+      gapSeconds: 2.0,
+      minDurationSeconds: 1.0,
+      maxIntervalSeconds: 0.0,
+      fps: 8.0,
+      maxFrames: 64,
+      debug: false,
     },
   }
 }
@@ -493,6 +523,47 @@ async function saveConfig() {
               </el-form>
             </el-collapse-item>
 
+            <el-collapse-item title="Распознавание действий (активности)" name="actionRecognition">
+              <el-form label-width="280px">
+                <el-form-item label="Порог старта (0..1)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Порог остановки (0..1)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Должен быть ниже порога старта (hysteresis)</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Таймаут закрытия (сек)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Мин. длительность события (сек)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
+                </el-form-item>
+                <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="FPS для модели (кадров/сек)">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
+                </el-form-item>
+                <el-form-item label="Макс. кадров в буфере">
+                  <el-input-number v-model="form.recognitionConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
+                </el-form-item>
+                <el-form-item label="Отладка (логи score)">
+                  <el-switch v-model="form.recognitionConfig.actionRecognition.debug" />
+                </el-form-item>
+              </el-form>
+            </el-collapse-item>
+
             <el-collapse-item title="Визуализация" name="visualization">
               <el-form label-width="280px">
               <el-form-item label="Рисовать рамки лиц">
@@ -682,6 +753,47 @@ async function saveConfig() {
                   <span style="font-size: 12px; color: #909399;">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
                 </template>
               </el-form-item>
+              </el-form>
+            </el-collapse-item>
+
+            <el-collapse-item title="Распознавание действий (активности)" name="actionRecognition">
+              <el-form label-width="280px">
+                <el-form-item label="Порог старта (0..1)">
+                  <el-input-number v-model="editConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Порог остановки (0..1)">
+                  <el-input-number v-model="editConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Должен быть ниже порога старта (hysteresis)</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Таймаут закрытия (сек)">
+                  <el-input-number v-model="editConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="Мин. длительность события (сек)">
+                  <el-input-number v-model="editConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
+                </el-form-item>
+                <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
+                  <el-input-number v-model="editConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
+                  <template #extra>
+                    <span style="font-size: 12px; color: #909399;">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                  </template>
+                </el-form-item>
+                <el-form-item label="FPS для модели (кадров/сек)">
+                  <el-input-number v-model="editConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
+                </el-form-item>
+                <el-form-item label="Макс. кадров в буфере">
+                  <el-input-number v-model="editConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
+                </el-form-item>
+                <el-form-item label="Отладка (логи score)">
+                  <el-switch v-model="editConfig.actionRecognition.debug" />
+                </el-form-item>
               </el-form>
             </el-collapse-item>
 
