@@ -61,12 +61,6 @@ interface TrainingAsset {
   annotations?: TrainingAnnotation[]
 }
 
-interface TrainingJob {
-  id: number
-  status: string
-  modelVersionId?: number | null
-  createdAt?: string
-}
 
 const activities = ref<Activity[]>([])
 const companies = ref<Company[]>([])

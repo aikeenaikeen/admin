@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, nextTick } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 
@@ -167,7 +167,7 @@ function drawPolygon(
   ctx.stroke()
   
   // Draw points
-  points.forEach((point, index) => {
+  points.forEach((point) => {
     ctx.beginPath()
     ctx.arc(point.x * canvasWidth, point.y * canvasHeight, 5, 0, 2 * Math.PI)
     ctx.fillStyle = strokeColor
