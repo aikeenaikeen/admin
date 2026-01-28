@@ -839,6 +839,10 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
   gap: 8px;
 }
 
+.action-buttons :deep(.el-button) {
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;

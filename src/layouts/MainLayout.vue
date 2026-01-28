@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 import {
   Location,
   Document,
@@ -13,11 +14,14 @@ import {
   Monitor,
   Operation,
   Briefcase,
+  Moon,
+  Sunny,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 const activeIndex = computed(() => route.path)
 
@@ -83,6 +87,17 @@ function logout() {
             <div class="user-role">{{ authStore.user?.role }}</div>
           </div>
         </div>
+        
+        <div class="theme-switcher">
+          <el-switch
+            v-model="themeStore.isDark"
+            size="large"
+            :active-action-icon="Moon"
+            :inactive-action-icon="Sunny"
+            inline-prompt
+          />
+        </div>
+        
         <el-button type="danger" size="small" @click="logout" style="width: 100%">
           Выйти
         </el-button>
@@ -103,22 +118,22 @@ function logout() {
 }
 
 .sidebar {
-  background: #ffffff;
-  border-right: 1px solid #e4e7ed;
+  background: var(--el-bg-color);
+  border-right: 1px solid var(--el-border-color);
   display: flex;
   flex-direction: column;
 }
 
 .logo {
   padding: 24px 20px;
-  border-bottom: 1px solid #e4e7ed;
+  border-bottom: 1px solid var(--el-border-color);
 }
 
 .logo h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .sidebar-menu {
@@ -128,7 +143,7 @@ function logout() {
 
 .user-section {
   padding: 16px;
-  border-top: 1px solid #e4e7ed;
+  border-top: 1px solid var(--el-border-color);
 }
 
 .user-info {
@@ -137,8 +152,14 @@ function logout() {
   gap: 12px;
   margin-bottom: 12px;
   padding: 8px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
+}
+
+.theme-switcher {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
 }
 
 .user-details {
@@ -149,7 +170,7 @@ function logout() {
 .user-email {
   font-size: 14px;
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -157,11 +178,11 @@ function logout() {
 
 .user-role {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .main-content {
-  background: #f0f2f5;
+  background: var(--el-bg-color-page);
   padding: 0;
 }
 

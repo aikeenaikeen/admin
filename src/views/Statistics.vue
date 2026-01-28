@@ -162,14 +162,14 @@ async function loadStatistics() {
           </template>
           
           <el-table :data="statistics.eventsByDay" style="width: 100%">
-            <el-table-column prop="date" label="Дата" width="150" />
-            <el-table-column prop="count" label="Всего" width="100" align="right" />
-            <el-table-column label="Вход" width="100" align="right">
+            <el-table-column prop="date" label="Дата" width="180" />
+            <el-table-column prop="count" label="Всего" min-width="150" align="right" />
+            <el-table-column label="Вход" min-width="150" align="right">
               <template #default="{ row }">
                 <el-tag type="success" size="small">{{ row.ins }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="Выход" width="100" align="right">
+            <el-table-column label="Выход" min-width="150" align="right">
               <template #default="{ row }">
                 <el-tag type="warning" size="small">{{ row.outs }}</el-tag>
               </template>
