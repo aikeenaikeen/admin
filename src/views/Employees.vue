@@ -301,29 +301,30 @@ async function removeTemplate() {
           </template>
         </el-table-column>
         
-        <el-table-column label="Действия" width="300" fixed="right">
+        <el-table-column label="Действия" width="380" fixed="right">
           <template #default="{ row }">
-            <el-button
-              size="small"
-              :icon="Setting"
-              @click="openEmployeeActivities(row)"
-            >
-              Активности
-            </el-button>
-            <el-button
-              size="small"
-              type="danger"
-              :icon="Delete"
-              @click="deleteEmployee(row.id)"
-            >
-              Удалить
-            </el-button>
-            <el-button
-              size="small"
-              @click="startEdit(row)"
-            >
-              Редактировать
-            </el-button>
+              <el-button
+                size="small"
+                :icon="Setting"
+                @click="openEmployeeActivities(row)"
+              >
+                Активности
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click="deleteEmployee(row.id)"
+              >
+                Удалить
+              </el-button>
+              <el-button
+                size="small"
+                @click="startEdit(row)"
+              >
+                Редактировать
+              </el-button>
+              
           </template>
         </el-table-column>
       </el-table>
@@ -455,5 +456,11 @@ async function removeTemplate() {
   .page-container {
     padding: 16px;
   }
+}
+
+.employee-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 </style>
