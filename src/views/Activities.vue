@@ -830,7 +830,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: --el-text-color-primary;
 }
 
 .action-buttons {

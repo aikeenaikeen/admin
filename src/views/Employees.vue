@@ -303,7 +303,6 @@ async function removeTemplate() {
         
         <el-table-column label="Действия" width="380" fixed="right">
           <template #default="{ row }">
-            <div class="employee-actions">
               <el-button
                 size="small"
                 :icon="Setting"
@@ -325,7 +324,7 @@ async function removeTemplate() {
               >
                 Редактировать
               </el-button>
-            </div>
+              
           </template>
         </el-table-column>
       </el-table>
