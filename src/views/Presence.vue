@@ -19,6 +19,7 @@ interface PresenceStatus {
 const presence = ref<PresenceStatus[]>([])
 const loading = ref(true)
 let socket: Socket | null = null
+let reloadTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   await loadPresence()
@@ -28,6 +29,9 @@ onMounted(async () => {
 onUnmounted(() => {
   if (socket) {
     socket.disconnect()
+  }
+  if (reloadTimer) {
+    clearTimeout(reloadTimer)
   }
 })
 
@@ -43,6 +47,13 @@ async function loadPresence() {
   }
 }
 
+function debouncedReload() {
+  if (reloadTimer) clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => {
+    loadPresence()
+  }, 2000)
+}
+
 function connectSocket() {
   const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_API_BASE_URL)
   
@@ -54,9 +65,8 @@ function connectSocket() {
     console.log('Socket connected')
   })
 
-  socket.on('event:created', (data: any) => {
-    console.log('Event received:', data)
-    loadPresence()
+  socket.on('event:created', () => {
+    debouncedReload()
   })
 
   socket.on('disconnect', () => {

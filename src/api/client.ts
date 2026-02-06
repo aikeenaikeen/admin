@@ -26,7 +26,9 @@ apiClient.interceptors.request.use(
   }
 )
 
-// Response interceptor - handle 401 and refresh token
+// Token refresh mutex: prevents multiple parallel 401s from each triggering a refresh
+let refreshPromise: Promise<void> | null = null
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -38,13 +40,17 @@ apiClient.interceptors.response.use(
       const authStore = useAuthStore()
 
       try {
-        // Try to refresh token
-        await authStore.refreshTokenFn()
+        // If a refresh is already in progress, wait for it instead of starting another
+        if (!refreshPromise) {
+          refreshPromise = authStore.refreshTokenFn().finally(() => {
+            refreshPromise = null
+          })
+        }
+        await refreshPromise
 
-        // Retry original request
+        // Retry original request with new token
         return apiClient(originalRequest)
       } catch (refreshError) {
-        // Refresh failed - logout
         authStore.logout()
         router.push('/login')
         return Promise.reject(refreshError)
