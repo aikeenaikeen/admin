@@ -20,6 +20,11 @@ const streamUrls = ref<Record<number, string>>({})
 const showRecognition = ref(false)
 const dialogVisible = ref(false)
 
+function withCacheBust(url: string): string {
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}ts=${Date.now()}`
+}
+
 function getRecognitionStreamUrl(cameraId: number): string {
   const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
   return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
@@ -49,7 +54,7 @@ async function openStream(cameraId: number, withRecognition = false) {
       streamUrls.value[cameraId] = getRecognitionStreamUrl(cameraId)
     } else {
       const response = await apiClient.get(`/api/cameras/${cameraId}/stream-url`)
-      streamUrls.value[cameraId] = `${response.data.mjpegUrl}?ts=${Date.now()}`
+      streamUrls.value[cameraId] = withCacheBust(response.data.mjpegUrl)
     }
     
     selectedCamera.value = cameraId

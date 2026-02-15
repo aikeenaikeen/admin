@@ -34,6 +34,11 @@ const currentPolygon = ref<Point[]>([])
 const polygons = ref<Polygon[]>([])
 const streamUrl = ref('')
 
+function withCacheBust(url: string): string {
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}ts=${Date.now()}`
+}
+
 onMounted(async () => {
   await loadStreamUrl()
   if (props.initialPolygons) {
@@ -57,7 +62,7 @@ async function loadStreamUrl() {
     }
 
     // MJPEG поток отображаем как <img>, полигоны рисуем поверх в canvas
-    streamUrl.value = `${mjpegUrl}?ts=${Date.now()}`
+    streamUrl.value = withCacheBust(mjpegUrl)
 
     await nextTick()
     // Канвас будет подогнан на onImgLoad

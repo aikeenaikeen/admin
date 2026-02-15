@@ -27,6 +27,11 @@ const streamUrl = ref('')
 const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
 
+function withCacheBust(url: string): string {
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}ts=${Date.now()}`
+}
+
 function getRecognitionStreamUrl(cameraId: number): string {
   const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
   return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
@@ -135,7 +140,7 @@ async function viewStream(id: number, withRecognition = false) {
       streamUrl.value = getRecognitionStreamUrl(id)
     } else {
       const response = await apiClient.get(`/api/cameras/${id}/stream-url`)
-      streamUrl.value = `${response.data.mjpegUrl}?ts=${Date.now()}`
+      streamUrl.value = withCacheBust(response.data.mjpegUrl)
     }
     
     selectedCamera.value = id
