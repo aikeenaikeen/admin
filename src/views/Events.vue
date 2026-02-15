@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Refresh, Calendar } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
+import { formatDateTime } from '@/utils/date'
 
 interface Event {
   id: number
@@ -70,7 +71,7 @@ async function loadEvents() {
 }
 
 function formatTime(time: string): string {
-  return new Date(time).toLocaleString('ru-RU')
+  return formatDateTime(time)
 }
 
 function handlePageChange(page: number) {
@@ -214,7 +215,7 @@ function resetFilters() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 @media (max-width: 768px) {

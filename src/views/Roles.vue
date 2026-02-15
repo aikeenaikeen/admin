@@ -450,7 +450,7 @@ function cancelRoiEditor() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .action-buttons {

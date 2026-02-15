@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import LogoIcon from '@/components/icons/LogoIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -34,7 +35,10 @@ async function handleLogin() {
   <div class="login-page">
     <el-card class="login-card" shadow="always">
       <div class="login-header">
-        <h1>Панель управления</h1>
+        <div class="brand">
+          <LogoIcon class="brand-logo" :size="40" />
+          <h1>Aikeen</h1>
+        </div>
         <p class="subtitle">Система учета посещаемости с распознаванием лиц</p>
       </div>
 
@@ -96,7 +100,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-dark-2) 100%);
   padding: 20px;
 }
 
@@ -111,17 +115,28 @@ async function handleLogin() {
   margin-bottom: 32px;
 }
 
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  width: 40px;
+  height: 40px;
+}
+
 .login-header h1 {
   margin: 0 0 8px 0;
   font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .subtitle {
   margin: 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .login-footer {
@@ -131,7 +146,7 @@ async function handleLogin() {
 .demo-accounts {
   margin: 0;
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   text-align: center;
   line-height: 1.6;
 }

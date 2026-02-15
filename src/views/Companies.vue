@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
+import { formatDate } from '@/utils/date'
 
 interface Company {
   id: number
@@ -305,7 +306,7 @@ async function saveConfig() {
         
         <el-table-column label="Создана" width="150">
           <template #default="{ row }">
-            {{ new Date(row.createdAt).toLocaleDateString('ru-RU') }}
+            {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
         
@@ -354,7 +355,7 @@ async function saveConfig() {
             <template #prepend>/</template>
           </el-input>
           <template #extra>
-            <span style="font-size: 12px; color: #909399;">
+            <span style="font-size: 12px; color: var(--el-text-color-secondary);">
               Только строчные буквы, цифры и дефисы
             </span>
           </template>
@@ -391,7 +392,7 @@ async function saveConfig() {
               <el-form-item label="Мин. резкость">
                 <el-input-number v-model="form.recognitionConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -402,7 +403,7 @@ async function saveConfig() {
               <el-form-item label="Порог сходства (0..1)">
                 <el-input-number v-model="form.recognitionConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Ниже = строже (меньше ложных срабатываний)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Ниже = строже (меньше ложных срабатываний)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -413,13 +414,13 @@ async function saveConfig() {
               <el-form-item label="Мин. эмбеддингов">
                 <el-input-number v-model="form.recognitionConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько кадров накопить перед распознаванием</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько кадров накопить перед распознаванием</span>
                 </template>
               </el-form-item>
               <el-form-item label="Время жизни трека (сек)">
                 <el-input-number v-model="form.recognitionConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько секунд трек лица живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек лица живёт без обновлений</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -430,37 +431,37 @@ async function saveConfig() {
               <el-form-item label="Порог уверенности детектора (0..1)">
                 <el-input-number v-model="form.recognitionConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Минимальная уверенность YOLO для детекции человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальная уверенность YOLO для детекции человека</span>
                 </template>
               </el-form-item>
               <el-form-item label="IoU для матчинга треков (0..1)">
                 <el-input-number v-model="form.recognitionConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Пересечение bbox для связывания с треком</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Пересечение bbox для связывания с треком</span>
                 </template>
               </el-form-item>
               <el-form-item label="Время жизни person-трека (сек)">
                 <el-input-number v-model="form.recognitionConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько секунд трек человека живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек человека живёт без обновлений</span>
                 </template>
               </el-form-item>
               <el-form-item label="IoU лицо→человек (0..1)">
                 <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Минимальное пересечение для привязки лица к человеку</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальное пересечение для привязки лица к человеку</span>
                 </template>
               </el-form-item>
               <el-form-item label="Вложенность лица в bbox (0..1)">
                 <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Какая часть лица должна быть внутри bbox человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Какая часть лица должна быть внутри bbox человека</span>
                 </template>
               </el-form-item>
               <el-form-item label="Строгая фиксация трека">
                 <el-switch v-model="form.recognitionConfig.personTracking.employeeLockStrict" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Запретить переназначение трека на другого сотрудника</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запретить переназначение трека на другого сотрудника</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -471,19 +472,19 @@ async function saveConfig() {
               <el-form-item label="Интервал наблюдений (сек)">
                 <el-input-number v-model="form.recognitionConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Как часто отправлять heartbeat (режим наблюдений)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Как часто отправлять heartbeat (режим наблюдений)</span>
                 </template>
               </el-form-item>
               <el-form-item label="Порог IN (сек, legacy)">
                 <el-input-number v-model="form.recognitionConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
                 </template>
               </el-form-item>
               <el-form-item label="Порог OUT (сек, legacy)">
                 <el-input-number v-model="form.recognitionConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -494,13 +495,13 @@ async function saveConfig() {
               <el-form-item label="Интервал детекции YOLO (кадры)">
                 <el-input-number v-model="form.recognitionConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
                 </template>
               </el-form-item>
               <el-form-item label="YOLO при новом лице">
                 <el-switch v-model="form.recognitionConfig.optimization.personDetOnNewFace" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Запускать YOLO сразу при распознавании нового лица</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запускать YOLO сразу при распознавании нового лица</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -511,13 +512,13 @@ async function saveConfig() {
               <el-form-item label="FPS потока">
                 <el-input-number v-model="form.recognitionConfig.streaming.streamFps" :min="1" :max="30" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Кадров в секунду в MJPEG-потоке для UI</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Кадров в секунду в MJPEG-потоке для UI</span>
                 </template>
               </el-form-item>
               <el-form-item label="Качество JPEG (30..95)">
                 <el-input-number v-model="form.recognitionConfig.streaming.streamJpegQuality" :min="30" :max="95" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -528,19 +529,19 @@ async function saveConfig() {
                 <el-form-item label="Порог старта (0..1)">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Порог остановки (0..1)">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Должен быть ниже порога старта (hysteresis)</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Должен быть ниже порога старта (hysteresis)</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Таймаут закрытия (сек)">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Мин. длительность события (сек)">
@@ -549,7 +550,7 @@ async function saveConfig() {
                 <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="FPS для модели (кадров/сек)">
@@ -624,7 +625,7 @@ async function saveConfig() {
               <el-form-item label="Мин. резкость">
                 <el-input-number v-model="editConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -635,7 +636,7 @@ async function saveConfig() {
               <el-form-item label="Порог сходства (0..1)">
                 <el-input-number v-model="editConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Ниже = строже (меньше ложных срабатываний)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Ниже = строже (меньше ложных срабатываний)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -646,13 +647,13 @@ async function saveConfig() {
               <el-form-item label="Мин. эмбеддингов">
                 <el-input-number v-model="editConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько кадров накопить перед распознаванием</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько кадров накопить перед распознаванием</span>
                 </template>
               </el-form-item>
               <el-form-item label="Время жизни трека (сек)">
                 <el-input-number v-model="editConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько секунд трек лица живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек лица живёт без обновлений</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -663,37 +664,37 @@ async function saveConfig() {
               <el-form-item label="Порог уверенности детектора (0..1)">
                 <el-input-number v-model="editConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Минимальная уверенность YOLO для детекции человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальная уверенность YOLO для детекции человека</span>
                 </template>
               </el-form-item>
               <el-form-item label="IoU для матчинга треков (0..1)">
                 <el-input-number v-model="editConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Пересечение bbox для связывания с треком</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Пересечение bbox для связывания с треком</span>
                 </template>
               </el-form-item>
               <el-form-item label="Время жизни person-трека (сек)">
                 <el-input-number v-model="editConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Сколько секунд трек человека живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек человека живёт без обновлений</span>
                 </template>
               </el-form-item>
               <el-form-item label="IoU лицо→человек (0..1)">
                 <el-input-number v-model="editConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Минимальное пересечение для привязки лица к человеку</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальное пересечение для привязки лица к человеку</span>
                 </template>
               </el-form-item>
               <el-form-item label="Вложенность лица в bbox (0..1)">
                 <el-input-number v-model="editConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Какая часть лица должна быть внутри bbox человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Какая часть лица должна быть внутри bbox человека</span>
                 </template>
               </el-form-item>
               <el-form-item label="Строгая фиксация трека">
                 <el-switch v-model="editConfig.personTracking.employeeLockStrict" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Запретить переназначение трека на другого сотрудника</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запретить переназначение трека на другого сотрудника</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -704,19 +705,19 @@ async function saveConfig() {
               <el-form-item label="Интервал наблюдений (сек)">
                 <el-input-number v-model="editConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Как часто отправлять heartbeat (режим наблюдений)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Как часто отправлять heartbeat (режим наблюдений)</span>
                 </template>
               </el-form-item>
               <el-form-item label="Порог IN (сек, legacy)">
                 <el-input-number v-model="editConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
                 </template>
               </el-form-item>
               <el-form-item label="Порог OUT (сек, legacy)">
                 <el-input-number v-model="editConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -727,13 +728,13 @@ async function saveConfig() {
               <el-form-item label="Интервал детекции YOLO (кадры)">
                 <el-input-number v-model="editConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
                 </template>
               </el-form-item>
               <el-form-item label="YOLO при новом лице">
                 <el-switch v-model="editConfig.optimization.personDetOnNewFace" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Запускать YOLO сразу при распознавании нового лица</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запускать YOLO сразу при распознавании нового лица</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -744,13 +745,13 @@ async function saveConfig() {
               <el-form-item label="FPS потока">
                 <el-input-number v-model="editConfig.streaming.streamFps" :min="1" :max="30" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Кадров в секунду в MJPEG-потоке для UI</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Кадров в секунду в MJPEG-потоке для UI</span>
                 </template>
               </el-form-item>
               <el-form-item label="Качество JPEG (30..95)">
                 <el-input-number v-model="editConfig.streaming.streamJpegQuality" :min="30" :max="95" />
                 <template #extra>
-                  <span style="font-size: 12px; color: #909399;">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
                 </template>
               </el-form-item>
               </el-form>
@@ -761,19 +762,19 @@ async function saveConfig() {
                 <el-form-item label="Порог старта (0..1)">
                   <el-input-number v-model="editConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Порог остановки (0..1)">
                   <el-input-number v-model="editConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Должен быть ниже порога старта (hysteresis)</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Должен быть ниже порога старта (hysteresis)</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Таймаут закрытия (сек)">
                   <el-input-number v-model="editConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="Мин. длительность события (сек)">
@@ -782,7 +783,7 @@ async function saveConfig() {
                 <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
                   <el-input-number v-model="editConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: #909399;">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
                   </template>
                 </el-form-item>
                 <el-form-item label="FPS для модели (кадров/сек)">
@@ -837,7 +838,7 @@ async function saveConfig() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 @media (max-width: 768px) {

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import LogoIcon from '@/components/icons/LogoIcon.vue'
 import {
   Location,
   Document,
@@ -22,6 +23,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const THEME_TOGGLE_INDEX = '__theme_toggle__'
 
 const activeIndex = computed(() => route.path)
 
@@ -48,6 +50,10 @@ const menuItems = computed(() => {
 })
 
 function handleSelect(index: string) {
+  if (index === THEME_TOGGLE_INDEX) {
+    themeStore.isDark = !themeStore.isDark
+    return
+  }
   router.push(index)
 }
 
@@ -61,7 +67,8 @@ function logout() {
   <el-container class="layout-container">
     <el-aside width="250px" class="sidebar">
       <div class="logo">
-        <h2>Face Recognition</h2>
+        <LogoIcon class="logo-image" :size="36" />
+        <h2>Aikeen</h2>
       </div>
       
       <el-menu
@@ -77,6 +84,11 @@ function logout() {
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.title }}</span>
         </el-menu-item>
+
+        <el-menu-item :index="THEME_TOGGLE_INDEX">
+          <el-icon><component :is="themeStore.isDark ? Moon : Sunny" /></el-icon>
+          <span>Тема</span>
+        </el-menu-item>
       </el-menu>
       
       <div class="user-section">
@@ -88,15 +100,6 @@ function logout() {
           </div>
         </div>
         
-        <div class="theme-switcher">
-          <el-switch
-            v-model="themeStore.isDark"
-            size="large"
-            :active-action-icon="Moon"
-            :inactive-action-icon="Sunny"
-            inline-prompt
-          />
-        </div>
         
         <el-button type="danger" size="small" @click="logout" style="width: 100%">
           Выйти
@@ -125,8 +128,11 @@ function logout() {
 }
 
 .logo {
-  padding: 24px 20px;
+  padding: 10px 10px 10px 15px;
   border-bottom: 1px solid var(--el-border-color);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .logo h2 {
@@ -134,6 +140,12 @@ function logout() {
   font-size: 18px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.logo-image {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 .sidebar-menu {
@@ -154,12 +166,6 @@ function logout() {
   padding: 8px;
   background: var(--el-fill-color-light);
   border-radius: 8px;
-}
-
-.theme-switcher {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 12px;
 }
 
 .user-details {

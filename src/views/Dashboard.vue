@@ -146,7 +146,7 @@ async function loadStats() {
   margin: 0 0 24px 0;
   font-size: 28px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .stats-grid {
@@ -196,23 +196,23 @@ async function loadStats() {
 }
 
 .stat-icon.primary {
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
 }
 
 .stat-icon.success {
-  background: #f0f9ff;
-  color: #67c23a;
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
 }
 
 .stat-icon.warning {
-  background: #fdf6ec;
-  color: #e6a23c;
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
 }
 
 .stat-icon.info {
-  background: #f4f4f5;
-  color: #909399;
+  background: var(--el-color-info-light-9);
+  color: var(--el-color-info);
 }
 
 .stat-info {
@@ -222,18 +222,18 @@ async function loadStats() {
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #303133;
+  color: var(--el-text-color-primary);
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .stat-value.success {
-  color: #67c23a;
+  color: var(--el-color-success);
 }
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .quick-links {
@@ -261,19 +261,19 @@ async function loadStats() {
   justify-content: center;
   gap: 12px;
   padding: 24px 16px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
   text-decoration: none;
-  color: #303133;
+  color: var(--el-text-color-primary);
   transition: all 0.3s;
   min-height: 120px;
 }
 
 .quick-link:hover {
-  background: #409eff;
-  color: white;
+  background: var(--el-color-primary);
+  color: var(--el-color-white);
   transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(var(--el-color-primary-rgb), 0.3);
 }
 
 .quick-link span {

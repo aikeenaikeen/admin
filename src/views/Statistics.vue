@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Refresh, TrendCharts, Calendar } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
+import { formatDate } from '@/utils/date'
 
 const statistics = ref<any>(null)
 const loading = ref(true)
@@ -162,7 +163,11 @@ async function loadStatistics() {
           </template>
           
           <el-table :data="statistics.eventsByDay" style="width: 100%">
-            <el-table-column prop="date" label="Дата" width="180" />
+            <el-table-column label="Дата" width="220">
+              <template #default="{ row }">
+                {{ formatDate(row.date) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="count" label="Всего" min-width="150" align="right" />
             <el-table-column label="Вход" min-width="150" align="right">
               <template #default="{ row }">
@@ -196,7 +201,7 @@ async function loadStatistics() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .stats-grid {
@@ -238,18 +243,18 @@ async function loadStatistics() {
 }
 
 .stat-icon.primary {
-  background: #ecf5ff;
-  color: #409eff;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
 }
 
 .stat-icon.success {
-  background: #f0f9ff;
-  color: #67c23a;
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
 }
 
 .stat-icon.warning {
-  background: #fdf6ec;
-  color: #e6a23c;
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
 }
 
 .stat-info {
@@ -259,13 +264,13 @@ async function loadStatistics() {
 .stat-value {
   font-size: 32px;
   font-weight: 700;
-  color: #303133;
+  color: var(--el-text-color-primary);
   line-height: 1;
   margin-bottom: 8px;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 </style>

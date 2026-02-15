@@ -439,7 +439,7 @@ async function testConnection(id: number) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .form-card {
@@ -473,7 +473,7 @@ async function testConnection(id: number) {
   justify-content: center;
   align-items: center;
   min-height: 400px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
   overflow: hidden;
 }

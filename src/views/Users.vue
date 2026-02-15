@@ -210,7 +210,7 @@ async function deleteUser(userId: number) {
             />
           </el-select>
           <template #extra>
-            <span style="font-size: 12px; color: #909399;">
+            <span style="font-size: 12px; color: var(--el-text-color-secondary);">
               Для SUPERADMIN компания не привязывается
             </span>
           </template>
@@ -240,7 +240,7 @@ async function deleteUser(userId: number) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 @media (max-width: 768px) {

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { Plus, Edit, Check, Close, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
+import { formatDateTime } from '@/utils/date'
 
 type ActivityStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED'
 type ModelVersionStatus = 'DRAFT' | 'STAGING' | 'ACTIVE' | 'DEPRECATED'
@@ -612,7 +613,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
               <el-button type="primary" :disabled="!annotationsAssetId" @click="saveAnnotations">Сохранить</el-button>
             </div>
 
-            <div v-if="!annotationsAssetId" style="color:#909399;">
+            <div v-if="!annotationsAssetId" style="color: var(--el-text-color-secondary);">
               Выберите ассет слева, чтобы редактировать разметку
             </div>
 
@@ -638,15 +639,15 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
 
               <el-row :gutter="12">
                 <el-col :span="8">
-                  <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">Start (sec)</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Start (sec)</div>
                   <el-input-number v-model="annotationForm.startSec" :min="0" :step="0.1" style="width: 100%;" />
                 </el-col>
                 <el-col :span="8">
-                  <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">End (sec)</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">End (sec)</div>
                   <el-input-number v-model="annotationForm.endSec" :min="0" :step="0.1" style="width: 100%;" />
                 </el-col>
                 <el-col :span="8">
-                  <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">Статус</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Статус</div>
                   <el-select v-model="annotationForm.type" style="width: 100%;">
                     <el-option label="POSITIVE" value="POSITIVE" />
                     <el-option label="NEGATIVE" value="NEGATIVE" />
@@ -674,7 +675,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 </template>
               </el-table-column>
               <el-table-column label="Created" min-width="180">
-                <template #default="{ row }">{{ row.createdAt || '—' }}</template>
+                <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
               </el-table-column>
               <el-table-column label="Действия" width="160">
                 <template #default="{ row }">
@@ -695,7 +696,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
             <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 10px;">
               <div style="font-weight: 600;">Версии моделей</div>
               <div style="flex:1;"></div>
-              <div style="font-size:12px; color:#909399;">
+              <div style="font-size: 12px; color: var(--el-text-color-secondary);">
                 Для публикации активности нужна хотя бы одна модель со статусом <b>ACTIVE</b>.
               </div>
             </div>
@@ -708,7 +709,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
               <el-table-column label="Артефакт" min-width="260">
                 <template #default="{ row }">
                   <span v-if="row.artifactUri" style="word-break: break-all;">{{ row.artifactUri }}</span>
-                  <span v-else style="color:#909399;">—</span>
+                  <span v-else style="color: var(--el-text-color-secondary);">—</span>
                 </template>
               </el-table-column>
               <el-table-column label="Действия" width="160">
@@ -767,7 +768,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :value="mv.id"
               />
             </el-select>
-            <span v-else style="color:#909399">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">—</span>
           </template>
         </el-table-column>
 
@@ -787,7 +788,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :value="mv.id"
               />
             </el-select>
-            <span v-else style="color:#909399">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">—</span>
           </template>
         </el-table-column>
 
@@ -800,7 +801,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
               :rows="3"
               placeholder='{"minPresencePercent":80}'
             />
-            <span v-else style="color:#909399">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">—</span>
           </template>
         </el-table-column>
       </el-table>

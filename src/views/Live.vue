@@ -191,7 +191,7 @@ function handleStreamError() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .loading-container {
@@ -234,7 +234,7 @@ function handleStreamError() {
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -243,7 +243,7 @@ function handleStreamError() {
 .camera-location {
   margin: 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -271,7 +271,7 @@ function handleStreamError() {
   justify-content: center;
   align-items: center;
   min-height: 400px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 8px;
   overflow: hidden;
 }

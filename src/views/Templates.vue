@@ -162,8 +162,8 @@ async function removeActivity(templateId: number, activityId: number) {
           </div>
 
           <div style="margin-top: 12px;">
-            <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">Активности</div>
-            <div v-if="!t.templateActivities?.length" style="color:#909399;">—</div>
+            <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Активности</div>
+            <div v-if="!t.templateActivities?.length" style="color: var(--el-text-color-secondary);">—</div>
             <el-tag
               v-for="ta in t.templateActivities"
               :key="ta.activityId"
@@ -224,7 +224,7 @@ async function removeActivity(templateId: number, activityId: number) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 </style>
 

@@ -116,23 +116,51 @@ function clearAll() {
   ElMessage.info('Все полигоны удалены')
 }
 
+/** Convert color from CSS var (hex or rgb) to rgba string for canvas */
+function colorToRgba(colorStr: string, alpha: number): string {
+  if (!colorStr || colorStr === '') return `rgba(0,0,0,${alpha})`
+  const s = colorStr.trim()
+  const rgbMatch = s.match(/rgb?a?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+  if (rgbMatch) {
+    return `rgba(${rgbMatch[1]},${rgbMatch[2]},${rgbMatch[3]},${alpha})`
+  }
+  const hex = s.replace('#', '')
+  if (hex.length >= 6) {
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    return `rgba(${r},${g},${b},${alpha})`
+  }
+  return `rgba(0,0,0,${alpha})`
+}
+
+function getElColor(varName: string): string {
+  const root = document.documentElement
+  return getComputedStyle(root).getPropertyValue(varName).trim() || getComputedStyle(root).getPropertyValue('--el-color-black').trim() || ''
+}
+
 function redrawPolygons() {
   if (!canvas.value) return
   
   const ctx = canvas.value.getContext('2d')
   if (!ctx) return
 
+  const successColor = getElColor('--el-color-success')
+  const warningColor = getElColor('--el-color-warning')
+  const whiteColor = getElColor('--el-color-white')
+  const blackColor = getElColor('--el-color-black')
+
   // Clear overlay
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
 
   // Draw saved polygons
   polygons.value.forEach((polygon, index) => {
-    drawPolygon(ctx, polygon.points, `rgba(0, 255, 0, 0.3)`, 'green', index + 1)
+    drawPolygon(ctx, polygon.points, colorToRgba(successColor, 0.3), successColor, whiteColor, blackColor, index + 1)
   })
 
   // Draw current polygon
   if (currentPolygon.value.length > 0) {
-    drawPolygon(ctx, currentPolygon.value, `rgba(255, 255, 0, 0.3)`, 'yellow')
+    drawPolygon(ctx, currentPolygon.value, colorToRgba(warningColor, 0.3), warningColor, whiteColor, blackColor)
   }
 }
 
@@ -141,6 +169,8 @@ function drawPolygon(
   points: Point[],
   fillColor: string,
   strokeColor: string,
+  pointStrokeColor: string,
+  labelStrokeColor: string,
   label?: number
 ) {
   if (points.length === 0) return
@@ -172,7 +202,7 @@ function drawPolygon(
     ctx.arc(point.x * canvasWidth, point.y * canvasHeight, 5, 0, 2 * Math.PI)
     ctx.fillStyle = strokeColor
     ctx.fill()
-    ctx.strokeStyle = 'white'
+    ctx.strokeStyle = pointStrokeColor
     ctx.lineWidth = 1
     ctx.stroke()
   })
@@ -181,8 +211,8 @@ function drawPolygon(
   if (label !== undefined && points.length > 0) {
     const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length * canvasWidth
     const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length * canvasHeight
-    ctx.fillStyle = 'white'
-    ctx.strokeStyle = 'black'
+    ctx.fillStyle = pointStrokeColor
+    ctx.strokeStyle = labelStrokeColor
     ctx.lineWidth = 3
     ctx.font = 'bold 20px Arial'
     ctx.strokeText(`Зона ${label}`, centerX - 30, centerY)
@@ -327,7 +357,7 @@ function onImgLoad() {
 
 .editor-toolbar {
   padding: 12px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
 }
 
@@ -335,7 +365,7 @@ function onImgLoad() {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #000;
+  background: var(--el-color-black);
   border-radius: 4px;
   padding: 8px;
 }
@@ -350,7 +380,7 @@ function onImgLoad() {
   width: 100%;
   height: auto;
   display: block;
-  border: 2px solid #dcdfe6;
+  border: 2px solid var(--el-border-color);
   border-radius: 4px;
 }
 
@@ -381,6 +411,6 @@ function onImgLoad() {
   justify-content: flex-end;
   gap: 12px;
   padding: 12px;
-  border-top: 1px solid #dcdfe6;
+  border-top: 1px solid var(--el-border-color);
 }
 </style>

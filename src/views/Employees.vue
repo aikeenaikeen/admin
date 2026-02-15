@@ -335,14 +335,14 @@ async function removeTemplate() {
       title="Активности сотрудника"
       width="700px"
     >
-      <div v-if="selectedEmployee" style="margin-bottom: 12px; color: #606266;">
+      <div v-if="selectedEmployee" style="margin-bottom: 12px; color: var(--el-text-color-regular);">
         Сотрудник: <strong>{{ selectedEmployee.name }}</strong>
       </div>
 
       <el-card shadow="never" style="margin-bottom: 12px;">
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
           <div>
-            <div style="font-size: 12px; color: #909399;">Текущий шаблон</div>
+            <div style="font-size: 12px; color: var(--el-text-color-secondary);">Текущий шаблон</div>
             <div>{{ currentTemplate ? currentTemplate.name : '—' }}</div>
           </div>
           <div style="flex: 1;"></div>
@@ -358,7 +358,7 @@ async function removeTemplate() {
         <el-row :gutter="12">
           <el-col v-for="ca in companyActivities" :key="ca.activityId" :span="12" style="margin-bottom: 8px;">
             <el-checkbox :label="ca.activityId">
-              {{ ca.activity.name }} <span style="color:#909399;">({{ ca.activity.kind }})</span>
+              {{ ca.activity.name }} <span style="color: var(--el-text-color-secondary);">({{ ca.activity.kind }})</span>
             </el-checkbox>
           </el-col>
         </el-row>
@@ -400,7 +400,7 @@ async function removeTemplate() {
               :value="ca.activityId"
             />
           </el-select>
-          <div style="font-size: 12px; color: #909399; margin-top: 6px;">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px;">
             Показываются только активности, разрешённые компании и с выбранной моделью.
           </div>
         </el-form-item>
@@ -416,7 +416,7 @@ async function removeTemplate() {
           >
             <el-button :icon="Upload">Выбрать файл</el-button>
             <template #tip>
-              <div style="font-size: 12px; color: #909399; margin-top: 8px;">
+              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px;">
                 JPG, PNG до 10MB
               </div>
             </template>
@@ -449,7 +449,7 @@ async function removeTemplate() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 @media (max-width: 768px) {

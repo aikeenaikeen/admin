@@ -2,6 +2,8 @@
 import { ref, onMounted } from 'vue'
 import apiClient from '@/api/client'
 import { ElMessage } from 'element-plus'
+import dayjs from 'dayjs'
+import { formatDateTime } from '@/utils/date'
 
 interface Employee {
   id: number
@@ -38,8 +40,8 @@ const companyActivities = ref<CompanyActivity[]>([])
 const filters = ref({
   employeeId: null as number | null,
   activityId: null as number | null,
-  from: '' as string,
-  to: '' as string,
+  from: null as Date | null,
+  to: null as Date | null,
 })
 
 const page = ref(1)
@@ -79,8 +81,8 @@ async function loadIntervals() {
     }
     if (filters.value.employeeId) params.employeeId = filters.value.employeeId
     if (filters.value.activityId) params.activityId = filters.value.activityId
-    if (filters.value.from) params.from = filters.value.from
-    if (filters.value.to) params.to = filters.value.to
+    if (filters.value.from) params.from = dayjs(filters.value.from).toISOString()
+    if (filters.value.to) params.to = dayjs(filters.value.to).toISOString()
 
     const res = await apiClient.get('/api/activity-intervals', { params })
     items.value = res.data.items
@@ -116,13 +118,13 @@ async function onSearch() {
     <el-card shadow="never" style="margin-bottom: 12px;">
       <el-row :gutter="12">
         <el-col :span="8">
-          <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">Сотрудник</div>
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Сотрудник</div>
           <el-select v-model="filters.employeeId" clearable filterable placeholder="Все" style="width: 100%">
             <el-option v-for="e in employees" :key="e.id" :label="e.name" :value="e.id" />
           </el-select>
         </el-col>
         <el-col :span="8">
-          <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">Активность</div>
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Активность</div>
           <el-select v-model="filters.activityId" clearable filterable placeholder="Все" style="width: 100%">
             <el-option
               v-for="ca in companyActivities"
@@ -133,12 +135,24 @@ async function onSearch() {
           </el-select>
         </el-col>
         <el-col :span="4">
-          <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">From (ISO)</div>
-          <el-input v-model="filters.from" placeholder="2026-01-17T00:00:00Z" />
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">От</div>
+          <el-date-picker
+            v-model="filters.from"
+            type="datetime"
+            placeholder="Выберите дату и время"
+            format="DD.MM.YYYY HH:mm"
+            style="width: 100%"
+          />
         </el-col>
         <el-col :span="4">
-          <div style="font-size: 12px; color:#909399; margin-bottom: 6px;">To (ISO)</div>
-          <el-input v-model="filters.to" placeholder="2026-01-17T23:59:59Z" />
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">До</div>
+          <el-date-picker
+            v-model="filters.to"
+            type="datetime"
+            placeholder="Выберите дату и время"
+            format="DD.MM.YYYY HH:mm"
+            style="width: 100%"
+          />
         </el-col>
       </el-row>
       <div style="margin-top: 12px;">
@@ -155,8 +169,12 @@ async function onSearch() {
         <el-table-column label="Активность" min-width="200">
           <template #default="{ row }">{{ row.activity?.name || row.activityId }}</template>
         </el-table-column>
-        <el-table-column prop="startTime" label="Start" min-width="220" />
-        <el-table-column prop="endTime" label="End" min-width="220" />
+        <el-table-column label="Start" min-width="220">
+          <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
+        </el-table-column>
+        <el-table-column label="End" min-width="220">
+          <template #default="{ row }">{{ formatDateTime(row.endTime) }}</template>
+        </el-table-column>
         <el-table-column label="Dur" width="90">
           <template #default="{ row }">{{ formatDuration(row.startTime, row.endTime) }}</template>
         </el-table-column>
@@ -196,7 +214,7 @@ async function onSearch() {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 </style>
 

@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { io, Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
 import { resolveBaseUrl } from '@/utils/baseUrl'
+import { formatDateTime } from '@/utils/date'
 
 interface PresenceStatus {
   id: number
@@ -75,8 +76,7 @@ function connectSocket() {
 }
 
 function formatTime(time: string | null): string {
-  if (!time) return '—'
-  return new Date(time).toLocaleString('ru-RU')
+  return formatDateTime(time)
 }
 </script>
 
@@ -140,7 +140,7 @@ function formatTime(time: string | null): string {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .presence-grid {
@@ -171,11 +171,11 @@ function formatTime(time: string | null): string {
 }
 
 .presence-card.present {
-  border-left: 4px solid #67c23a;
+  border-left: 4px solid var(--el-color-success);
 }
 
 .presence-card.absent {
-  border-left: 4px solid #909399;
+  border-left: 4px solid var(--el-color-info);
 }
 
 .presence-card:hover {
@@ -198,19 +198,19 @@ function formatTime(time: string | null): string {
   margin: 0 0 4px 0;
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .employee-role {
   margin: 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
 }
 
 .last-event {
   margin-top: 12px;
   font-size: 12px;
-  color: #909399;
+  color: var(--el-text-color-secondary);
   line-height: 1.5;
 }
 </style>
