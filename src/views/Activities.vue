@@ -2,8 +2,15 @@
 import { ref, onMounted, computed } from 'vue'
 import { Plus, Edit, Check, Close, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
+import {
+  translateActivityStatus,
+  translateModelStatus,
+  translateTrainingAnnotationType,
+  translateTrainingJobStatus,
+} from '@/utils/uiText'
 
 type ActivityStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED'
 type ModelVersionStatus = 'DRAFT' | 'STAGING' | 'ACTIVE' | 'DEPRECATED'
@@ -65,6 +72,7 @@ interface TrainingAsset {
 
 const activities = ref<Activity[]>([])
 const companies = ref<Company[]>([])
+const { t } = useI18n()
 const loading = ref(true)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
@@ -110,7 +118,7 @@ async function loadActivities() {
     const response = await apiClient.get('/api/activities')
     activities.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить активности')
+    ElMessage.error(t('activities.loadError'))
   } finally {
     loading.value = false
   }
@@ -121,7 +129,7 @@ async function loadCompanies() {
     const response = await apiClient.get('/api/companies')
     companies.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить компании')
+    ElMessage.error(t('activities.loadCompaniesError'))
   }
 }
 
@@ -129,13 +137,13 @@ async function handleSubmit(openTrainingAfterSave: boolean = false) {
   try {
     if (isEditing.value && editingActivityId.value) {
       await apiClient.put(`/api/activities/${editingActivityId.value}`, form.value)
-      ElMessage.success('Активность обновлена')
+      ElMessage.success(t('activities.updated'))
       if (openTrainingAfterSave) {
         await openTraining({ id: editingActivityId.value } as any)
       }
     } else {
       const created = await apiClient.post('/api/activities', form.value)
-      ElMessage.success('Активность создана')
+      ElMessage.success(t('activities.created'))
       if (openTrainingAfterSave) {
         await openTraining(created.data)
       }
@@ -143,19 +151,19 @@ async function handleSubmit(openTrainingAfterSave: boolean = false) {
     resetForm()
     await loadActivities()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось сохранить активность')
+    ElMessage.error(error.response?.data?.error || t('activities.saveError'))
   }
 }
 
 async function publishActivity(id: number) {
   try {
     await ElMessageBox.confirm(
-      'Опубликовать активность? После публикации её можно будет назначать компаниям.',
-      'Подтверждение',
-      { confirmButtonText: 'Опубликовать', cancelButtonText: 'Отмена', type: 'warning' }
+      t('activities.publishConfirmText'),
+      t('activities.publishConfirmTitle'),
+      { confirmButtonText: t('common.actions.publish'), cancelButtonText: t('common.actions.cancel'), type: 'warning' }
     )
     await apiClient.post(`/api/activities/${id}/publish`)
-    ElMessage.success('Активность опубликована')
+    ElMessage.success(t('activities.published'))
     await loadActivities()
   } catch (error: any) {
     if (error !== 'cancel') {
@@ -163,9 +171,9 @@ async function publishActivity(id: number) {
       if (msg && msg.includes('needs ACTIVE modelVersion')) {
         try {
           await ElMessageBox.confirm(
-            'Чтобы опубликовать активность, нужно сначала перевести обученную модель из STAGING в ACTIVE.\n\nОткрыть раздел «Обучение», чтобы промотить модель?',
-            'Нужна ACTIVE модель',
-            { confirmButtonText: 'Открыть обучение', cancelButtonText: 'Отмена', type: 'info' }
+            t('activities.activeModelNeededText'),
+            t('activities.activeModelNeededTitle'),
+            { confirmButtonText: t('common.actions.openTraining'), cancelButtonText: t('common.actions.cancel'), type: 'info' }
           )
           const act = activities.value.find((a) => a.id === id)
           if (act) await openTraining(act)
@@ -174,7 +182,7 @@ async function publishActivity(id: number) {
         }
         return
       }
-      ElMessage.error(msg || 'Не удалось опубликовать активность')
+      ElMessage.error(msg || t('activities.publishError'))
     }
   }
 }
@@ -182,16 +190,16 @@ async function publishActivity(id: number) {
 async function deprecateActivity(id: number) {
   try {
     await ElMessageBox.confirm(
-      'Пометить активность как устаревшую? Компании не смогут добавлять её новым ролям.',
-      'Подтверждение',
-      { confirmButtonText: 'Пометить', cancelButtonText: 'Отмена', type: 'warning' }
+      t('activities.deprecateConfirmText'),
+      t('activities.publishConfirmTitle'),
+      { confirmButtonText: t('activities.deprecateConfirmButton'), cancelButtonText: t('common.actions.cancel'), type: 'warning' }
     )
     await apiClient.post(`/api/activities/${id}/deprecate`)
-    ElMessage.success('Активность помечена как устаревшая')
+    ElMessage.success(t('activities.deprecated'))
     await loadActivities()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('Не удалось обновить активность')
+      ElMessage.error(t('activities.updateError'))
     }
   }
 }
@@ -237,7 +245,7 @@ async function openTraining(activity: Activity) {
     }))
     annotationForm.value = { startSec: null, endSec: null, type: 'POSITIVE' }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось загрузить данные обучения')
+    ElMessage.error(e.response?.data?.error || t('activities.trainingLoadError'))
   }
 }
 
@@ -257,10 +265,10 @@ async function onFilesSelected(e: Event) {
     await apiClient.post(`/api/activities/${trainingActivity.value.id}/training-assets`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    ElMessage.success('Файлы загружены')
+    ElMessage.success(t('activities.filesUploaded'))
     await openTraining(trainingActivity.value)
   } catch (err: any) {
-    ElMessage.error(err.response?.data?.error || 'Не удалось загрузить файлы')
+    ElMessage.error(err.response?.data?.error || t('activities.filesUploadError'))
   } finally {
     if (input) input.value = ''
   }
@@ -282,7 +290,7 @@ function addAnnotationInterval() {
   const startSec = Number(annotationForm.value.startSec)
   const endSec = Number(annotationForm.value.endSec)
   if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec <= startSec) {
-    ElMessage.error('Некорректные значения start/end (end должен быть больше start)')
+    ElMessage.error(t('activities.invalidInterval'))
     return
   }
 
@@ -329,10 +337,10 @@ async function saveAnnotations() {
         type: i.type,
       })),
     })
-    ElMessage.success('Разметка сохранена')
+    ElMessage.success(t('activities.annotationsSaved'))
     await openTraining(trainingActivity.value)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось сохранить разметку')
+    ElMessage.error(e.response?.data?.error || t('activities.annotationsSaveError'))
   }
 }
 
@@ -340,24 +348,24 @@ async function startTraining() {
   if (!trainingActivity.value) return
   try {
     await apiClient.post(`/api/activities/${trainingActivity.value.id}/train`, {})
-    ElMessage.success('TrainingJob создан (запуск в recognition-service)')
+    ElMessage.success(t('activities.trainingStarted'))
     await openTraining(trainingActivity.value)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось запустить обучение')
+    ElMessage.error(e.response?.data?.error || t('activities.trainingStartError'))
   }
 }
 
 async function promoteModelVersion(modelVersionId: number) {
   try {
     await apiClient.post(`/api/models/${modelVersionId}/promote`, {})
-    ElMessage.success('ModelVersion переведён в ACTIVE')
+    ElMessage.success(t('activities.modelActivated'))
     if (trainingActivity.value) await openTraining(trainingActivity.value)
     if (selectedActivity.value) {
       const full = await apiClient.get(`/api/activities/${selectedActivity.value.id}`)
       selectedActivity.value = full.data
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось промотить модель')
+    ElMessage.error(e.response?.data?.error || t('activities.modelActivateError'))
   }
 }
 
@@ -367,7 +375,7 @@ async function openCompanySettings(activity: Activity) {
     const full = await apiClient.get(`/api/activities/${activity.id}`)
     selectedActivity.value = full.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить детали активности')
+    ElMessage.error(t('activities.detailsLoadError'))
     return
   }
 
@@ -411,7 +419,7 @@ async function saveCompanySettings() {
         try {
           overrides = JSON.parse(settings.overridesText)
         } catch (e) {
-          throw new Error(`Некорректный JSON overrides для компании "${company.name}"`)
+          throw new Error(t('activities.invalidOverridesJson', { name: company.name }))
         }
       } else {
         overrides = null
@@ -426,11 +434,11 @@ async function saveCompanySettings() {
     })
 
     await Promise.all(promises)
-    ElMessage.success('Настройки компаний сохранены')
+    ElMessage.success(t('activities.companySettingsSaved'))
     companyDialogVisible.value = false
     await loadActivities()
   } catch (error) {
-    ElMessage.error((error as any)?.message || 'Не удалось сохранить настройки')
+    ElMessage.error((error as any)?.message || t('activities.companySettingsSaveError'))
   }
 }
 
@@ -447,42 +455,42 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Активности</h1>
+        <h1 class="page-title">{{ t('activities.title') }}</h1>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="startCreate">
-          Создать активность
+          {{ t('activities.createButton') }}
         </el-button>
       </template>
     </el-page-header>
 
     <el-card shadow="never">
       <el-table :data="activities" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="60" />
+        <el-table-column prop="id" :label="t('common.labels.number')" width="60" />
         
-        <el-table-column prop="code" label="Код" min-width="150">
+        <el-table-column prop="code" :label="t('activities.table.code')" min-width="150">
           <template #default="{ row }">
             <el-tag>{{ row.code }}</el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column prop="name" label="Название" min-width="200" />
+        <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
         
-        <el-table-column label="Статус" width="120">
+        <el-table-column :label="t('common.labels.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">
-              {{ row.status }}
+              {{ translateActivityStatus(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column label="Компании" width="100" align="center">
+        <el-table-column :label="t('activities.table.companiesCount')" width="100" align="center">
           <template #default="{ row }">
             {{ row._count?.companyActivities || 0 }}
           </template>
         </el-table-column>
         
-        <el-table-column label="Действия" width="450" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="450" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button
@@ -492,7 +500,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :icon="Check"
                 @click="publishActivity(row.id)"
               >
-                Опубликовать
+                {{ t('common.actions.publish') }}
               </el-button>
               
               <el-button
@@ -502,7 +510,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :icon="Close"
                 @click="deprecateActivity(row.id)"
               >
-                Устареть
+                {{ t('activities.deprecateButton') }}
               </el-button>
               
               <el-button
@@ -511,14 +519,14 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :icon="Edit"
                 @click="startEdit(row)"
               >
-                Редактировать
+                {{ t('common.actions.edit') }}
               </el-button>
 
               <el-button
                 size="small"
                 @click="openTraining(row)"
               >
-                Обучение
+                {{ t('common.actions.openTraining') }}
               </el-button>
               
               <el-button
@@ -528,7 +536,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 :icon="Setting"
                 @click="openCompanySettings(row)"
               >
-                Компании
+                {{ t('layout.menu.companies') }}
               </el-button>
             </div>
           </template>
@@ -539,31 +547,31 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
     <!-- Создание/редактирование активности -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEditing ? 'Редактировать активность' : 'Создать активность'"
+      :title="isEditing ? t('activities.dialog.editTitle') : t('activities.dialog.createTitle')"
       width="600px"
     >
       <el-form :model="form" label-width="150px">
-        <el-form-item label="Название" required>
-          <el-input v-model="form.name" placeholder="Официант обслуживает стол" />
+        <el-form-item :label="t('activities.dialog.name')" required>
+          <el-input v-model="form.name" :placeholder="t('activities.dialog.namePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="Описание">
+        <el-form-item :label="t('activities.dialog.description')">
           <el-input
             v-model="form.description"
             type="textarea"
             :rows="3"
-            placeholder="Коротко: что считаем активностью и как размечать"
+            :placeholder="t('activities.dialog.descriptionPlaceholder')"
           />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Отмена</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
         <el-button type="primary" @click="handleSubmit(false)">
-          {{ isEditing ? 'Сохранить' : 'Создать' }}
+          {{ isEditing ? t('common.actions.save') : t('common.actions.create') }}
         </el-button>
         <el-button type="success" @click="handleSubmit(true)">
-          {{ isEditing ? 'Сохранить и обучить' : 'Создать и обучить' }}
+          {{ isEditing ? t('activities.dialog.saveAndTrainEdit') : t('activities.dialog.saveAndTrainCreate') }}
         </el-button>
       </template>
     </el-dialog>
@@ -571,34 +579,34 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
     <!-- Обучение / данные активности -->
     <el-dialog
       v-model="trainingDialogVisible"
-      :title="`Обучение — ${trainingActivity?.name || ''}`"
+      :title="t('activities.dialog.trainingTitle', { name: trainingActivity?.name || '' })"
       width="1100px"
     >
       <el-row :gutter="12">
         <el-col :span="12">
           <el-card shadow="never">
             <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 10px;">
-              <div style="font-weight: 600;">Данные (ассеты)</div>
+              <div style="font-weight: 600;">{{ t('activities.dialog.dataAssets') }}</div>
               <div style="flex:1;"></div>
               <input ref="uploadInputRef" type="file" multiple style="display:none" @change="onFilesSelected" />
-              <el-button type="primary" @click="onPickFiles">Загрузить файлы</el-button>
+              <el-button type="primary" @click="onPickFiles">{{ t('common.actions.upload') }}</el-button>
             </div>
 
             <el-table :data="trainingActivity?.trainingAssets || []" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="70" />
-              <el-table-column label="URI" min-width="240">
+              <el-table-column prop="id" :label="t('common.labels.number')" width="70" />
+              <el-table-column :label="t('activities.dialog.link')" min-width="240">
                 <template #default="{ row }">
                   <el-link :href="row.uri" target="_blank">{{ row.uri }}</el-link>
                 </template>
               </el-table-column>
-              <el-table-column prop="mime" label="MIME" width="150" />
-              <el-table-column prop="sizeBytes" label="Size" width="110" />
-              <el-table-column label="Разметка" width="110">
+              <el-table-column prop="mime" :label="t('activities.dialog.mimeType')" width="150" />
+              <el-table-column prop="sizeBytes" :label="t('activities.dialog.size')" width="110" />
+              <el-table-column :label="t('activities.dialog.annotations')" width="110">
                 <template #default="{ row }">{{ (row.annotations || []).length }}</template>
               </el-table-column>
-              <el-table-column label=" " width="120">
+              <el-table-column label="" width="120">
                 <template #default="{ row }">
-                  <el-button size="small" @click="onSelectAssetForAnnotations(row.id)">Редакт.</el-button>
+                  <el-button size="small" @click="onSelectAssetForAnnotations(row.id)">{{ t('activities.dialog.annotationEditShort') }}</el-button>
                 </template>
               </el-table-column>
             </el-table>
@@ -608,30 +616,30 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
         <el-col :span="12">
           <el-card shadow="never" style="margin-bottom: 12px;">
             <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 10px;">
-              <div style="font-weight: 600;">Разметка (интервалы)</div>
+              <div style="font-weight: 600;">{{ t('activities.dialog.annotationsTitle') }}</div>
               <div style="flex:1;"></div>
-              <el-button type="primary" :disabled="!annotationsAssetId" @click="saveAnnotations">Сохранить</el-button>
+              <el-button type="primary" :disabled="!annotationsAssetId" @click="saveAnnotations">{{ t('common.actions.save') }}</el-button>
             </div>
 
             <div v-if="!annotationsAssetId" style="color: var(--el-text-color-secondary);">
-              Выберите ассет слева, чтобы редактировать разметку
+              {{ t('activities.dialog.pickAssetHint') }}
             </div>
 
             <div v-else>
               <el-table :data="annotationsDraft" style="width: 100%; margin-bottom: 12px;">
-                <el-table-column label="Start (sec)" width="140">
+                <el-table-column :label="t('activities.dialog.intervalStart')" width="140">
                   <template #default="{ row }">{{ row.startSec }}</template>
                 </el-table-column>
-                <el-table-column label="End (sec)" width="140">
+                <el-table-column :label="t('activities.dialog.intervalEnd')" width="140">
                   <template #default="{ row }">{{ row.endSec }}</template>
                 </el-table-column>
-                <el-table-column label="Статус" width="140">
-                  <template #default="{ row }">{{ row.type }}</template>
+                <el-table-column :label="t('common.labels.type')" width="140">
+                  <template #default="{ row }">{{ translateTrainingAnnotationType(row.type) }}</template>
                 </el-table-column>
-                <el-table-column label=" " width="120">
+                <el-table-column label="" width="120">
                   <template #default="{ $index }">
                     <el-button size="small" type="danger" @click="removeAnnotationInterval($index)">
-                      Удалить
+                      {{ t('common.actions.delete') }}
                     </el-button>
                   </template>
                 </el-table-column>
@@ -639,45 +647,49 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
 
               <el-row :gutter="12">
                 <el-col :span="8">
-                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Start (sec)</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('activities.dialog.intervalStart') }}</div>
                   <el-input-number v-model="annotationForm.startSec" :min="0" :step="0.1" style="width: 100%;" />
                 </el-col>
                 <el-col :span="8">
-                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">End (sec)</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('activities.dialog.intervalEnd') }}</div>
                   <el-input-number v-model="annotationForm.endSec" :min="0" :step="0.1" style="width: 100%;" />
                 </el-col>
                 <el-col :span="8">
-                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Статус</div>
+                  <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('common.labels.type') }}</div>
                   <el-select v-model="annotationForm.type" style="width: 100%;">
-                    <el-option label="POSITIVE" value="POSITIVE" />
-                    <el-option label="NEGATIVE" value="NEGATIVE" />
+                    <el-option :label="translateTrainingAnnotationType('POSITIVE')" value="POSITIVE" />
+                    <el-option :label="translateTrainingAnnotationType('NEGATIVE')" value="NEGATIVE" />
                   </el-select>
                 </el-col>
               </el-row>
               <div style="margin-top: 12px;">
-                <el-button type="primary" @click="addAnnotationInterval">Добавить интервал</el-button>
+                <el-button type="primary" @click="addAnnotationInterval">{{ t('activities.dialog.addInterval') }}</el-button>
               </div>
             </div>
           </el-card>
 
           <el-card shadow="never">
             <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 10px;">
-              <div style="font-weight: 600;">Training jobs</div>
+              <div style="font-weight: 600;">{{ t('activities.dialog.trainingJobs') }}</div>
               <div style="flex:1;"></div>
-              <el-button type="success" @click="startTraining">Запустить обучение</el-button>
+              <el-button type="success" @click="startTraining">{{ t('activities.dialog.startTraining') }}</el-button>
             </div>
             <el-table :data="trainingActivity?.trainingJobs || []" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="70" />
-              <el-table-column prop="status" label="Status" width="120" />
-              <el-table-column label="ModelVersion" min-width="140">
+              <el-table-column prop="id" :label="t('common.labels.number')" width="70" />
+              <el-table-column :label="t('common.labels.status')" width="120">
                 <template #default="{ row }">
-                  {{ row.modelVersion?.id || row.modelVersionId || '—' }}
+                  {{ translateTrainingJobStatus(row.status) }}
                 </template>
               </el-table-column>
-              <el-table-column label="Created" min-width="180">
+              <el-table-column :label="t('activities.dialog.modelVersion')" min-width="140">
+                <template #default="{ row }">
+                  {{ row.modelVersion?.id || row.modelVersionId || t('common.misc.none') }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('activities.dialog.createdAt')" min-width="180">
                 <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
               </el-table-column>
-              <el-table-column label="Действия" width="160">
+              <el-table-column :label="t('common.labels.actions')" width="160">
                 <template #default="{ row }">
                   <el-button
                     v-if="(row.modelVersion?.id || row.modelVersionId) && ((row.modelVersion?.status || ((trainingActivity?.modelVersions || []).find((m:any)=>m.id===row.modelVersionId)?.status)) === 'STAGING')"
@@ -685,7 +697,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                     type="primary"
                     @click="promoteModelVersion(row.modelVersion?.id || row.modelVersionId)"
                   >
-                    Сделать ACTIVE
+                    {{ t('common.actions.activate') }}
                   </el-button>
                 </template>
               </el-table-column>
@@ -694,25 +706,29 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
 
           <el-card shadow="never" style="margin-top: 12px;">
             <div style="display:flex; align-items:center; gap: 12px; margin-bottom: 10px;">
-              <div style="font-weight: 600;">Версии моделей</div>
+              <div style="font-weight: 600;">{{ t('activities.dialog.modelVersions') }}</div>
               <div style="flex:1;"></div>
               <div style="font-size: 12px; color: var(--el-text-color-secondary);">
-                Для публикации активности нужна хотя бы одна модель со статусом <b>ACTIVE</b>.
+                {{ t('activities.dialog.modelPublishHint') }}
               </div>
             </div>
             <el-table :data="trainingActivity?.modelVersions || []" style="width: 100%">
-              <el-table-column prop="id" label="ID" width="80" />
-              <el-table-column prop="version" label="Версия" width="90">
+              <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+              <el-table-column prop="version" :label="t('activities.dialog.modelVersion')" width="90">
                 <template #default="{ row }">v{{ row.version }}</template>
               </el-table-column>
-              <el-table-column prop="status" label="Статус" width="120" />
-              <el-table-column label="Артефакт" min-width="260">
+              <el-table-column :label="t('common.labels.status')" width="120">
                 <template #default="{ row }">
-                  <span v-if="row.artifactUri" style="word-break: break-all;">{{ row.artifactUri }}</span>
-                  <span v-else style="color: var(--el-text-color-secondary);">—</span>
+                  {{ translateModelStatus(row.status) }}
                 </template>
               </el-table-column>
-              <el-table-column label="Действия" width="160">
+              <el-table-column :label="t('activities.dialog.artifact')" min-width="260">
+                <template #default="{ row }">
+                  <span v-if="row.artifactUri" style="word-break: break-all;">{{ row.artifactUri }}</span>
+                  <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('common.labels.actions')" width="160">
                 <template #default="{ row }">
                   <el-button
                     v-if="row.status === 'STAGING'"
@@ -720,7 +736,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                     type="primary"
                     @click="promoteModelVersion(row.id)"
                   >
-                    Сделать ACTIVE
+                    {{ t('common.actions.activate') }}
                   </el-button>
                 </template>
               </el-table-column>
@@ -730,20 +746,20 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
       </el-row>
 
       <template #footer>
-        <el-button @click="trainingDialogVisible = false">Закрыть</el-button>
+        <el-button @click="trainingDialogVisible = false">{{ t('common.actions.close') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Настройки доступа для компаний -->
     <el-dialog
       v-model="companyDialogVisible"
-      :title="`Настройки компаний — ${selectedActivity?.name}`"
+      :title="t('activities.dialog.companySettingsTitle', { name: selectedActivity?.name || '' })"
       width="1100px"
     >
       <el-table :data="companies" style="width: 100%">
-        <el-table-column prop="name" label="Компания" min-width="200" />
+        <el-table-column prop="name" :label="t('common.labels.company')" min-width="200" />
         
-        <el-table-column label="Доступ" width="100" align="center">
+        <el-table-column :label="t('activities.dialog.access')" width="100" align="center">
           <template #default="{ row }">
             <el-switch
               :model-value="companySettings[row.id]?.enabled || false"
@@ -752,64 +768,64 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
           </template>
         </el-table-column>
 
-        <el-table-column label="Allowed model" width="220">
+        <el-table-column :label="t('activities.dialog.allowedModel')" width="220">
           <template #default="{ row }">
             <el-select
               v-if="companySettings[row.id]?.enabled"
               v-model="companySettings[row.id].allowedModelVersionId"
-              placeholder="—"
+              :placeholder="t('common.misc.none')"
               clearable
               style="width: 200px"
             >
               <el-option
                 v-for="mv in (selectedActivity?.modelVersions || [])"
                 :key="mv.id"
-                :label="`v${mv.version} (${mv.status})`"
+                :label="`v${mv.version} (${translateModelStatus(mv.status)})`"
                 :value="mv.id"
               />
             </el-select>
-            <span v-else style="color: var(--el-text-color-secondary);">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="Active model" width="220">
+        <el-table-column :label="t('activities.dialog.activeModel')" width="220">
           <template #default="{ row }">
             <el-select
               v-if="companySettings[row.id]?.enabled"
               v-model="companySettings[row.id].activeModelVersionId"
-              placeholder="—"
+              :placeholder="t('common.misc.none')"
               clearable
               style="width: 200px"
             >
               <el-option
                 v-for="mv in (selectedActivity?.modelVersions || []).filter((m: any) => m.status === 'ACTIVE')"
                 :key="mv.id"
-                :label="`v${mv.version} (${mv.status})`"
+                :label="`v${mv.version} (${translateModelStatus(mv.status)})`"
                 :value="mv.id"
               />
             </el-select>
-            <span v-else style="color: var(--el-text-color-secondary);">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="Overrides (JSON)" min-width="350">
+        <el-table-column :label="t('activities.dialog.overrides')" min-width="350">
           <template #default="{ row }">
             <el-input
               v-if="companySettings[row.id]?.enabled"
               v-model="companySettings[row.id].overridesText"
               type="textarea"
               :rows="3"
-              placeholder='{"minPresencePercent":80}'
+              :placeholder="t('activities.dialog.overridesPlaceholder')"
             />
-            <span v-else style="color: var(--el-text-color-secondary);">—</span>
+            <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
           </template>
         </el-table-column>
       </el-table>
 
       <template #footer>
-        <el-button @click="companyDialogVisible = false">Отмена</el-button>
+        <el-button @click="companyDialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
         <el-button type="primary" @click="saveCompanySettings">
-          Сохранить
+          {{ t('common.actions.save') }}
         </el-button>
       </template>
     </el-dialog>
@@ -831,7 +847,7 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: --el-text-color-primary;
+  color: var(--el-text-color-primary);
 }
 
 .action-buttons {

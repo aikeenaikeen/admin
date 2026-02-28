@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { io, Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
 import { resolveBaseUrl } from '@/utils/baseUrl'
 import { formatDateTime } from '@/utils/date'
+import { translateEventType } from '@/utils/uiText'
+
+const { t } = useI18n()
 
 interface PresenceStatus {
   id: number
@@ -42,7 +46,7 @@ async function loadPresence() {
     const response = await apiClient.get('/api/presence')
     presence.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить данные о присутствии')
+    ElMessage.error(t('presence.loadError'))
   } finally {
     loading.value = false
   }
@@ -84,11 +88,11 @@ function formatTime(time: string | null): string {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Присутствие сотрудников</h1>
+        <h1 class="page-title">{{ t('presence.title') }}</h1>
       </template>
       <template #extra>
         <el-button :icon="Refresh" @click="loadPresence" :loading="loading">
-          Обновить
+          {{ t('common.actions.refresh') }}
         </el-button>
       </template>
     </el-page-header>
@@ -107,21 +111,21 @@ function formatTime(time: string | null): string {
 
           <div class="employee-info">
             <h3 class="employee-name">{{ emp.name }}</h3>
-            <p class="employee-role">{{ emp.role || 'Сотрудник' }}</p>
+            <p class="employee-role">{{ emp.role || t('presence.defaultRole') }}</p>
             
             <el-tag :type="emp.present ? 'success' : 'info'" size="large" style="margin-top: 12px;">
-              {{ emp.present ? '✅ Присутствует' : '⭕ Отсутствует' }}
+              {{ emp.present ? t('presence.present') : t('presence.absent') }}
             </el-tag>
 
             <div v-if="emp.lastEventTime" class="last-event">
-              Последнее: {{ emp.lastEventType }} в {{ formatTime(emp.lastEventTime) }}
+              {{ t('presence.lastEvent', { type: translateEventType(emp.lastEventType), time: formatTime(emp.lastEventTime) }) }}
             </div>
           </div>
         </div>
       </el-card>
     </div>
 
-    <el-empty v-if="!loading && presence.length === 0" description="Нет сотрудников" />
+    <el-empty v-if="!loading && presence.length === 0" :description="t('presence.empty')" />
   </div>
 </template>
 

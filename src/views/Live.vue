@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { VideoCamera, Monitor } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import { resolveBaseUrl } from '@/utils/baseUrl'
+
+const { t } = useI18n()
 
 interface Camera {
   id: number
@@ -72,9 +75,9 @@ function closeModal() {
 
 function handleStreamError() {
   if (showRecognition.value) {
-    alert('Не удалось подключиться к сервису распознавания. Убедитесь, что Recognition Service запущен.')
+    alert(t('live.recognitionServiceError'))
   } else {
-    alert('Не удалось загрузить видео с камеры.')
+    alert(t('live.streamError'))
   }
 }
 </script>
@@ -84,12 +87,12 @@ function handleStreamError() {
     <el-page-header class="page-header">
       <template #content>
         <div class="header-content">
-          <h1 class="page-title">Прямые трансляции</h1>
+          <h1 class="page-title">{{ t('live.title') }}</h1>
         </div>
       </template>
       <template #extra>
         <el-button @click="loadCameras" :loading="loading">
-          Обновить
+          {{ t('common.actions.refresh') }}
         </el-button>
       </template>
     </el-page-header>
@@ -109,10 +112,10 @@ function handleStreamError() {
           <div class="card-header">
             <div class="camera-info">
               <h3 class="camera-name">{{ camera.name }}</h3>
-              <p class="camera-location">{{ camera.location || '—' }}</p>
+              <p class="camera-location">{{ camera.location || t('common.misc.none') }}</p>
             </div>
             <el-tag :type="camera.isActive ? 'success' : 'danger'" size="small">
-              {{ camera.isActive ? 'Активна' : 'Неактивна' }}
+              {{ camera.isActive ? t('live.active') : t('live.inactive') }}
             </el-tag>
           </div>
         </template>
@@ -125,7 +128,7 @@ function handleStreamError() {
             @click="openStream(camera.id, false)"
             style="flex: 1"
           >
-            Видео
+            {{ t('live.video') }}
           </el-button>
           <el-button
             type="success"
@@ -134,7 +137,7 @@ function handleStreamError() {
             @click="openStream(camera.id, true)"
             style="flex: 1"
           >
-            AI
+            {{ t('live.ai') }}
           </el-button>
         </div>
       </el-card>
@@ -142,7 +145,7 @@ function handleStreamError() {
 
     <el-dialog
       v-model="dialogVisible"
-      :title="cameras.find(c => c.id === selectedCamera)?.name || 'Камера'"
+      :title="cameras.find(c => c.id === selectedCamera)?.name || t('live.streamTitleFallback')"
       width="90%"
       @close="closeModal"
       center
@@ -150,7 +153,7 @@ function handleStreamError() {
       <div v-if="showRecognition" class="recognition-indicator">
         <el-tag type="success" size="large">
           <el-icon><Monitor /></el-icon>
-          Режим распознавания
+          {{ t('live.recognitionMode') }}
         </el-tag>
       </div>
       
@@ -158,7 +161,7 @@ function handleStreamError() {
         <img
           v-if="selectedCamera && streamUrls[selectedCamera]"
           :src="streamUrls[selectedCamera]"
-          alt="Live stream"
+          :alt="t('live.imageAlt')"
           class="stream-image"
           @error="handleStreamError"
         />
@@ -166,7 +169,7 @@ function handleStreamError() {
       
       <el-alert
         v-if="showRecognition"
-        title="Зеленые рамки обозначают распознанные лица"
+        :title="t('live.recognitionHint')"
         type="info"
         :closable="false"
         style="margin-top: 16px"

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Refresh, TrendCharts, Calendar } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
+
+const { t } = useI18n()
 
 const statistics = ref<any>(null)
 const loading = ref(true)
@@ -39,7 +42,7 @@ async function loadStatistics() {
     })
     statistics.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить статистику')
+    ElMessage.error(t('statistics.loadError'))
   } finally {
     loading.value = false
   }
@@ -50,11 +53,11 @@ async function loadStatistics() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Статистика</h1>
+        <h1 class="page-title">{{ t('statistics.title') }}</h1>
       </template>
       <template #extra>
         <el-button :icon="Refresh" @click="loadStatistics" :loading="loading">
-          Обновить
+          {{ t('common.actions.refresh') }}
         </el-button>
       </template>
     </el-page-header>
@@ -63,18 +66,18 @@ async function loadStatistics() {
       <template #header>
         <div style="display: flex; align-items: center; gap: 8px;">
           <el-icon><Calendar /></el-icon>
-          <span>Период</span>
+          <span>{{ t('statistics.period') }}</span>
         </div>
       </template>
       
       <el-form label-width="100px">
         <el-row :gutter="16">
           <el-col :xs="24" :sm="10">
-            <el-form-item label="От даты">
+            <el-form-item :label="t('statistics.fromDate')">
               <el-date-picker
                 v-model="dateFrom"
                 type="date"
-                placeholder="Выберите дату"
+                :placeholder="t('common.placeholders.selectDate')"
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
@@ -83,11 +86,11 @@ async function loadStatistics() {
           </el-col>
           
           <el-col :xs="24" :sm="10">
-            <el-form-item label="До даты">
+            <el-form-item :label="t('statistics.toDate')">
               <el-date-picker
                 v-model="dateTo"
                 type="date"
-                placeholder="Выберите дату"
+                :placeholder="t('common.placeholders.selectDate')"
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
@@ -96,9 +99,9 @@ async function loadStatistics() {
           </el-col>
           
           <el-col :xs="24" :sm="4">
-            <el-form-item label=" ">
+            <el-form-item label="">
               <el-button type="primary" @click="loadStatistics" style="width: 100%">
-                Применить
+                {{ t('statistics.apply') }}
               </el-button>
             </el-form-item>
           </el-col>
@@ -116,7 +119,7 @@ async function loadStatistics() {
               </div>
               <div class="stat-info">
                 <div class="stat-value">{{ statistics.summary.totalEvents }}</div>
-                <div class="stat-label">Всего событий</div>
+                <div class="stat-label">{{ t('statistics.totalEvents') }}</div>
               </div>
             </div>
           </el-card>
@@ -128,7 +131,7 @@ async function loadStatistics() {
               </div>
               <div class="stat-info">
                 <div class="stat-value">{{ statistics.summary.uniqueEmployees }}</div>
-                <div class="stat-label">Уникальных сотрудников</div>
+                <div class="stat-label">{{ t('statistics.uniqueEmployees') }}</div>
               </div>
             </div>
           </el-card>
@@ -140,7 +143,7 @@ async function loadStatistics() {
               </div>
               <div class="stat-info">
                 <div class="stat-value">{{ statistics.summary.avgEventsPerDay }}</div>
-                <div class="stat-label">Среднее событий/день</div>
+                <div class="stat-label">{{ t('statistics.avgEventsPerDay') }}</div>
               </div>
             </div>
           </el-card>
@@ -148,33 +151,33 @@ async function loadStatistics() {
 
         <el-card shadow="never" style="margin-top: 24px">
           <template #header>
-            <h3 style="margin: 0;">Топ сотрудников</h3>
+            <h3 style="margin: 0;">{{ t('statistics.topEmployees') }}</h3>
           </template>
           
           <el-table :data="statistics.topEmployees" style="width: 100%">
-            <el-table-column prop="name" label="Имя" min-width="200" />
-            <el-table-column prop="eventCount" label="Количество событий" width="180" align="right" />
+            <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
+            <el-table-column prop="eventCount" :label="t('statistics.eventCount')" width="180" align="right" />
           </el-table>
         </el-card>
 
         <el-card shadow="never" style="margin-top: 24px">
           <template #header>
-            <h3 style="margin: 0;">События по дням</h3>
+            <h3 style="margin: 0;">{{ t('statistics.eventsByDay') }}</h3>
           </template>
           
           <el-table :data="statistics.eventsByDay" style="width: 100%">
-            <el-table-column label="Дата" width="220">
+            <el-table-column :label="t('common.labels.date')" width="220">
               <template #default="{ row }">
                 {{ formatDate(row.date) }}
               </template>
             </el-table-column>
-            <el-table-column prop="count" label="Всего" min-width="150" align="right" />
-            <el-table-column label="Вход" min-width="150" align="right">
+            <el-table-column prop="count" :label="t('statistics.total')" min-width="150" align="right" />
+            <el-table-column :label="t('enums.eventType.IN')" min-width="150" align="right">
               <template #default="{ row }">
                 <el-tag type="success" size="small">{{ row.ins }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="Выход" min-width="150" align="right">
+            <el-table-column :label="t('enums.eventType.OUT')" min-width="150" align="right">
               <template #default="{ row }">
                 <el-tag type="warning" size="small">{{ row.outs }}</el-tag>
               </template>

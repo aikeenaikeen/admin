@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { User, Lock } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -8,6 +9,7 @@ import LogoIcon from '@/components/icons/LogoIcon.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const loginForm = ref({
   email: '',
@@ -21,10 +23,10 @@ async function handleLogin() {
 
   try {
     await authStore.login(loginForm.value.email, loginForm.value.password)
-    ElMessage.success('Вход выполнен успешно')
+    ElMessage.success(t('login.success'))
     router.push('/dashboard')
   } catch (err: any) {
-    ElMessage.error(err.response?.data?.error || 'Ошибка входа')
+    ElMessage.error(err.response?.data?.error || t('login.error'))
   } finally {
     loading.value = false
   }
@@ -36,10 +38,10 @@ async function handleLogin() {
     <el-card class="login-card" shadow="always">
       <div class="login-header">
         <div class="brand">
-          <LogoIcon class="brand-logo" :size="40" />
-          <h1>Aikeen</h1>
+          <LogoIcon class="brand-logo" :size="40" :title="t('common.brandLogoTitle')" />
+          <h1>{{ t('common.appName') }}</h1>
         </div>
-        <p class="subtitle">Система учета посещаемости с распознаванием лиц</p>
+        <p class="subtitle">{{ t('login.subtitle') }}</p>
       </div>
 
       <el-form
@@ -48,22 +50,22 @@ async function handleLogin() {
         label-position="top"
         size="large"
       >
-        <el-form-item label="Email">
+        <el-form-item :label="t('common.labels.email')">
           <el-input
             v-model="loginForm.email"
             :prefix-icon="User"
             type="email"
-            placeholder="admin@example.com"
+            :placeholder="t('login.placeholders.email')"
             required
           />
         </el-form-item>
 
-        <el-form-item label="Пароль">
+        <el-form-item :label="t('common.labels.password')">
           <el-input
             v-model="loginForm.password"
             :prefix-icon="Lock"
             type="password"
-            placeholder="••••••••"
+            :placeholder="t('login.placeholders.password')"
             show-password
             required
           />
@@ -77,7 +79,7 @@ async function handleLogin() {
             style="width: 100%"
             size="large"
           >
-            {{ loading ? 'Вход...' : 'Войти' }}
+            {{ loading ? t('login.submitting') : t('login.submit') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -85,9 +87,9 @@ async function handleLogin() {
       <div class="login-footer">
         <el-divider />
         <p class="demo-accounts">
-          <strong>Тестовые аккаунты:</strong><br>
-          SUPERADMIN: superadmin@system.com<br>
-          ADMIN: admin@demo.com
+          <strong>{{ t('login.demoTitle') }}</strong><br>
+          {{ t('login.demoSuperadmin') }}<br>
+          {{ t('login.demoCompanyAdmin') }}
         </p>
       </div>
     </el-card>

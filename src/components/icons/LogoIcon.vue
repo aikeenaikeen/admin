@@ -6,7 +6,7 @@ withDefaults(
   }>(),
   {
     size: 32,
-    title: 'aikeen logo',
+    title: 'Aikeen Logo',
   },
 )
 </script>

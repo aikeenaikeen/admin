@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { User, VideoCamera, Calendar, TrendCharts } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
+
+const { t } = useI18n()
 
 const stats = ref({
   totalEmployees: 0,
@@ -52,7 +55,7 @@ async function loadStats() {
 
 <template>
   <div class="page-container">
-    <h1 class="page-title">Панель управления</h1>
+    <h1 class="page-title">{{ t('dashboard.title') }}</h1>
 
     <div v-loading="loading" class="stats-grid">
       <el-card shadow="hover" class="stat-card">
@@ -62,7 +65,7 @@ async function loadStats() {
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.totalEmployees }}</div>
-            <div class="stat-label">Всего сотрудников</div>
+            <div class="stat-label">{{ t('dashboard.stats.totalEmployees') }}</div>
           </div>
         </div>
       </el-card>
@@ -74,7 +77,7 @@ async function loadStats() {
           </div>
           <div class="stat-info">
             <div class="stat-value success">{{ stats.presentEmployees }}</div>
-            <div class="stat-label">Присутствуют сейчас</div>
+            <div class="stat-label">{{ t('dashboard.stats.presentEmployees') }}</div>
           </div>
         </div>
       </el-card>
@@ -86,7 +89,7 @@ async function loadStats() {
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.eventsToday }}</div>
-            <div class="stat-label">События сегодня</div>
+            <div class="stat-label">{{ t('dashboard.stats.eventsToday') }}</div>
           </div>
         </div>
       </el-card>
@@ -98,7 +101,7 @@ async function loadStats() {
           </div>
           <div class="stat-info">
             <div class="stat-value">{{ stats.activeCameras }}</div>
-            <div class="stat-label">Активные камеры</div>
+            <div class="stat-label">{{ t('dashboard.stats.activeCameras') }}</div>
           </div>
         </div>
       </el-card>
@@ -106,29 +109,29 @@ async function loadStats() {
 
     <el-card shadow="never" style="margin-top: 24px">
       <template #header>
-        <h2 style="margin: 0; font-size: 18px;">Быстрые действия</h2>
+        <h2 style="margin: 0; font-size: 18px;">{{ t('dashboard.quickActions.title') }}</h2>
       </template>
       
       <div class="quick-links">
         <router-link to="/employees" class="quick-link">
           <el-icon :size="40"><User /></el-icon>
-          <span>Управление сотрудниками</span>
+          <span>{{ t('dashboard.quickActions.employees') }}</span>
         </router-link>
         <router-link to="/cameras" class="quick-link">
           <el-icon :size="40"><VideoCamera /></el-icon>
-          <span>Управление камерами</span>
+          <span>{{ t('dashboard.quickActions.cameras') }}</span>
         </router-link>
         <router-link to="/presence" class="quick-link">
           <el-icon :size="40"><TrendCharts /></el-icon>
-          <span>Посещаемость</span>
+          <span>{{ t('dashboard.quickActions.presence') }}</span>
         </router-link>
         <router-link to="/events" class="quick-link">
           <el-icon :size="40"><Calendar /></el-icon>
-          <span>История событий</span>
+          <span>{{ t('dashboard.quickActions.events') }}</span>
         </router-link>
         <router-link to="/live" class="quick-link">
           <el-icon :size="40"><VideoCamera /></el-icon>
-          <span>Прямые трансляции</span>
+          <span>{{ t('dashboard.quickActions.live') }}</span>
         </router-link>
       </div>
     </el-card>

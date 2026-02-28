@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { type AppLocale, persistLocale } from '@/i18n'
 import LogoIcon from '@/components/icons/LogoIcon.vue'
+import { translateUserRole } from '@/utils/uiText'
 import {
   Location,
   Document,
@@ -23,27 +26,40 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const themeStore = useThemeStore()
+const { t, locale } = useI18n()
 const THEME_TOGGLE_INDEX = '__theme_toggle__'
 
 const activeIndex = computed(() => route.path)
+const localeOptions = computed(() => [
+  { value: 'ru' as AppLocale, label: t('layout.languageOptions.ru') },
+  { value: 'en' as AppLocale, label: t('layout.languageOptions.en') },
+])
+
+const currentLocale = computed<AppLocale>({
+  get: () => locale.value as AppLocale,
+  set: (value) => {
+    locale.value = value
+    persistLocale(value)
+  },
+})
 
 const menuItems = computed(() => {
   const items = [
-    { index: '/dashboard', title: 'Дашборд', icon: TrendCharts },
-    { index: '/employees', title: 'Сотрудники', icon: User },
-    { index: '/templates', title: 'Шаблоны', icon: Briefcase },
-    { index: '/cameras', title: 'Камеры', icon: VideoCamera },
-    { index: '/presence', title: 'Присутствие', icon: Location },
-    { index: '/events', title: 'События', icon: Document },
-    { index: '/statistics', title: 'Статистика', icon: TrendCharts },
-    { index: '/employee-activities', title: 'Активности сотрудников', icon: Operation },
-    { index: '/live', title: 'Прямые трансляции', icon: Monitor },
+    { index: '/dashboard', title: t('layout.menu.dashboard'), icon: TrendCharts },
+    { index: '/employees', title: t('layout.menu.employees'), icon: User },
+    { index: '/templates', title: t('layout.menu.templates'), icon: Briefcase },
+    { index: '/cameras', title: t('layout.menu.cameras'), icon: VideoCamera },
+    { index: '/presence', title: t('layout.menu.presence'), icon: Location },
+    { index: '/events', title: t('layout.menu.events'), icon: Document },
+    { index: '/statistics', title: t('layout.menu.statistics'), icon: TrendCharts },
+    { index: '/employee-activities', title: t('layout.menu.employeeActivities'), icon: Operation },
+    { index: '/live', title: t('layout.menu.live'), icon: Monitor },
   ]
   
   if (authStore.isSuperAdmin) {
-    items.push({ index: '/activities', title: 'Активности', icon: Operation })
-    items.push({ index: '/companies', title: 'Компании', icon: OfficeBuilding })
-    items.push({ index: '/users', title: 'Пользователи', icon: Setting })
+    items.push({ index: '/activities', title: t('layout.menu.activities'), icon: Operation })
+    items.push({ index: '/companies', title: t('layout.menu.companies'), icon: OfficeBuilding })
+    items.push({ index: '/users', title: t('layout.menu.users'), icon: Setting })
   }
   
   return items
@@ -67,8 +83,8 @@ function logout() {
   <el-container class="layout-container">
     <el-aside width="250px" class="sidebar">
       <div class="logo">
-        <LogoIcon class="logo-image" :size="36" />
-        <h2>Aikeen</h2>
+        <LogoIcon class="logo-image" :size="36" :title="t('common.brandLogoTitle')" />
+        <h2>{{ t('common.appName') }}</h2>
       </div>
       
       <el-menu
@@ -87,7 +103,7 @@ function logout() {
 
         <el-menu-item :index="THEME_TOGGLE_INDEX">
           <el-icon><component :is="themeStore.isDark ? Moon : Sunny" /></el-icon>
-          <span>Тема</span>
+          <span>{{ t('layout.theme') }}</span>
         </el-menu-item>
       </el-menu>
       
@@ -96,13 +112,24 @@ function logout() {
           <el-icon size="20"><User /></el-icon>
           <div class="user-details">
             <div class="user-email">{{ authStore.user?.email }}</div>
-            <div class="user-role">{{ authStore.user?.role }}</div>
+            <div class="user-role">{{ translateUserRole(authStore.user?.role) }}</div>
           </div>
         </div>
-        
-        
+
+        <div class="locale-switch">
+          <div class="locale-label">{{ t('layout.language') }}</div>
+          <el-select v-model="currentLocale" size="small">
+            <el-option
+              v-for="option in localeOptions"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+        </div>
+
         <el-button type="danger" size="small" @click="logout" style="width: 100%">
-          Выйти
+          {{ t('common.actions.logout') }}
         </el-button>
       </div>
     </el-aside>
@@ -187,6 +214,16 @@ function logout() {
   color: var(--el-text-color-secondary);
 }
 
+.locale-switch {
+  margin-bottom: 12px;
+}
+
+.locale-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+}
+
 .main-content {
   background: var(--el-bg-color-page);
   padding: 0;
@@ -202,5 +239,3 @@ function logout() {
   }
 }
 </style>
-
-

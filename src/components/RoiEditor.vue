@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 
 interface Point {
@@ -25,6 +26,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const { t } = useI18n()
 
 const imgEl = ref<HTMLImageElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -57,7 +59,7 @@ async function loadStreamUrl() {
     const response = await apiClient.get(`/api/cameras/${props.cameraId}/stream-url`)
     const mjpegUrl = response.data?.mjpegUrl
     if (!mjpegUrl) {
-      ElMessage.error('Не удалось получить URL потока камеры')
+      ElMessage.error(t('roiEditor.streamAddressError'))
       return
     }
 
@@ -67,7 +69,7 @@ async function loadStreamUrl() {
     await nextTick()
     // Канвас будет подогнан на onImgLoad
   } catch (error) {
-    ElMessage.error('Ошибка при получении потока камеры')
+    ElMessage.error(t('roiEditor.streamError'))
   }
 }
 
@@ -84,19 +86,19 @@ function handleCanvasClick(event: MouseEvent) {
 
 function finishPolygon() {
   if (currentPolygon.value.length < 3) {
-    ElMessage.warning('Полигон должен содержать минимум 3 точки')
+    ElMessage.warning(t('roiEditor.polygonMinPoints'))
     return
   }
   
   polygons.value.push({
     points: [...currentPolygon.value],
-    label: `Зона ${polygons.value.length + 1}`,
+    label: t('roiEditor.zone', { number: polygons.value.length + 1 }),
   })
   
   currentPolygon.value = []
   drawing.value = false
   redrawPolygons()
-  ElMessage.success('Полигон добавлен')
+  ElMessage.success(t('roiEditor.polygonAdded'))
 }
 
 function cancelCurrentPolygon() {
@@ -109,7 +111,7 @@ function removeLastPolygon() {
   if (polygons.value.length > 0) {
     polygons.value.pop()
     redrawPolygons()
-    ElMessage.info('Последний полигон удалён')
+    ElMessage.info(t('roiEditor.lastPolygonRemoved'))
   }
 }
 
@@ -118,7 +120,7 @@ function clearAll() {
   currentPolygon.value = []
   drawing.value = false
   redrawPolygons()
-  ElMessage.info('Все полигоны удалены')
+  ElMessage.info(t('roiEditor.allPolygonsRemoved'))
 }
 
 /** Convert color from CSS var (hex or rgb) to rgba string for canvas */
@@ -220,25 +222,26 @@ function drawPolygon(
     ctx.strokeStyle = labelStrokeColor
     ctx.lineWidth = 3
     ctx.font = 'bold 20px Arial'
-    ctx.strokeText(`Зона ${label}`, centerX - 30, centerY)
-    ctx.fillText(`Зона ${label}`, centerX - 30, centerY)
+    const zoneLabel = t('roiEditor.zone', { number: label })
+    ctx.strokeText(zoneLabel, centerX - 30, centerY)
+    ctx.fillText(zoneLabel, centerX - 30, centerY)
   }
 }
 
 function startDrawing() {
   drawing.value = true
   currentPolygon.value = []
-  ElMessage.info('Кликайте на изображении, чтобы нарисовать полигон. Нажмите "Завершить полигон" когда закончите.')
+  ElMessage.info(t('roiEditor.drawHint'))
 }
 
 function handleSave() {
   if (currentPolygon.value.length > 0) {
-    ElMessage.warning('Завершите или отмените текущий полигон перед сохранением')
+    ElMessage.warning(t('roiEditor.completeOrCancel'))
     return
   }
   
   if (polygons.value.length === 0) {
-    ElMessage.warning('Добавьте хотя бы один полигон')
+    ElMessage.warning(t('roiEditor.addAtLeastOne'))
     return
   }
   
@@ -275,7 +278,7 @@ function onImgLoad() {
           type="primary"
           @click="startDrawing"
         >
-          Начать рисование
+          {{ t('roiEditor.startDrawing') }}
         </el-button>
         
         <el-button
@@ -284,7 +287,7 @@ function onImgLoad() {
           @click="finishPolygon"
           :disabled="currentPolygon.length < 3"
         >
-          Завершить полигон
+          {{ t('roiEditor.finishPolygon') }}
         </el-button>
         
         <el-button
@@ -292,7 +295,7 @@ function onImgLoad() {
           type="warning"
           @click="cancelCurrentPolygon"
         >
-          Отменить
+          {{ t('common.actions.cancel') }}
         </el-button>
         
         <el-button
@@ -300,7 +303,7 @@ function onImgLoad() {
           type="danger"
           @click="removeLastPolygon"
         >
-          Удалить последний
+          {{ t('roiEditor.removeLast') }}
         </el-button>
         
         <el-button
@@ -308,7 +311,7 @@ function onImgLoad() {
           type="danger"
           @click="clearAll"
         >
-          Очистить всё
+          {{ t('common.actions.clear') }}
         </el-button>
       </el-space>
     </div>
@@ -319,7 +322,7 @@ function onImgLoad() {
           ref="imgEl"
           class="preview-image"
           :src="streamUrl"
-          alt="Camera stream"
+          :alt="t('roiEditor.imageAlt')"
           @load="onImgLoad"
         />
         <canvas
@@ -333,21 +336,21 @@ function onImgLoad() {
     
     <div class="editor-info">
       <el-alert type="info" :closable="false">
-        <p><strong>Инструкция:</strong></p>
+        <p><strong>{{ t('roiEditor.instructionsTitle') }}</strong></p>
         <ul>
-          <li>Нажмите "Начать рисование" и кликайте на изображении для создания полигона</li>
-          <li>Полигон должен содержать минимум 3 точки</li>
-          <li>Нажмите "Завершить полигон" когда закончите</li>
-          <li>Координаты сохраняются в нормализованном виде (0..1)</li>
+          <li>{{ t('roiEditor.instructions.step1') }}</li>
+          <li>{{ t('roiEditor.instructions.step2') }}</li>
+          <li>{{ t('roiEditor.instructions.step3') }}</li>
+          <li>{{ t('roiEditor.instructions.step4') }}</li>
         </ul>
-        <p><strong>Полигонов создано:</strong> {{ polygons.length }}</p>
+        <p><strong>{{ t('roiEditor.polygonsCreated') }}</strong> {{ polygons.length }}</p>
       </el-alert>
     </div>
     
     <div class="editor-actions">
-      <el-button @click="handleCancel">Отмена</el-button>
+      <el-button @click="handleCancel">{{ t('common.actions.cancel') }}</el-button>
       <el-button type="primary" @click="handleSave">
-        Сохранить зоны
+        {{ t('roiEditor.saveZones') }}
       </el-button>
     </div>
   </div>

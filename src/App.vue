@@ -1,11 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterView } from 'vue-router'
+import { ElConfigProvider } from 'element-plus'
+import enLocale from 'element-plus/es/locale/lang/en'
+import ruLocale from 'element-plus/es/locale/lang/ru'
+import { useI18n } from 'vue-i18n'
+
+const { locale } = useI18n()
+
+const elementLocale = computed(() => {
+  return locale.value === 'ru' ? ruLocale : enLocale
+})
 </script>
 
 <template>
-  <div id="app">
-    <RouterView />
-  </div>
+  <el-config-provider :locale="elementLocale">
+    <div id="app">
+      <RouterView />
+    </div>
+  </el-config-provider>
 </template>
 
 <style>

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Refresh, Calendar } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
+import { translateEventType } from '@/utils/uiText'
+
+const { t } = useI18n()
 
 interface Event {
   id: number
@@ -64,7 +68,7 @@ async function loadEvents() {
     events.value = response.data.events
     total.value = response.data.pagination.total
   } catch (error) {
-    ElMessage.error('Не удалось загрузить события')
+    ElMessage.error(t('events.loadError'))
   } finally {
     loading.value = false
   }
@@ -90,11 +94,11 @@ function resetFilters() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">События</h1>
+        <h1 class="page-title">{{ t('events.title') }}</h1>
       </template>
       <template #extra>
         <el-button :icon="Refresh" @click="loadEvents" :loading="loading">
-          Обновить
+          {{ t('common.actions.refresh') }}
         </el-button>
       </template>
     </el-page-header>
@@ -103,18 +107,18 @@ function resetFilters() {
       <template #header>
         <div style="display: flex; align-items: center; gap: 8px;">
           <el-icon><Calendar /></el-icon>
-          <span>Фильтры</span>
+          <span>{{ t('events.filters') }}</span>
         </div>
       </template>
       
       <el-form :model="filters" label-width="100px">
         <el-row :gutter="16">
           <el-col :xs="24" :sm="8">
-            <el-form-item label="От даты">
+            <el-form-item :label="t('events.fromDate')">
               <el-date-picker
                 v-model="filters.dateFrom"
                 type="date"
-                placeholder="Выберите дату"
+                :placeholder="t('common.placeholders.selectDate')"
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
@@ -124,11 +128,11 @@ function resetFilters() {
           </el-col>
           
           <el-col :xs="24" :sm="8">
-            <el-form-item label="До даты">
+            <el-form-item :label="t('events.toDate')">
               <el-date-picker
                 v-model="filters.dateTo"
                 type="date"
-                placeholder="Выберите дату"
+                :placeholder="t('common.placeholders.selectDate')"
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
@@ -138,51 +142,51 @@ function resetFilters() {
           </el-col>
           
           <el-col :xs="24" :sm="8">
-            <el-form-item label="Тип">
-              <el-select v-model="filters.type" placeholder="Все" style="width: 100%" @change="loadEvents">
-                <el-option label="Все" value="" />
-                <el-option label="Вход (IN)" value="IN" />
-                <el-option label="Выход (OUT)" value="OUT" />
+            <el-form-item :label="t('events.type')">
+              <el-select v-model="filters.type" :placeholder="t('common.placeholders.all')" style="width: 100%" @change="loadEvents">
+                <el-option :label="t('common.placeholders.all')" value="" />
+                <el-option :label="translateEventType('IN')" value="IN" />
+                <el-option :label="translateEventType('OUT')" value="OUT" />
               </el-select>
             </el-form-item>
           </el-col>
         </el-row>
         
         <el-form-item>
-          <el-button @click="resetFilters">Сбросить фильтры</el-button>
+          <el-button @click="resetFilters">{{ t('events.resetFilters') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
     <el-card shadow="never">
       <el-table :data="events" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
-        <el-table-column label="Время" width="200">
+        <el-table-column :label="t('common.labels.time')" width="200">
           <template #default="{ row }">
             {{ formatTime(row.timestamp) }}
           </template>
         </el-table-column>
         
-        <el-table-column prop="employee.name" label="Сотрудник" min-width="180" />
+        <el-table-column prop="employee.name" :label="t('events.employee')" min-width="180" />
         
-        <el-table-column label="Должность" min-width="150">
+        <el-table-column :label="t('events.position')" min-width="150">
           <template #default="{ row }">
-            {{ row.employee.role || '—' }}
+            {{ row.employee.role || t('common.misc.none') }}
           </template>
         </el-table-column>
         
-        <el-table-column label="Тип" width="100">
+        <el-table-column :label="t('events.type')" width="100">
           <template #default="{ row }">
             <el-tag :type="row.type === 'IN' ? 'success' : 'warning'">
-              {{ row.type === 'IN' ? 'Вход' : 'Выход' }}
+              {{ translateEventType(row.type) }}
             </el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column label="Камера" min-width="150">
+        <el-table-column :label="t('events.camera')" min-width="150">
           <template #default="{ row }">
-            {{ row.camera?.name || '—' }}
+            {{ row.camera?.name || t('common.misc.none') }}
           </template>
         </el-table-column>
       </el-table>

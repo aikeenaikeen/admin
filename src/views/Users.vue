@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
+import { translateUserRole } from '@/utils/uiText'
 
 type UserRole = 'SUPERADMIN' | 'COMPANY_ADMIN' | 'USER'
 
@@ -22,6 +24,7 @@ interface Company {
 }
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const users = ref<UserRow[]>([])
 const companies = ref<Company[]>([])
@@ -53,7 +56,7 @@ async function loadUsers() {
     const response = await apiClient.get('/api/users')
     users.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить пользователей')
+    ElMessage.error(t('users.loadError'))
   } finally {
     loading.value = false
   }
@@ -82,12 +85,12 @@ function startCreate() {
 async function handleSubmit() {
   try {
     if (!form.value.email || !form.value.password) {
-      ElMessage.error('Укажите email и пароль')
+      ElMessage.error(t('users.validationEmailPassword'))
       return
     }
 
     if (companyRequired.value && !form.value.companyId) {
-      ElMessage.error('Выберите компанию')
+      ElMessage.error(t('users.validationCompany'))
       return
     }
 
@@ -101,32 +104,32 @@ async function handleSubmit() {
     }
 
     await apiClient.post('/api/users', payload)
-    ElMessage.success('Пользователь создан')
+    ElMessage.success(t('users.created'))
     dialogVisible.value = false
     await loadUsers()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось создать пользователя')
+    ElMessage.error(error.response?.data?.error || t('users.createError'))
   }
 }
 
 async function deleteUser(userId: number) {
   try {
     await ElMessageBox.confirm(
-      'Вы уверены, что хотите удалить этого пользователя?',
-      'Подтверждение',
+      t('users.deleteConfirmText'),
+      t('users.deleteConfirmTitle'),
       {
-        confirmButtonText: 'Удалить',
-        cancelButtonText: 'Отмена',
+        confirmButtonText: t('common.actions.delete'),
+        cancelButtonText: t('common.actions.cancel'),
         type: 'warning',
       }
     )
 
     await apiClient.delete(`/api/users/${userId}`)
-    ElMessage.success('Пользователь удалён')
+    ElMessage.success(t('users.deleteSuccess'))
     await loadUsers()
   } catch (error: any) {
     if (error === 'cancel') return
-    ElMessage.error(error.response?.data?.error || 'Не удалось удалить пользователя')
+    ElMessage.error(error.response?.data?.error || t('users.deleteError'))
   }
 }
 </script>
@@ -135,38 +138,38 @@ async function deleteUser(userId: number) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Пользователи</h1>
+        <h1 class="page-title">{{ t('users.title') }}</h1>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="startCreate">
-          Добавить пользователя
+          {{ t('users.addButton') }}
         </el-button>
       </template>
     </el-page-header>
 
     <el-card shadow="never">
       <el-table :data="users" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="email" label="Email" min-width="240" />
+        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+        <el-table-column prop="email" :label="t('common.labels.email')" min-width="240" />
 
-        <el-table-column label="Роль" width="160">
+        <el-table-column :label="t('common.labels.role')" width="160">
           <template #default="{ row }">
             <el-tag :type="row.role === 'SUPERADMIN' ? 'danger' : row.role === 'COMPANY_ADMIN' ? 'warning' : 'info'">
-              {{ row.role }}
+              {{ translateUserRole(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column label="Компания" min-width="220">
+        <el-table-column :label="t('common.labels.company')" min-width="220">
           <template #default="{ row }">
             <span v-if="row.companyId">
-              {{ companiesById.get(row.companyId)?.name || `Company #${row.companyId}` }}
+              {{ companiesById.get(row.companyId)?.name || t('users.companyFallback', { id: row.companyId }) }}
             </span>
-            <span v-else>—</span>
+            <span v-else>{{ t('common.misc.none') }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="Действия" width="160" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="160" fixed="right">
           <template #default="{ row }">
             <el-button
               size="small"
@@ -175,33 +178,33 @@ async function deleteUser(userId: number) {
               :disabled="row.id === authStore.user?.id"
               @click="deleteUser(row.id)"
             >
-              Удалить
+              {{ t('common.actions.delete') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" title="Добавить пользователя" width="520px">
+    <el-dialog v-model="dialogVisible" :title="t('users.dialogTitle')" width="520px">
       <el-form :model="form" label-width="120px">
-        <el-form-item label="Email" required>
-          <el-input v-model="form.email" placeholder="user@company.com" />
+        <el-form-item :label="t('common.labels.email')" required>
+          <el-input v-model="form.email" :placeholder="t('users.emailPlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="Пароль" required>
-          <el-input v-model="form.password" type="password" show-password placeholder="Минимум 6 символов" />
+        <el-form-item :label="t('common.labels.password')" required>
+          <el-input v-model="form.password" type="password" show-password :placeholder="t('users.passwordHint')" />
         </el-form-item>
 
-        <el-form-item label="Роль" required>
+        <el-form-item :label="t('common.labels.role')" required>
           <el-select v-model="form.role" style="width: 100%">
-            <el-option label="SUPERADMIN" value="SUPERADMIN" />
-            <el-option label="COMPANY_ADMIN" value="COMPANY_ADMIN" />
-            <el-option label="USER" value="USER" />
+            <el-option :label="translateUserRole('SUPERADMIN')" value="SUPERADMIN" />
+            <el-option :label="translateUserRole('COMPANY_ADMIN')" value="COMPANY_ADMIN" />
+            <el-option :label="translateUserRole('USER')" value="USER" />
           </el-select>
         </el-form-item>
 
-        <el-form-item v-if="companyRequired" label="Компания" required>
-          <el-select v-model="form.companyId" filterable style="width: 100%" placeholder="Выберите компанию">
+        <el-form-item v-if="companyRequired" :label="t('common.labels.company')" required>
+          <el-select v-model="form.companyId" filterable style="width: 100%" :placeholder="t('common.placeholders.selectCompany')">
             <el-option
               v-for="c in companies"
               :key="c.id"
@@ -210,16 +213,16 @@ async function deleteUser(userId: number) {
             />
           </el-select>
           <template #extra>
-            <span style="font-size: 12px; color: var(--el-text-color-secondary);">
-              Для SUPERADMIN компания не привязывается
-            </span>
+              <span style="font-size: 12px; color: var(--el-text-color-secondary);">
+              {{ t('users.companyHint') }}
+              </span>
           </template>
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="handleSubmit">Создать</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSubmit">{{ t('common.actions.create') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -249,5 +252,3 @@ async function deleteUser(userId: number) {
   }
 }
 </style>
-
-

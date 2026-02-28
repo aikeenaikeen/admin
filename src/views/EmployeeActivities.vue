@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import { formatDateTime } from '@/utils/date'
+import { translateActivityKind } from '@/utils/uiText'
+
+const { t } = useI18n()
 
 interface Employee {
   id: number
@@ -88,7 +92,7 @@ async function loadIntervals() {
     items.value = res.data.items
     total.value = res.data.total
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось загрузить интервалы')
+    ElMessage.error(e.response?.data?.error || t('employeeActivities.loadError'))
   } finally {
     loading.value = false
   }
@@ -98,7 +102,7 @@ function formatDuration(startIso: string, endIso: string): string {
   const start = new Date(startIso).getTime()
   const end = new Date(endIso).getTime()
   const sec = Math.max(0, Math.round((end - start) / 1000))
-  return `${sec}s`
+  return t('employeeActivities.durationSeconds', { value: sec })
 }
 
 async function onSearch() {
@@ -111,77 +115,77 @@ async function onSearch() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Активности сотрудников</h1>
+        <h1 class="page-title">{{ t('employeeActivities.title') }}</h1>
       </template>
     </el-page-header>
 
     <el-card shadow="never" style="margin-bottom: 12px;">
       <el-row :gutter="12">
         <el-col :span="8">
-          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Сотрудник</div>
-          <el-select v-model="filters.employeeId" clearable filterable placeholder="Все" style="width: 100%">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('common.labels.employee') }}</div>
+          <el-select v-model="filters.employeeId" clearable filterable :placeholder="t('common.placeholders.all')" style="width: 100%">
             <el-option v-for="e in employees" :key="e.id" :label="e.name" :value="e.id" />
           </el-select>
         </el-col>
         <el-col :span="8">
-          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">Активность</div>
-          <el-select v-model="filters.activityId" clearable filterable placeholder="Все" style="width: 100%">
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('common.labels.activity') }}</div>
+          <el-select v-model="filters.activityId" clearable filterable :placeholder="t('common.placeholders.all')" style="width: 100%">
             <el-option
               v-for="ca in companyActivities"
               :key="ca.activityId"
-              :label="`${ca.activity.name} (${ca.activity.kind})`"
+              :label="`${ca.activity.name} (${translateActivityKind(ca.activity.kind)})`"
               :value="ca.activityId"
             />
           </el-select>
         </el-col>
         <el-col :span="4">
-          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">От</div>
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('common.labels.from') }}</div>
           <el-date-picker
             v-model="filters.from"
             type="datetime"
-            placeholder="Выберите дату и время"
+            :placeholder="t('common.placeholders.selectDateTime')"
             format="DD.MM.YYYY HH:mm"
             style="width: 100%"
           />
         </el-col>
         <el-col :span="4">
-          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">До</div>
+          <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-bottom: 6px;">{{ t('common.labels.to') }}</div>
           <el-date-picker
             v-model="filters.to"
             type="datetime"
-            placeholder="Выберите дату и время"
+            :placeholder="t('common.placeholders.selectDateTime')"
             format="DD.MM.YYYY HH:mm"
             style="width: 100%"
           />
         </el-col>
       </el-row>
       <div style="margin-top: 12px;">
-        <el-button type="primary" @click="onSearch">Поиск</el-button>
+        <el-button type="primary" @click="onSearch">{{ t('common.actions.search') }}</el-button>
       </div>
     </el-card>
 
     <el-card shadow="never">
       <el-table :data="items" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column label="Сотрудник" min-width="180">
+        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+        <el-table-column :label="t('common.labels.employee')" min-width="180">
           <template #default="{ row }">{{ row.employee?.name || row.employeeId }}</template>
         </el-table-column>
-        <el-table-column label="Активность" min-width="200">
+        <el-table-column :label="t('common.labels.activity')" min-width="200">
           <template #default="{ row }">{{ row.activity?.name || row.activityId }}</template>
         </el-table-column>
-        <el-table-column label="Start" min-width="220">
+        <el-table-column :label="t('employeeActivities.start')" min-width="220">
           <template #default="{ row }">{{ formatDateTime(row.startTime) }}</template>
         </el-table-column>
-        <el-table-column label="End" min-width="220">
+        <el-table-column :label="t('employeeActivities.end')" min-width="220">
           <template #default="{ row }">{{ formatDateTime(row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="Dur" width="90">
+        <el-table-column :label="t('employeeActivities.duration')" width="90">
           <template #default="{ row }">{{ formatDuration(row.startTime, row.endTime) }}</template>
         </el-table-column>
-        <el-table-column label="Conf" width="100">
+        <el-table-column :label="t('employeeActivities.confidence')" width="100">
           <template #default="{ row }">{{ row.confidence?.toFixed?.(2) ?? row.confidence }}</template>
         </el-table-column>
-        <el-table-column label="Cameras" min-width="180">
+        <el-table-column :label="t('employeeActivities.cameras')" min-width="180">
           <template #default="{ row }">{{ (row.confirmedCameraIds || []).join(', ') }}</template>
         </el-table-column>
       </el-table>

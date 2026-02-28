@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
 
@@ -16,6 +17,7 @@ interface Company {
 const companies = ref<Company[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
+const { t } = useI18n()
 
 // Редактирование recognitionConfig
 const editConfigDialogVisible = ref(false)
@@ -170,7 +172,7 @@ async function loadCompanies() {
     const response = await apiClient.get('/api/companies')
     companies.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить компании')
+    ElMessage.error(t('companies.loadError'))
   } finally {
     loading.value = false
   }
@@ -179,7 +181,7 @@ async function loadCompanies() {
 async function handleSubmit() {
   try {
     await apiClient.post('/api/companies', form.value)
-    ElMessage.success('Компания успешно создана')
+    ElMessage.success(t('companies.created'))
     dialogVisible.value = false
     form.value = {
       name: '',
@@ -188,17 +190,17 @@ async function handleSubmit() {
     }
     await loadCompanies()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось создать компанию')
+    ElMessage.error(error.response?.data?.error || t('companies.createError'))
   }
 }
 
 async function toggleCompany(id: number, isActive: boolean) {
   try {
     await apiClient.put(`/api/companies/${id}`, { isActive: !isActive })
-    ElMessage.success(isActive ? 'Компания деактивирована' : 'Компания активирована')
+    ElMessage.success(isActive ? t('companies.deactivated') : t('companies.activated'))
     await loadCompanies()
   } catch (error) {
-    ElMessage.error('Не удалось обновить компанию')
+    ElMessage.error(t('companies.toggleError'))
   }
 }
 
@@ -243,7 +245,7 @@ async function openEditConfig(company: Company) {
     
     editConfig.value = merged
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось загрузить настройки компании')
+    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
     editConfigDialogVisible.value = false
   } finally {
     configLoading.value = false
@@ -259,12 +261,12 @@ async function saveConfig() {
       `/api/companies/${editingCompanyId.value}/recognition-config`,
       editConfig.value
     )
-    ElMessage.success('Настройки распознавания сохранены')
+    ElMessage.success(t('companies.configSaved'))
     editConfigDialogVisible.value = false
     editingCompanyId.value = null
     editingCompanyName.value = ''
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось сохранить настройки')
+    ElMessage.error(error.response?.data?.error || t('companies.configSaveError'))
   } finally {
     configSaving.value = false
   }
@@ -275,42 +277,42 @@ async function saveConfig() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Компании</h1>
+        <h1 class="page-title">{{ t('companies.title') }}</h1>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="dialogVisible = true">
-          Добавить компанию
+          {{ t('companies.addButton') }}
         </el-button>
       </template>
     </el-page-header>
 
     <el-card shadow="never">
       <el-table :data="companies" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
-        <el-table-column prop="name" label="Название" min-width="200" />
+        <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
         
-        <el-table-column label="Slug" min-width="180">
+        <el-table-column :label="t('companies.table.slug')" min-width="180">
           <template #default="{ row }">
             <el-tag type="info">{{ row.slug }}</el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column label="Статус" width="120">
+        <el-table-column :label="t('common.labels.status')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.isActive ? 'success' : 'danger'">
-              {{ row.isActive ? 'Активна' : 'Неактивна' }}
+              {{ row.isActive ? t('companies.table.active') : t('companies.table.inactive') }}
             </el-tag>
           </template>
         </el-table-column>
         
-        <el-table-column label="Создана" width="150">
+        <el-table-column :label="t('companies.table.createdAt')" width="150">
           <template #default="{ row }">
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
         
-        <el-table-column label="Действия" width="420" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="420" fixed="right">
           <template #default="{ row }">
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <el-button
@@ -318,14 +320,14 @@ async function saveConfig() {
                 type="primary"
                 @click="openEditConfig(row)"
               >
-                Настроить распознавание
+                {{ t('companies.configureRecognition') }}
               </el-button>
               <el-button
                 size="small"
                 :type="row.isActive ? 'warning' : 'success'"
                 @click="toggleCompany(row.id, row.isActive)"
               >
-                {{ row.isActive ? 'Деактивировать' : 'Активировать' }}
+                {{ row.isActive ? t('common.actions.disable') : t('common.actions.enable') }}
               </el-button>
             </div>
           </template>
@@ -335,245 +337,245 @@ async function saveConfig() {
 
     <el-dialog
       v-model="dialogVisible"
-      title="Добавить компанию"
+      :title="t('companies.dialog.addTitle')"
       width="800px"
     >
       <el-form :model="form" label-width="200px">
-        <el-form-item label="Название" required>
+        <el-form-item :label="t('companies.dialog.name')" required>
           <el-input
             v-model="form.name"
-            placeholder="Название компании"
+            :placeholder="t('companies.dialog.namePlaceholder')"
             @input="generateSlug"
           />
         </el-form-item>
 
-        <el-form-item label="Slug" required>
+        <el-form-item :label="t('companies.dialog.slug')" required>
           <el-input
             v-model="form.slug"
-            placeholder="company-slug"
+            :placeholder="t('companies.dialog.slugPlaceholder')"
           >
             <template #prepend>/</template>
           </el-input>
           <template #extra>
             <span style="font-size: 12px; color: var(--el-text-color-secondary);">
-              Только строчные буквы, цифры и дефисы
+              {{ t('companies.dialog.slugHint') }}
             </span>
           </template>
         </el-form-item>
 
-        <el-divider content-position="left">Настройки распознавания</el-divider>
+        <el-divider content-position="left">{{ t('companies.dialog.recognitionSettings') }}</el-divider>
 
-        <el-form-item label="Трекинг людей">
+        <el-form-item :label="t('companies.dialog.peopleTracking')">
           <el-switch v-model="form.recognitionConfig.personTracking.enabled" />
         </el-form-item>
 
-        <el-form-item label="Режим наблюдений">
+        <el-form-item :label="t('companies.dialog.observationMode')">
           <el-switch v-model="form.recognitionConfig.presence.observationMode" />
         </el-form-item>
 
-        <el-form-item label="Режим детекции людей">
+        <el-form-item :label="t('companies.dialog.personDetectionMode')">
           <el-select v-model="form.recognitionConfig.optimization.personDetectMode">
-            <el-option label="По требованию (рекомендуется)" value="on_demand" />
-            <el-option label="Всегда" value="always" />
+            <el-option :label="t('companies.dialog.personDetectionOnDemand')" value="on_demand" />
+            <el-option :label="t('companies.dialog.always')" value="always" />
           </el-select>
         </el-form-item>
 
         <el-link type="primary" @click="showAdvanced = !showAdvanced" style="margin-bottom: 16px">
-          {{ showAdvanced ? 'Скрыть' : 'Показать' }} расширенные настройки
+          {{ showAdvanced ? t('companies.dialog.hideAdvanced') : t('companies.dialog.showAdvanced') }}
         </el-link>
 
         <div v-show="showAdvanced">
           <el-collapse>
-            <el-collapse-item title="Качество" name="quality">
+            <el-collapse-item :title="t('companies.dialog.section.quality')" name="quality">
               <el-form label-width="280px">
-              <el-form-item label="Мин. высота лица (px)">
+              <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
                 <el-input-number v-model="form.recognitionConfig.quality.minFaceHeight" :min="10" :max="200" />
               </el-form-item>
-              <el-form-item label="Мин. резкость">
+              <el-form-item :label="t('companies.dialog.fields.minBlur')">
                 <el-input-number v-model="form.recognitionConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minBlur') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Распознавание (InsightFace)" name="insightface">
+            <el-collapse-item :title="t('companies.dialog.section.recognition')" name="insightface">
               <el-form label-width="280px">
-              <el-form-item label="Порог сходства (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
                 <el-input-number v-model="form.recognitionConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Ниже = строже (меньше ложных срабатываний)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.similarityThreshold') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Трекинг лиц" name="faceTracking">
+            <el-collapse-item :title="t('companies.dialog.section.faceTracking')" name="faceTracking">
               <el-form label-width="280px">
-              <el-form-item label="Мин. эмбеддингов">
+              <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
                 <el-input-number v-model="form.recognitionConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько кадров накопить перед распознаванием</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minEmbeddings') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Время жизни трека (сек)">
+              <el-form-item :label="t('companies.dialog.fields.faceTrackMaxAgeSeconds')">
                 <el-input-number v-model="form.recognitionConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек лица живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceTrackMaxAgeSeconds') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Трекинг людей (расширенные)" name="personTracking">
+            <el-collapse-item :title="t('companies.dialog.section.personTracking')" name="personTracking">
               <el-form label-width="280px">
-              <el-form-item label="Порог уверенности детектора (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
                 <el-input-number v-model="form.recognitionConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальная уверенность YOLO для детекции человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetectorConfidence') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="IoU для матчинга треков (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.personIouThreshold')">
                 <el-input-number v-model="form.recognitionConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Пересечение bbox для связывания с треком</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personIouThreshold') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Время жизни person-трека (сек)">
+              <el-form-item :label="t('companies.dialog.fields.personTrackMaxAgeSeconds')">
                 <el-input-number v-model="form.recognitionConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек человека живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personTrackMaxAgeSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="IoU лицо→человек (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
                 <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальное пересечение для привязки лица к человеку</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonIouThreshold') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Вложенность лица в bbox (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.faceToPersonContainmentMin')">
                 <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Какая часть лица должна быть внутри bbox человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonContainmentMin') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Строгая фиксация трека">
+              <el-form-item :label="t('companies.dialog.fields.employeeLockStrict')">
                 <el-switch v-model="form.recognitionConfig.personTracking.employeeLockStrict" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запретить переназначение трека на другого сотрудника</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.employeeLockStrict') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Присутствие/Наблюдения" name="presence">
+            <el-collapse-item :title="t('companies.dialog.section.presence')" name="presence">
               <el-form label-width="280px">
-              <el-form-item label="Интервал наблюдений (сек)">
+              <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
                 <el-input-number v-model="form.recognitionConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Как часто отправлять heartbeat (режим наблюдений)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.observationIntervalSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Порог IN (сек, legacy)">
+              <el-form-item :label="t('companies.dialog.fields.inThresholdSeconds')">
                 <el-input-number v-model="form.recognitionConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.inThresholdSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Порог OUT (сек, legacy)">
+              <el-form-item :label="t('companies.dialog.fields.outThresholdSeconds')">
                 <el-input-number v-model="form.recognitionConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.outThresholdSeconds') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Оптимизация" name="optimization">
+            <el-collapse-item :title="t('companies.dialog.section.optimization')" name="optimization">
               <el-form label-width="280px">
-              <el-form-item label="Интервал детекции YOLO (кадры)">
+              <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
                 <el-input-number v-model="form.recognitionConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetIntervalFrames') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="YOLO при новом лице">
+              <el-form-item :label="t('companies.dialog.fields.personDetOnNewFace')">
                 <el-switch v-model="form.recognitionConfig.optimization.personDetOnNewFace" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запускать YOLO сразу при распознавании нового лица</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetOnNewFace') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Видеопоток" name="streaming">
+            <el-collapse-item :title="t('companies.dialog.section.streaming')" name="streaming">
               <el-form label-width="280px">
-              <el-form-item label="FPS потока">
+              <el-form-item :label="t('companies.dialog.fields.streamFps')">
                 <el-input-number v-model="form.recognitionConfig.streaming.streamFps" :min="1" :max="30" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Кадров в секунду в MJPEG-потоке для UI</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamFps') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Качество JPEG (30..95)">
+              <el-form-item :label="t('companies.dialog.fields.streamJpegQuality')">
                 <el-input-number v-model="form.recognitionConfig.streaming.streamJpegQuality" :min="30" :max="95" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamJpegQuality') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Распознавание действий (активности)" name="actionRecognition">
+            <el-collapse-item :title="t('companies.dialog.section.actionRecognition')" name="actionRecognition">
               <el-form label-width="280px">
-                <el-form-item label="Порог старта (0..1)">
+                <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionStartThreshold') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Порог остановки (0..1)">
+                <el-form-item :label="t('companies.dialog.fields.actionEndThreshold')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Должен быть ниже порога старта (hysteresis)</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionEndThreshold') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Таймаут закрытия (сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionGapSeconds') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Мин. длительность события (сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionMinDurationSeconds')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
                 </el-form-item>
-                <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
+                <el-form-item :label="t('companies.dialog.fields.actionMaxIntervalSeconds')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionMaxIntervalSeconds') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="FPS для модели (кадров/сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionFps')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
                 </el-form-item>
-                <el-form-item label="Макс. кадров в буфере">
+                <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
                   <el-input-number v-model="form.recognitionConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
                 </el-form-item>
-                <el-form-item label="Отладка (логи score)">
+                <el-form-item :label="t('companies.dialog.fields.actionDebug')">
                   <el-switch v-model="form.recognitionConfig.actionRecognition.debug" />
                 </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Визуализация" name="visualization">
+            <el-collapse-item :title="t('companies.dialog.section.visualization')" name="visualization">
               <el-form label-width="280px">
-              <el-form-item label="Рисовать рамки лиц">
+              <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
                 <el-switch v-model="form.recognitionConfig.visualization.drawFaceBoxes" />
               </el-form-item>
-              <el-form-item label="Рисовать рамки людей">
+              <el-form-item :label="t('companies.dialog.fields.drawPersonBoxes')">
                 <el-switch v-model="form.recognitionConfig.visualization.drawPersonBoxes" />
               </el-form-item>
-              <el-form-item label="Показывать имена/ID">
+              <el-form-item :label="t('companies.dialog.fields.drawNames')">
                 <el-switch v-model="form.recognitionConfig.visualization.drawNames" />
               </el-form-item>
               </el-form>
@@ -583,230 +585,230 @@ async function saveConfig() {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="handleSubmit">Создать</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSubmit">{{ t('common.actions.create') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Диалог редактирования recognitionConfig -->
     <el-dialog
       v-model="editConfigDialogVisible"
-      :title="`Настройки распознавания — ${editingCompanyName}`"
+      :title="t('companies.dialog.configTitle', { name: editingCompanyName })"
       width="800px"
       v-loading="configLoading"
     >
       <el-form :model="editConfig" label-width="200px">
-        <el-form-item label="Трекинг людей">
+        <el-form-item :label="t('companies.dialog.peopleTracking')">
           <el-switch v-model="editConfig.personTracking.enabled" />
         </el-form-item>
 
-        <el-form-item label="Режим наблюдений">
+        <el-form-item :label="t('companies.dialog.observationMode')">
           <el-switch v-model="editConfig.presence.observationMode" />
         </el-form-item>
 
-        <el-form-item label="Режим детекции людей">
+        <el-form-item :label="t('companies.dialog.personDetectionMode')">
           <el-select v-model="editConfig.optimization.personDetectMode">
-            <el-option label="По требованию (рекомендуется)" value="on_demand" />
-            <el-option label="Всегда" value="always" />
+            <el-option :label="t('companies.dialog.personDetectionOnDemand')" value="on_demand" />
+            <el-option :label="t('companies.dialog.always')" value="always" />
           </el-select>
         </el-form-item>
 
         <el-link type="primary" @click="showAdvancedEdit = !showAdvancedEdit" style="margin-bottom: 16px">
-          {{ showAdvancedEdit ? 'Скрыть' : 'Показать' }} расширенные настройки
+          {{ showAdvancedEdit ? t('companies.dialog.hideAdvanced') : t('companies.dialog.showAdvanced') }}
         </el-link>
 
         <div v-show="showAdvancedEdit">
           <el-collapse>
-            <el-collapse-item title="Качество" name="quality">
+            <el-collapse-item :title="t('companies.dialog.section.quality')" name="quality">
               <el-form label-width="280px">
-              <el-form-item label="Мин. высота лица (px)">
+              <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
                 <el-input-number v-model="editConfig.quality.minFaceHeight" :min="10" :max="200" />
               </el-form-item>
-              <el-form-item label="Мин. резкость">
+              <el-form-item :label="t('companies.dialog.fields.minBlur')">
                 <el-input-number v-model="editConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Дисперсия Лапласиана (выше = требуется более чёткое изображение)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minBlur') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Распознавание (InsightFace)" name="insightface">
+            <el-collapse-item :title="t('companies.dialog.section.recognition')" name="insightface">
               <el-form label-width="280px">
-              <el-form-item label="Порог сходства (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
                 <el-input-number v-model="editConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Ниже = строже (меньше ложных срабатываний)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.similarityThreshold') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Трекинг лиц" name="faceTracking">
+            <el-collapse-item :title="t('companies.dialog.section.faceTracking')" name="faceTracking">
               <el-form label-width="280px">
-              <el-form-item label="Мин. эмбеддингов">
+              <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
                 <el-input-number v-model="editConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько кадров накопить перед распознаванием</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minEmbeddings') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Время жизни трека (сек)">
+              <el-form-item :label="t('companies.dialog.fields.faceTrackMaxAgeSeconds')">
                 <el-input-number v-model="editConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек лица живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceTrackMaxAgeSeconds') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Трекинг людей (расширенные)" name="personTracking">
+            <el-collapse-item :title="t('companies.dialog.section.personTracking')" name="personTracking">
               <el-form label-width="280px">
-              <el-form-item label="Порог уверенности детектора (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
                 <el-input-number v-model="editConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальная уверенность YOLO для детекции человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetectorConfidence') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="IoU для матчинга треков (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.personIouThreshold')">
                 <el-input-number v-model="editConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Пересечение bbox для связывания с треком</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personIouThreshold') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Время жизни person-трека (сек)">
+              <el-form-item :label="t('companies.dialog.fields.personTrackMaxAgeSeconds')">
                 <el-input-number v-model="editConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд трек человека живёт без обновлений</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personTrackMaxAgeSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="IoU лицо→человек (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
                 <el-input-number v-model="editConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Минимальное пересечение для привязки лица к человеку</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonIouThreshold') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Вложенность лица в bbox (0..1)">
+              <el-form-item :label="t('companies.dialog.fields.faceToPersonContainmentMin')">
                 <el-input-number v-model="editConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Какая часть лица должна быть внутри bbox человека</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonContainmentMin') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Строгая фиксация трека">
+              <el-form-item :label="t('companies.dialog.fields.employeeLockStrict')">
                 <el-switch v-model="editConfig.personTracking.employeeLockStrict" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запретить переназначение трека на другого сотрудника</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.employeeLockStrict') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Присутствие/Наблюдения" name="presence">
+            <el-collapse-item :title="t('companies.dialog.section.presence')" name="presence">
               <el-form label-width="280px">
-              <el-form-item label="Интервал наблюдений (сек)">
+              <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
                 <el-input-number v-model="editConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Как часто отправлять heartbeat (режим наблюдений)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.observationIntervalSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Порог IN (сек, legacy)">
+              <el-form-item :label="t('companies.dialog.fields.inThresholdSeconds')">
                 <el-input-number v-model="editConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд устойчивого присутствия до события IN (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.inThresholdSeconds') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Порог OUT (сек, legacy)">
+              <el-form-item :label="t('companies.dialog.fields.outThresholdSeconds')">
                 <el-input-number v-model="editConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Секунд отсутствия до события OUT (если режим наблюдений выключен)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.outThresholdSeconds') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Оптимизация" name="optimization">
+            <el-collapse-item :title="t('companies.dialog.section.optimization')" name="optimization">
               <el-form label-width="280px">
-              <el-form-item label="Интервал детекции YOLO (кадры)">
+              <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
                 <el-input-number v-model="editConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Через сколько кадров запускать YOLO для активных треков (режим "по требованию")</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetIntervalFrames') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="YOLO при новом лице">
+              <el-form-item :label="t('companies.dialog.fields.personDetOnNewFace')">
                 <el-switch v-model="editConfig.optimization.personDetOnNewFace" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Запускать YOLO сразу при распознавании нового лица</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetOnNewFace') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Видеопоток" name="streaming">
+            <el-collapse-item :title="t('companies.dialog.section.streaming')" name="streaming">
               <el-form label-width="280px">
-              <el-form-item label="FPS потока">
+              <el-form-item :label="t('companies.dialog.fields.streamFps')">
                 <el-input-number v-model="editConfig.streaming.streamFps" :min="1" :max="30" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Кадров в секунду в MJPEG-потоке для UI</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamFps') }}</span>
                 </template>
               </el-form-item>
-              <el-form-item label="Качество JPEG (30..95)">
+              <el-form-item :label="t('companies.dialog.fields.streamJpegQuality')">
                 <el-input-number v-model="editConfig.streaming.streamJpegQuality" :min="30" :max="95" />
                 <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">Качество сжатия JPEG (выше = лучше, но больше трафик)</span>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamJpegQuality') }}</span>
                 </template>
               </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Распознавание действий (активности)" name="actionRecognition">
+            <el-collapse-item :title="t('companies.dialog.section.actionRecognition')" name="actionRecognition">
               <el-form label-width="280px">
-                <el-form-item label="Порог старта (0..1)">
+                <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
                   <el-input-number v-model="editConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Выше = меньше ложных срабатываний, но сложнее запустить событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionStartThreshold') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Порог остановки (0..1)">
+                <el-form-item :label="t('companies.dialog.fields.actionEndThreshold')">
                   <el-input-number v-model="editConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Должен быть ниже порога старта (hysteresis)</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionEndThreshold') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Таймаут закрытия (сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
                   <el-input-number v-model="editConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Сколько секунд score должен быть ниже порога остановки, чтобы закрыть событие</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionGapSeconds') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="Мин. длительность события (сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionMinDurationSeconds')">
                   <el-input-number v-model="editConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
                 </el-form-item>
-                <el-form-item label="Разбивать длинное событие (сек, 0=выкл)">
+                <el-form-item :label="t('companies.dialog.fields.actionMaxIntervalSeconds')">
                   <el-input-number v-model="editConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
                   <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">Если поставить, например, 10 — длинная активность будет “нарезаться” на интервалы по 10 секунд</span>
+                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionMaxIntervalSeconds') }}</span>
                   </template>
                 </el-form-item>
-                <el-form-item label="FPS для модели (кадров/сек)">
+                <el-form-item :label="t('companies.dialog.fields.actionFps')">
                   <el-input-number v-model="editConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
                 </el-form-item>
-                <el-form-item label="Макс. кадров в буфере">
+                <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
                   <el-input-number v-model="editConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
                 </el-form-item>
-                <el-form-item label="Отладка (логи score)">
+                <el-form-item :label="t('companies.dialog.fields.actionDebug')">
                   <el-switch v-model="editConfig.actionRecognition.debug" />
                 </el-form-item>
               </el-form>
             </el-collapse-item>
 
-            <el-collapse-item title="Визуализация" name="visualization">
+            <el-collapse-item :title="t('companies.dialog.section.visualization')" name="visualization">
               <el-form label-width="280px">
-              <el-form-item label="Рисовать рамки лиц">
+              <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
                 <el-switch v-model="editConfig.visualization.drawFaceBoxes" />
               </el-form-item>
-              <el-form-item label="Рисовать рамки людей">
+              <el-form-item :label="t('companies.dialog.fields.drawPersonBoxes')">
                 <el-switch v-model="editConfig.visualization.drawPersonBoxes" />
               </el-form-item>
-              <el-form-item label="Показывать имена/ID">
+              <el-form-item :label="t('companies.dialog.fields.drawNames')">
                 <el-switch v-model="editConfig.visualization.drawNames" />
               </el-form-item>
               </el-form>
@@ -816,8 +818,8 @@ async function saveConfig() {
       </el-form>
 
       <template #footer>
-        <el-button @click="editConfigDialogVisible = false" :disabled="configSaving">Отмена</el-button>
-        <el-button type="primary" @click="saveConfig" :loading="configSaving">Сохранить</el-button>
+        <el-button @click="editConfigDialogVisible = false" :disabled="configSaving">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="primary" @click="saveConfig" :loading="configSaving">{{ t('common.actions.save') }}</el-button>
       </template>
     </el-dialog>
   </div>

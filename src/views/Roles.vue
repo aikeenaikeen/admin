@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus, Edit, Delete, VideoCamera } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
 import RoiEditor from '@/components/RoiEditor.vue'
+import { translateActivityKind } from '@/utils/uiText'
+
+const { t } = useI18n()
 
 interface Activity {
   id: number
@@ -93,7 +97,7 @@ async function loadRoles() {
     const response = await apiClient.get('/api/roles')
     roles.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить роли')
+    ElMessage.error(t('roles.loadRolesError'))
   } finally {
     loading.value = false
   }
@@ -104,7 +108,7 @@ async function loadAvailableActivities() {
     const response = await apiClient.get('/api/company-activities')
     availableActivities.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить доступные активности')
+    ElMessage.error(t('roles.loadActivitiesError'))
   }
 }
 
@@ -113,7 +117,7 @@ async function loadCameras() {
     const response = await apiClient.get('/api/cameras')
     cameras.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить камеры')
+    ElMessage.error(t('roles.loadCamerasError'))
   }
 }
 
@@ -121,32 +125,32 @@ async function handleSubmit() {
   try {
     if (isEditing.value && editingRoleId.value) {
       await apiClient.put(`/api/roles/${editingRoleId.value}`, form.value)
-      ElMessage.success('Роль обновлена')
+      ElMessage.success(t('roles.updated'))
     } else {
       await apiClient.post('/api/roles', form.value)
-      ElMessage.success('Роль создана')
+      ElMessage.success(t('roles.created'))
     }
     resetForm()
     await loadRoles()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось сохранить роль')
+    ElMessage.error(error.response?.data?.error || t('roles.saveError'))
   }
 }
 
 async function deleteRole(id: number) {
   try {
-    await ElMessageBox.confirm('Вы уверены, что хотите удалить эту роль?', 'Подтверждение', {
-      confirmButtonText: 'Удалить',
-      cancelButtonText: 'Отмена',
+    await ElMessageBox.confirm(t('roles.deleteConfirmText'), t('roles.deleteConfirmTitle'), {
+      confirmButtonText: t('common.actions.delete'),
+      cancelButtonText: t('common.actions.cancel'),
       type: 'warning',
     })
-    
+
     await apiClient.delete(`/api/roles/${id}`)
-    ElMessage.success('Роль удалена')
+    ElMessage.success(t('roles.deleted'))
     await loadRoles()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('Не удалось удалить роль')
+      ElMessage.error(t('roles.deleteError'))
     }
   }
 }
@@ -184,8 +188,7 @@ async function saveActivitySettings() {
   try {
     const roleId = selectedRole.value.id
     const currentActivityIds = selectedRole.value.roleActivities?.map(ra => ra.activityId) || []
-    
-    // Add new activities
+
     const toAdd = selectedActivities.value.filter(id => !currentActivityIds.includes(id))
     for (const activityId of toAdd) {
       await apiClient.post(`/api/roles/${roleId}/activities`, {
@@ -193,18 +196,17 @@ async function saveActivitySettings() {
         enabled: true,
       })
     }
-    
-    // Remove removed activities
+
     const toRemove = currentActivityIds.filter(id => !selectedActivities.value.includes(id))
     for (const activityId of toRemove) {
       await apiClient.delete(`/api/roles/${roleId}/activities/${activityId}`)
     }
-    
-    ElMessage.success('Активности роли обновлены')
+
+    ElMessage.success(t('roles.activitiesUpdated'))
     activityDialogVisible.value = false
     await loadRoles()
   } catch (error) {
-    ElMessage.error('Не удалось обновить активности')
+    ElMessage.error(t('roles.activitiesUpdateError'))
   }
 }
 
@@ -214,7 +216,6 @@ function openCameraConfig(roleId: number, activityId: number) {
 }
 
 async function configureCameraROI(roleId: number, activityId: number, cameraId: number) {
-  // Find existing polygons if already configured
   const role = roles.value.find(r => r.id === roleId)
   const roleActivity = role?.roleActivities?.find(ra => ra.activityId === activityId)
   const existingConfig = roleActivity?.cameraConfigs?.find(cc => cc.cameraId === cameraId)
@@ -236,12 +237,12 @@ async function saveRoiPolygons(polygons: any[]) {
       schedule: null,
       thresholds: null,
     })
-    ElMessage.success('ROI зоны сохранены')
+    ElMessage.success(t('roles.zonesSaved'))
     roiEditorVisible.value = false
     roiEditorTarget.value = null
     await loadRoles()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось сохранить ROI')
+    ElMessage.error(error.response?.data?.error || t('roles.zonesSaveError'))
   }
 }
 
@@ -255,33 +256,33 @@ function cancelRoiEditor() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Роли сотрудников</h1>
+        <h1 class="page-title">{{ t('roles.title') }}</h1>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="startCreate">
-          Создать роль
+          {{ t('roles.createButton') }}
         </el-button>
       </template>
     </el-page-header>
 
     <el-card shadow="never">
       <el-table :data="roles" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="name" label="Название" min-width="200" />
-        
-        <el-table-column label="Активностей" width="120" align="center">
+        <el-table-column prop="id" :label="t('common.labels.number')" width="60" />
+        <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
+
+        <el-table-column :label="t('roles.table.activitiesCount')" width="120" align="center">
           <template #default="{ row }">
             {{ row.roleActivities?.length || 0 }}
           </template>
         </el-table-column>
-        
-        <el-table-column label="Сотрудников" width="120" align="center">
+
+        <el-table-column :label="t('roles.table.employeesCount')" width="120" align="center">
           <template #default="{ row }">
             {{ row._count?.employeeAssignments || 0 }}
           </template>
         </el-table-column>
-        
-        <el-table-column label="Действия" width="400" fixed="right">
+
+        <el-table-column :label="t('common.labels.actions')" width="400" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button
@@ -289,24 +290,24 @@ function cancelRoiEditor() {
                 type="primary"
                 @click="openActivitySettings(row)"
               >
-                Активности
+                {{ t('common.labels.activity') }}
               </el-button>
-              
+
               <el-button
                 size="small"
                 :icon="Edit"
                 @click="startEdit(row)"
               >
-                Редактировать
+                {{ t('common.actions.edit') }}
               </el-button>
-              
+
               <el-button
                 size="small"
                 type="danger"
                 :icon="Delete"
                 @click="deleteRole(row.id)"
               >
-                Удалить
+                {{ t('common.actions.delete') }}
               </el-button>
             </div>
           </template>
@@ -314,30 +315,28 @@ function cancelRoiEditor() {
       </el-table>
     </el-card>
 
-    <!-- Создание/редактирование роли -->
     <el-dialog
       v-model="dialogVisible"
-      :title="isEditing ? 'Редактировать роль' : 'Создать роль'"
+      :title="isEditing ? t('roles.dialog.editTitle') : t('roles.dialog.createTitle')"
       width="500px"
     >
       <el-form :model="form" label-width="120px">
-        <el-form-item label="Название" required>
-          <el-input v-model="form.name" placeholder="Официант, Кассир, Уборщик..." />
+        <el-form-item :label="t('roles.dialog.name')" required>
+          <el-input v-model="form.name" :placeholder="t('roles.dialog.namePlaceholder')" />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Отмена</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
         <el-button type="primary" @click="handleSubmit">
-          {{ isEditing ? 'Сохранить' : 'Создать' }}
+          {{ isEditing ? t('common.actions.save') : t('common.actions.create') }}
         </el-button>
       </template>
     </el-dialog>
 
-    <!-- Настройка активностей роли -->
     <el-dialog
       v-model="activityDialogVisible"
-      :title="`Активности роли — ${selectedRole?.name}`"
+      :title="t('roles.dialog.roleActivitiesTitle', { name: selectedRole?.name || '' })"
       width="900px"
     >
       <div style="margin-bottom: 16px">
@@ -345,10 +344,9 @@ function cancelRoiEditor() {
           <div v-for="companyActivity in availableActivities" :key="companyActivity.activityId">
             <el-checkbox :value="companyActivity.activityId" style="margin-bottom: 12px">
               <strong>{{ companyActivity.activity.name }}</strong>
-              <el-tag size="small" style="margin-left: 8px">{{ companyActivity.activity.kind }}</el-tag>
+              <el-tag size="small" style="margin-left: 8px">{{ translateActivityKind(companyActivity.activity.kind) }}</el-tag>
             </el-checkbox>
-            
-            <!-- Настройка по камерам (если активность выбрана) -->
+
             <div
               v-if="selectedActivities.includes(companyActivity.activityId) && selectedRole"
               style="margin-left: 32px; margin-top: 8px; margin-bottom: 16px"
@@ -359,7 +357,7 @@ function cancelRoiEditor() {
                 :icon="VideoCamera"
                 @click="openCameraConfig(selectedRole.id, companyActivity.activityId)"
               >
-                Настроить камеры и зоны
+                {{ t('roles.dialog.configureCamerasAndZones') }}
               </el-button>
             </div>
           </div>
@@ -367,33 +365,32 @@ function cancelRoiEditor() {
       </div>
 
       <template #footer>
-        <el-button @click="activityDialogVisible = false">Отмена</el-button>
+        <el-button @click="activityDialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
         <el-button type="primary" @click="saveActivitySettings">
-          Сохранить
+          {{ t('common.actions.save') }}
         </el-button>
       </template>
     </el-dialog>
 
-    <!-- Настройка камер для активности -->
     <el-dialog
       v-model="cameraConfigDialogVisible"
-      title="Настройка камер и зон (ROI)"
+      :title="t('roles.dialog.cameraConfigTitle')"
       width="1000px"
     >
       <el-alert
-        title="Настройка зон (ROI)"
+        :title="t('roles.dialog.zonesConfigTitle')"
         type="info"
         :closable="false"
         style="margin-bottom: 16px"
       >
-        Для каждой камеры вы можете настроить области (ROI), расписание и пороги активности.
+        {{ t('roles.dialog.zonesConfigHint') }}
       </el-alert>
-      
+
       <el-table :data="cameras" style="width: 100%">
-        <el-table-column prop="name" label="Камера" min-width="200" />
-        <el-table-column prop="location" label="Расположение" min-width="150" />
-        
-        <el-table-column label="Действия" width="200">
+        <el-table-column prop="name" :label="t('common.labels.camera')" min-width="200" />
+        <el-table-column prop="location" :label="t('common.labels.location')" min-width="150" />
+
+        <el-table-column :label="t('common.labels.actions')" width="200">
           <template #default="{ row }">
             <el-button
               v-if="selectedRoleActivity"
@@ -405,21 +402,20 @@ function cancelRoiEditor() {
                 row.id
               )"
             >
-              Настроить ROI
+              {{ t('roles.dialog.configureZones') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <template #footer>
-        <el-button @click="cameraConfigDialogVisible = false">Закрыть</el-button>
+        <el-button @click="cameraConfigDialogVisible = false">{{ t('common.actions.close') }}</el-button>
       </template>
     </el-dialog>
 
-    <!-- ROI Editor -->
     <el-dialog
       v-model="roiEditorVisible"
-      title="Редактор зон (ROI)"
+      :title="t('roles.dialog.zoneEditorTitle')"
       width="1100px"
       top="3vh"
       destroy-on-close
@@ -463,7 +459,7 @@ function cancelRoiEditor() {
   .page-container {
     padding: 16px;
   }
-  
+
   .action-buttons {
     flex-direction: column;
   }

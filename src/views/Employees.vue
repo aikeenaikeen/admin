@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus, Delete, User, Upload, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import apiClient from '@/api/client'
+import { translateActivityKind } from '@/utils/uiText'
+
+const { t } = useI18n()
 
 interface Employee {
   id: number
@@ -66,7 +70,7 @@ async function loadEmployees() {
     const response = await apiClient.get('/api/employees')
     employees.value = response.data
   } catch (error) {
-    ElMessage.error('Не удалось загрузить сотрудников')
+    ElMessage.error(t('employees.loadError'))
   } finally {
     loading.value = false
   }
@@ -111,13 +115,13 @@ async function handleSubmit() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       savedEmployee = res.data
-      ElMessage.success('Сотрудник обновлён')
+      ElMessage.success(t('employees.updated'))
     } else {
       const res = await apiClient.post(url, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       savedEmployee = res.data
-      ElMessage.success('Сотрудник успешно добавлен')
+      ElMessage.success(t('employees.created'))
     }
 
     // Assign activities immediately (new UX)
@@ -128,14 +132,14 @@ async function handleSubmit() {
           activities: (form.value.activityIds || []).map((id) => ({ activityId: id, enabled: true })),
         })
       } catch (e: any) {
-        ElMessage.error(e.response?.data?.error || 'Сотрудник сохранён, но активности назначить не удалось')
+        ElMessage.error(e.response?.data?.error || t('employees.savedButActivitiesFailed'))
       }
     }
 
     resetForm()
     await loadEmployees()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || 'Не удалось сохранить сотрудника')
+    ElMessage.error(error.response?.data?.error || t('employees.saveError'))
   }
 }
 
@@ -195,18 +199,18 @@ async function loadEmployeeActivityIds(employeeId: number): Promise<number[]> {
 
 async function deleteEmployee(id: number) {
   try {
-    await ElMessageBox.confirm('Вы уверены, что хотите удалить этого сотрудника?', 'Подтверждение', {
-      confirmButtonText: 'Удалить',
-      cancelButtonText: 'Отмена',
+    await ElMessageBox.confirm(t('employees.deleteConfirmText'), t('employees.deleteConfirmTitle'), {
+      confirmButtonText: t('common.actions.delete'),
+      cancelButtonText: t('common.actions.cancel'),
       type: 'warning',
     })
 
     await apiClient.delete(`/api/employees/${id}`)
-    ElMessage.success('Сотрудник удален')
+    ElMessage.success(t('employees.deleteSuccess'))
     await loadEmployees()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('Не удалось удалить сотрудника')
+      ElMessage.error(t('employees.deleteError'))
     }
   }
 }
@@ -226,7 +230,7 @@ async function openEmployeeActivities(employee: Employee) {
       ? { templateId: res.data.template.templateId, name: res.data.template.name }
       : null
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось загрузить активности сотрудника')
+    ElMessage.error(e.response?.data?.error || t('employees.loadActivitiesError'))
   }
 }
 
@@ -236,10 +240,10 @@ async function saveEmployeeActivities() {
     await apiClient.put(`/api/employees/${selectedEmployee.value.id}/activities`, {
       activities: selectedActivityIds.value.map((id) => ({ activityId: id, enabled: true })),
     })
-    ElMessage.success('Активности сохранены')
+    ElMessage.success(t('employees.activitiesSaved'))
     activitiesDialogVisible.value = false
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось сохранить активности')
+    ElMessage.error(e.response?.data?.error || t('employees.activitiesSaveError'))
   }
 }
 
@@ -249,10 +253,10 @@ async function applyTemplate() {
     await apiClient.put(`/api/employees/${selectedEmployee.value.id}/template`, {
       templateId: selectedTemplateId.value,
     })
-    ElMessage.success('Шаблон применён')
+    ElMessage.success(t('employees.templateApplied'))
     await openEmployeeActivities(selectedEmployee.value)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось применить шаблон')
+    ElMessage.error(e.response?.data?.error || t('employees.templateApplyError'))
   }
 }
 
@@ -260,10 +264,10 @@ async function removeTemplate() {
   if (!selectedEmployee.value) return
   try {
     await apiClient.delete(`/api/employees/${selectedEmployee.value.id}/template`)
-    ElMessage.success('Шаблон снят')
+    ElMessage.success(t('employees.templateRemoved'))
     await openEmployeeActivities(selectedEmployee.value)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || 'Не удалось снять шаблон')
+    ElMessage.error(e.response?.data?.error || t('employees.templateRemoveError'))
   }
 }
 </script>
@@ -272,20 +276,20 @@ async function removeTemplate() {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">Сотрудники</h1>
+        <h1 class="page-title">{{ t('employees.title') }}</h1>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="startCreate">
-          {{ dialogVisible ? 'Отмена' : 'Добавить сотрудника' }}
+          {{ dialogVisible ? t('common.actions.cancel') : t('employees.addButton') }}
         </el-button>
       </template>
     </el-page-header>
 
     <el-card shadow="never">
       <el-table :data="employees" v-loading="loading" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
+        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
-        <el-table-column label="Фото" width="100">
+        <el-table-column :label="t('employees.table.photo')" width="100">
           <template #default="{ row }">
             <el-avatar :src="row.photoUrl" :size="60">
               <el-icon :size="30"><User /></el-icon>
@@ -293,22 +297,22 @@ async function removeTemplate() {
           </template>
         </el-table-column>
         
-        <el-table-column prop="name" label="Имя" min-width="180" />
+        <el-table-column prop="name" :label="t('employees.table.name')" min-width="180" />
         
-        <el-table-column label="Должность" min-width="150">
+        <el-table-column :label="t('employees.table.position')" min-width="150">
           <template #default="{ row }">
-            {{ row.role || '—' }}
+            {{ row.role || t('common.misc.none') }}
           </template>
         </el-table-column>
         
-        <el-table-column label="Действия" width="380" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="380" fixed="right">
           <template #default="{ row }">
               <el-button
                 size="small"
                 :icon="Setting"
                 @click="openEmployeeActivities(row)"
               >
-                Активности
+                {{ t('common.labels.activity') }}
               </el-button>
               <el-button
                 size="small"
@@ -316,13 +320,13 @@ async function removeTemplate() {
                 :icon="Delete"
                 @click="deleteEmployee(row.id)"
               >
-                Удалить
+                {{ t('common.actions.delete') }}
               </el-button>
               <el-button
                 size="small"
                 @click="startEdit(row)"
               >
-                Редактировать
+                {{ t('common.actions.edit') }}
               </el-button>
               
           </template>
@@ -332,25 +336,25 @@ async function removeTemplate() {
 
     <el-dialog
       v-model="activitiesDialogVisible"
-      title="Активности сотрудника"
+      :title="t('employees.activitiesDialog.title')"
       width="700px"
     >
       <div v-if="selectedEmployee" style="margin-bottom: 12px; color: var(--el-text-color-regular);">
-        Сотрудник: <strong>{{ selectedEmployee.name }}</strong>
+        {{ t('employees.activitiesDialog.employee') }} <strong>{{ selectedEmployee.name }}</strong>
       </div>
 
       <el-card shadow="never" style="margin-bottom: 12px;">
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
           <div>
-            <div style="font-size: 12px; color: var(--el-text-color-secondary);">Текущий шаблон</div>
-            <div>{{ currentTemplate ? currentTemplate.name : '—' }}</div>
+            <div style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('employees.activitiesDialog.currentTemplate') }}</div>
+            <div>{{ currentTemplate ? currentTemplate.name : t('common.misc.none') }}</div>
           </div>
           <div style="flex: 1;"></div>
-          <el-select v-model="selectedTemplateId" placeholder="Применить шаблон" clearable style="min-width: 260px;">
+          <el-select v-model="selectedTemplateId" :placeholder="t('common.placeholders.selectTemplate')" clearable style="min-width: 260px;">
             <el-option v-for="t in templates" :key="t.id" :label="t.name" :value="t.id" />
           </el-select>
-          <el-button type="primary" :disabled="!selectedTemplateId" @click="applyTemplate">Применить</el-button>
-          <el-button type="danger" :disabled="!currentTemplate" @click="removeTemplate">Снять</el-button>
+          <el-button type="primary" :disabled="!selectedTemplateId" @click="applyTemplate">{{ t('employees.activitiesDialog.applyTemplate') }}</el-button>
+          <el-button type="danger" :disabled="!currentTemplate" @click="removeTemplate">{{ t('employees.activitiesDialog.removeTemplate') }}</el-button>
         </div>
       </el-card>
 
@@ -358,54 +362,54 @@ async function removeTemplate() {
         <el-row :gutter="12">
           <el-col v-for="ca in companyActivities" :key="ca.activityId" :span="12" style="margin-bottom: 8px;">
             <el-checkbox :label="ca.activityId">
-              {{ ca.activity.name }} <span style="color: var(--el-text-color-secondary);">({{ ca.activity.kind }})</span>
+              {{ ca.activity.name }} <span style="color: var(--el-text-color-secondary);">({{ translateActivityKind(ca.activity.kind) }})</span>
             </el-checkbox>
           </el-col>
         </el-row>
       </el-checkbox-group>
 
       <template #footer>
-        <el-button @click="activitiesDialogVisible = false">Отмена</el-button>
-        <el-button type="primary" @click="saveEmployeeActivities">Сохранить</el-button>
+        <el-button @click="activitiesDialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="primary" @click="saveEmployeeActivities">{{ t('common.actions.save') }}</el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="dialogVisible"
-      :title="isEditing ? 'Редактировать сотрудника' : 'Добавить сотрудника'"
+      :title="isEditing ? t('employees.dialog.editTitle') : t('employees.dialog.addTitle')"
       width="500px"
     >
       <el-form :model="form" label-width="120px">
-        <el-form-item label="Имя" required>
-          <el-input v-model="form.name" placeholder="Иван Иванов" />
+        <el-form-item :label="t('employees.dialog.name')" required>
+          <el-input v-model="form.name" :placeholder="t('employees.dialog.namePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="Должность (текст)">
-          <el-input v-model="form.roleTitle" placeholder="Необязательно (старое поле)" />
+        <el-form-item :label="t('employees.dialog.roleText')">
+          <el-input v-model="form.roleTitle" :placeholder="t('employees.dialog.rolePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="Активности">
+        <el-form-item :label="t('employees.dialog.activities')">
           <el-select
             v-model="form.activityIds"
             multiple
             filterable
             clearable
-            placeholder="Выберите активности"
+            :placeholder="t('employees.dialog.activitiesPlaceholder')"
             style="width: 100%"
           >
             <el-option
               v-for="ca in companyActivities"
               :key="ca.activityId"
-              :label="`${ca.activity.name} (${ca.activity.kind})`"
+              :label="`${ca.activity.name} (${translateActivityKind(ca.activity.kind)})`"
               :value="ca.activityId"
             />
           </el-select>
           <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 6px;">
-            Показываются только активности, разрешённые компании и с выбранной моделью.
+            {{ t('employees.dialog.activitiesHint') }}
           </div>
         </el-form-item>
 
-        <el-form-item label="Фото">
+        <el-form-item :label="t('employees.dialog.photo')">
           <el-upload
             v-model:file-list="fileList"
             :auto-upload="false"
@@ -414,10 +418,10 @@ async function removeTemplate() {
             :on-change="handleFileChange"
             :on-remove="handleRemove"
           >
-            <el-button :icon="Upload">Выбрать файл</el-button>
+            <el-button :icon="Upload">{{ t('common.actions.selectFile') }}</el-button>
             <template #tip>
               <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px;">
-                JPG, PNG до 10MB
+                {{ t('employees.dialog.photoHint') }}
               </div>
             </template>
           </el-upload>
@@ -425,9 +429,9 @@ async function removeTemplate() {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">Отмена</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
         <el-button type="primary" @click="handleSubmit">
-          {{ isEditing ? 'Сохранить' : 'Создать' }}
+          {{ isEditing ? t('common.actions.save') : t('common.actions.create') }}
         </el-button>
       </template>
     </el-dialog>
