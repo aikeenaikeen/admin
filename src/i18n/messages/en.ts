@@ -129,10 +129,10 @@ const en = {
     success: 'Successfully signed in',
     error: 'Sign-in failed',
     demoTitle: 'Test accounts:',
-    demoSuperadmin: 'Superadmin: superadmin@system.com',
-    demoCompanyAdmin: 'Company admin: admin@demo.com',
+    demoSuperadmin: "Superadmin: superadmin{'@'}system.com",
+    demoCompanyAdmin: "Company admin: admin{'@'}demo.com",
     placeholders: {
-      email: 'email@example.com',
+      email: "email{'@'}example.com",
       password: '••••••••',
     },
   },
@@ -414,7 +414,7 @@ const en = {
     dialogTitle: 'Add user',
     passwordHint: 'At least 6 characters',
     companyHint: 'Company is not required for superadmin',
-    emailPlaceholder: 'email@company.com',
+    emailPlaceholder: "email{'@'}company.com",
     companyFallback: 'Company #{id}',
   },
   templates: {

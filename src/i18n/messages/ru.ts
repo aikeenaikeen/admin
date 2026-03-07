@@ -129,10 +129,10 @@ const ru = {
     success: 'Вход выполнен успешно',
     error: 'Ошибка входа',
     demoTitle: 'Тестовые аккаунты:',
-    demoSuperadmin: 'Суперадминистратор: superadmin@system.com',
-    demoCompanyAdmin: 'Администратор компании: admin@demo.com',
+    demoSuperadmin: "Суперадминистратор: superadmin{'@'}system.com",
+    demoCompanyAdmin: "Администратор компании: admin{'@'}demo.com",
     placeholders: {
-      email: 'pochta@primer.ru',
+      email: "pochta{'@'}primer.ru",
       password: '••••••••',
     },
   },
@@ -414,7 +414,7 @@ const ru = {
     dialogTitle: 'Добавить пользователя',
     passwordHint: 'Минимум 6 символов',
     companyHint: 'Для суперадминистратора компания не привязывается',
-    emailPlaceholder: 'pochta@kompaniya.ru',
+    emailPlaceholder: "pochta{'@'}kompaniya.ru",
     companyFallback: 'Компания №{id}',
   },
   templates: {
