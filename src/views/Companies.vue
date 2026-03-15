@@ -6,6 +6,10 @@ import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
 import RecognitionConfigForm from '@/components/RecognitionConfigForm.vue'
+import {
+  RECOMMENDED_RECOGNITION_CONFIG,
+  type RecognitionConfig,
+} from '@/constants/recognitionConfig'
 
 interface Company {
   id: number
@@ -15,14 +19,7 @@ interface Company {
   createdAt: string
 }
 
-type RecognitionConfig = Record<string, any>
-
-interface RecognitionConfigDefaultsResponse {
-  recognitionConfigDefaults: RecognitionConfig
-}
-
 interface RecognitionConfigSnapshot {
-  recognitionConfigDefaults: RecognitionConfig
   rawRecognitionConfig: RecognitionConfig | null
   resolvedRecognitionConfig: RecognitionConfig
   recognitionConfigUpdatedAt: string | null
@@ -39,7 +36,6 @@ const editingCompanyId = ref<number | null>(null)
 const editingCompanyName = ref('')
 const configLoading = ref(false)
 const configSaving = ref(false)
-const recognitionConfigDefaults = ref<RecognitionConfig | null>(null)
 
 const form = ref({
   name: '',
@@ -60,19 +56,12 @@ function resetCreateForm() {
   form.value = {
     name: '',
     slug: '',
-    recognitionConfig: recognitionConfigDefaults.value
-      ? cloneRecognitionConfig(recognitionConfigDefaults.value)
-      : ({} as RecognitionConfig),
+    recognitionConfig: cloneRecognitionConfig(RECOMMENDED_RECOGNITION_CONFIG),
   }
 }
 
 onMounted(async () => {
-  try {
-    await ensureRecognitionConfigDefaultsLoaded()
-    resetCreateForm()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
-  }
+  resetCreateForm()
   await loadCompanies()
 })
 
@@ -139,26 +128,10 @@ function generateSlug() {
     .replace(/^-|-$/g, '')
 }
 
-async function ensureRecognitionConfigDefaultsLoaded() {
-  if (recognitionConfigDefaults.value) {
-    return
-  }
-
-  const response = await apiClient.get<RecognitionConfigDefaultsResponse>(
-    '/api/companies/recognition-config/defaults'
-  )
-  recognitionConfigDefaults.value = response.data.recognitionConfigDefaults
-}
-
-async function openCreateDialog() {
-  try {
-    await ensureRecognitionConfigDefaultsLoaded()
-    resetCreateForm()
-    showAdvanced.value = false
-    dialogVisible.value = true
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
-  }
+function openCreateDialog() {
+  resetCreateForm()
+  showAdvanced.value = false
+  dialogVisible.value = true
 }
 
 async function openEditConfig(company: Company) {
@@ -170,11 +143,9 @@ async function openEditConfig(company: Company) {
   showAdvancedEdit.value = false
   
   try {
-    await ensureRecognitionConfigDefaultsLoaded()
     const response = await apiClient.get<RecognitionConfigSnapshot>(
       `/api/companies/${company.id}/recognition-config`
     )
-    recognitionConfigDefaults.value = response.data.recognitionConfigDefaults
     editConfig.value = cloneRecognitionConfig(response.data.resolvedRecognitionConfig)
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
@@ -282,7 +253,6 @@ async function saveConfig() {
     </el-card>
 
     <el-dialog
-      v-if="recognitionConfigDefaults"
       v-model="dialogVisible"
       :title="t('companies.dialog.addTitle')"
       width="800px"
