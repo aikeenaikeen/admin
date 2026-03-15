@@ -308,16 +308,12 @@ function toggleAdvanced() {
 
   <el-form-item :label="t('companies.dialog.peopleTracking')">
     <el-switch v-model="config.personTracking.enabled" />
-    <template #extra>
-      <span class="field-hint">{{ hintText('peopleTracking') }}</span>
-    </template>
+    <div class="field-hint">{{ hintText('peopleTracking') }}</div>
   </el-form-item>
 
   <el-form-item :label="t('companies.dialog.observationMode')">
     <el-switch v-model="config.presence.observationMode" />
-    <template #extra>
-      <span class="field-hint">{{ hintText('observationMode') }}</span>
-    </template>
+    <div class="field-hint">{{ hintText('observationMode') }}</div>
   </el-form-item>
 
   <el-form-item :label="t('companies.dialog.personDetectionMode')">
@@ -325,9 +321,7 @@ function toggleAdvanced() {
       <el-option :label="t('companies.dialog.personDetectionOnDemand')" value="on_demand" />
       <el-option :label="t('companies.dialog.always')" value="always" />
     </el-select>
-    <template #extra>
-      <span class="field-hint">{{ hintText('personDetectionMode') }}</span>
-    </template>
+    <div class="field-hint">{{ hintText('personDetectionMode') }}</div>
   </el-form-item>
 
   <el-link type="primary" @click="toggleAdvanced" style="margin-bottom: 16px">
@@ -340,15 +334,11 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
             <el-input-number v-model="config.quality.minFaceHeight" :min="10" :max="200" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('minFaceHeight') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('minFaceHeight') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.minBlur')">
             <el-input-number v-model="config.quality.minBlurVar" :min="0" :max="500" :step="10" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('minBlur') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('minBlur') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -357,27 +347,19 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
             <el-input-number v-model="config.insightface.threshold" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('similarityThreshold') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('similarityThreshold') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.minMargin')">
             <el-input-number v-model="config.insightface.minMargin" :min="0" :max="1" :step="0.01" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('minMargin') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('minMargin') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.lowConfidenceExtra')">
             <el-input-number v-model="config.insightface.lowConfidenceExtra" :min="0" :max="1" :step="0.01" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('lowConfidenceExtra') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('lowConfidenceExtra') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.lowConfidenceMinMargin')">
             <el-input-number v-model="config.insightface.lowConfidenceMinMargin" :min="0" :max="1" :step="0.01" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('lowConfidenceMinMargin') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('lowConfidenceMinMargin') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -386,21 +368,15 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
             <el-input-number v-model="config.faceTracking.minEmbeddings" :min="1" :max="10" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('minEmbeddings') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('minEmbeddings') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.lowConfidenceExtraEmbeddings')">
             <el-input-number v-model="config.faceTracking.lowConfidenceExtraEmbeddings" :min="0" :max="10" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('lowConfidenceExtraEmbeddings') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('lowConfidenceExtraEmbeddings') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceTrackMaxAgeSeconds')">
             <el-input-number v-model="config.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('faceTrackMaxAgeSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('faceTrackMaxAgeSeconds') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -409,51 +385,35 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
             <el-input-number v-model="config.personTracking.detConf" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('personDetectorConfidence') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('personDetectorConfidence') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.personIouThreshold')">
             <el-input-number v-model="config.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('personIouThreshold') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('personIouThreshold') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.personTrackMaxAgeSeconds')">
             <el-input-number v-model="config.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('personTrackMaxAgeSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('personTrackMaxAgeSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
             <el-input-number v-model="config.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('faceToPersonIouThreshold') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('faceToPersonIouThreshold') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceToPersonContainmentMin')">
             <el-input-number v-model="config.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('faceToPersonContainmentMin') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('faceToPersonContainmentMin') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceToPersonLooseContainmentMin')">
             <el-input-number v-model="config.personTracking.faceToPersonLooseContainmentMin" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('faceToPersonLooseContainmentMin') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('faceToPersonLooseContainmentMin') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceToPersonUpperBodyMaxYRatio')">
             <el-input-number v-model="config.personTracking.faceToPersonUpperBodyMaxYRatio" :min="0" :max="1" :step="0.05" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('faceToPersonUpperBodyMaxYRatio') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('faceToPersonUpperBodyMaxYRatio') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.employeeLockStrict')">
             <el-switch v-model="config.personTracking.employeeLockStrict" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('employeeLockStrict') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('employeeLockStrict') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -462,21 +422,15 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
             <el-input-number v-model="config.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('observationIntervalSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('observationIntervalSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.inThresholdSeconds')">
             <el-input-number v-model="config.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('inThresholdSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('inThresholdSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.outThresholdSeconds')">
             <el-input-number v-model="config.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('outThresholdSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('outThresholdSeconds') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -485,15 +439,11 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
             <el-input-number v-model="config.optimization.personDetIntervalFrames" :min="1" :max="120" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('personDetIntervalFrames') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('personDetIntervalFrames') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.personDetOnNewFace')">
             <el-switch v-model="config.optimization.personDetOnNewFace" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('personDetOnNewFace') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('personDetOnNewFace') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -502,15 +452,11 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.streamFps')">
             <el-input-number v-model="config.streaming.streamFps" :min="1" :max="30" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('streamFps') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('streamFps') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.streamJpegQuality')">
             <el-input-number v-model="config.streaming.streamJpegQuality" :min="30" :max="95" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('streamJpegQuality') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('streamJpegQuality') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -519,51 +465,35 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
             <el-input-number v-model="config.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionStartThreshold') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionStartThreshold') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionEndThreshold')">
             <el-input-number v-model="config.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionEndThreshold') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionEndThreshold') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
             <el-input-number v-model="config.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionGapSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionGapSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionMinDurationSeconds')">
             <el-input-number v-model="config.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionMinDurationSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionMinDurationSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionMaxIntervalSeconds')">
             <el-input-number v-model="config.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionMaxIntervalSeconds') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionMaxIntervalSeconds') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionFps')">
             <el-input-number v-model="config.actionRecognition.fps" :min="1" :max="30" :step="1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionFps') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionFps') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
             <el-input-number v-model="config.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionMaxFrames') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionMaxFrames') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionDebug')">
             <el-switch v-model="config.actionRecognition.debug" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('actionDebug') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('actionDebug') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -572,21 +502,15 @@ function toggleAdvanced() {
         <el-form label-width="280px">
           <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
             <el-switch v-model="config.visualization.drawFaceBoxes" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('drawFaceBoxes') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('drawFaceBoxes') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.drawPersonBoxes')">
             <el-switch v-model="config.visualization.drawPersonBoxes" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('drawPersonBoxes') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('drawPersonBoxes') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.drawNames')">
             <el-switch v-model="config.visualization.drawNames" />
-            <template #extra>
-              <span class="field-hint">{{ hintText('drawNames') }}</span>
-            </template>
+            <div class="field-hint">{{ hintText('drawNames') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
