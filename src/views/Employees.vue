@@ -12,7 +12,6 @@ const { t } = useI18n()
 interface Employee {
   id: number
   name: string
-  role: string | null
   photoUrl: string | null
 }
 
@@ -31,11 +30,6 @@ interface CompanyActivity {
   activity: Activity
 }
 
-interface TemplateItem {
-  id: number
-  name: string
-}
-
 const employees = ref<Employee[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
@@ -44,7 +38,6 @@ const editingEmployeeId = ref<number | null>(null)
 
 const form = ref({
   name: '',
-  roleTitle: '',
   photo: null as File | null,
   activityIds: [] as number[],
 })
@@ -55,13 +48,10 @@ const fileList = ref<UploadFile[]>([])
 const activitiesDialogVisible = ref(false)
 const selectedEmployee = ref<Employee | null>(null)
 const companyActivities = ref<CompanyActivity[]>([])
-const templates = ref<TemplateItem[]>([])
 const selectedActivityIds = ref<number[]>([])
-const selectedTemplateId = ref<number | null>(null)
-const currentTemplate = ref<{ templateId: number; name: string } | null>(null)
 
 onMounted(async () => {
-  await Promise.all([loadEmployees(), loadCompanyActivities(), loadTemplates()])
+  await Promise.all([loadEmployees(), loadCompanyActivities()])
 })
 
 async function loadEmployees() {
@@ -85,22 +75,10 @@ async function loadCompanyActivities() {
   }
 }
 
-async function loadTemplates() {
-  try {
-    const response = await apiClient.get('/api/templates')
-    templates.value = response.data
-  } catch {
-    templates.value = []
-  }
-}
-
 async function handleSubmit() {
   try {
     const formData = new FormData()
     formData.append('name', form.value.name)
-    if (form.value.roleTitle) {
-      formData.append('roleTitle', form.value.roleTitle)
-    }
     if (form.value.photo) {
       formData.append('photo', form.value.photo)
     }
@@ -165,7 +143,6 @@ function startEdit(employee: Employee) {
   dialogVisible.value = true
   form.value = {
     name: employee.name,
-    roleTitle: employee.role || '',
     photo: null,
     activityIds: [],
   }
@@ -183,7 +160,7 @@ function resetForm() {
   dialogVisible.value = false
   isEditing.value = false
   editingEmployeeId.value = null
-  form.value = { name: '', roleTitle: '', photo: null, activityIds: [] }
+  form.value = { name: '', photo: null, activityIds: [] }
   fileList.value = []
 }
 
@@ -217,8 +194,6 @@ async function deleteEmployee(id: number) {
 
 async function openEmployeeActivities(employee: Employee) {
   selectedEmployee.value = employee
-  selectedTemplateId.value = null
-  currentTemplate.value = null
   selectedActivityIds.value = []
   activitiesDialogVisible.value = true
 
@@ -226,9 +201,6 @@ async function openEmployeeActivities(employee: Employee) {
     const res = await apiClient.get(`/api/employees/${employee.id}/activities`)
     const activities = res.data?.activities || []
     selectedActivityIds.value = activities.filter((a: any) => a.enabled).map((a: any) => a.activityId)
-    currentTemplate.value = res.data?.template
-      ? { templateId: res.data.template.templateId, name: res.data.template.name }
-      : null
   } catch (e: any) {
     ElMessage.error(e.response?.data?.error || t('employees.loadActivitiesError'))
   }
@@ -244,30 +216,6 @@ async function saveEmployeeActivities() {
     activitiesDialogVisible.value = false
   } catch (e: any) {
     ElMessage.error(e.response?.data?.error || t('employees.activitiesSaveError'))
-  }
-}
-
-async function applyTemplate() {
-  if (!selectedEmployee.value || !selectedTemplateId.value) return
-  try {
-    await apiClient.put(`/api/employees/${selectedEmployee.value.id}/template`, {
-      templateId: selectedTemplateId.value,
-    })
-    ElMessage.success(t('employees.templateApplied'))
-    await openEmployeeActivities(selectedEmployee.value)
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || t('employees.templateApplyError'))
-  }
-}
-
-async function removeTemplate() {
-  if (!selectedEmployee.value) return
-  try {
-    await apiClient.delete(`/api/employees/${selectedEmployee.value.id}/template`)
-    ElMessage.success(t('employees.templateRemoved'))
-    await openEmployeeActivities(selectedEmployee.value)
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || t('employees.templateRemoveError'))
   }
 }
 </script>
@@ -298,13 +246,7 @@ async function removeTemplate() {
         </el-table-column>
         
         <el-table-column prop="name" :label="t('employees.table.name')" min-width="180" />
-        
-        <el-table-column :label="t('employees.table.position')" min-width="150">
-          <template #default="{ row }">
-            {{ row.role || t('common.misc.none') }}
-          </template>
-        </el-table-column>
-        
+
         <el-table-column :label="t('common.labels.actions')" width="380" fixed="right">
           <template #default="{ row }">
               <el-button
@@ -343,21 +285,6 @@ async function removeTemplate() {
         {{ t('employees.activitiesDialog.employee') }} <strong>{{ selectedEmployee.name }}</strong>
       </div>
 
-      <el-card shadow="never" style="margin-bottom: 12px;">
-        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-          <div>
-            <div style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('employees.activitiesDialog.currentTemplate') }}</div>
-            <div>{{ currentTemplate ? currentTemplate.name : t('common.misc.none') }}</div>
-          </div>
-          <div style="flex: 1;"></div>
-          <el-select v-model="selectedTemplateId" :placeholder="t('common.placeholders.selectTemplate')" clearable style="min-width: 260px;">
-            <el-option v-for="t in templates" :key="t.id" :label="t.name" :value="t.id" />
-          </el-select>
-          <el-button type="primary" :disabled="!selectedTemplateId" @click="applyTemplate">{{ t('employees.activitiesDialog.applyTemplate') }}</el-button>
-          <el-button type="danger" :disabled="!currentTemplate" @click="removeTemplate">{{ t('employees.activitiesDialog.removeTemplate') }}</el-button>
-        </div>
-      </el-card>
-
       <el-checkbox-group v-model="selectedActivityIds">
         <el-row :gutter="12">
           <el-col v-for="ca in companyActivities" :key="ca.activityId" :span="12" style="margin-bottom: 8px;">
@@ -382,10 +309,6 @@ async function removeTemplate() {
       <el-form :model="form" label-width="120px">
         <el-form-item :label="t('employees.dialog.name')" required>
           <el-input v-model="form.name" :placeholder="t('employees.dialog.namePlaceholder')" />
-        </el-form-item>
-
-        <el-form-item :label="t('employees.dialog.roleText')">
-          <el-input v-model="form.roleTitle" :placeholder="t('employees.dialog.rolePlaceholder')" />
         </el-form-item>
 
         <el-form-item :label="t('employees.dialog.activities')">

@@ -38,11 +38,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/Presence.vue'),
       },
       {
-        path: '/live',
-        name: 'Live',
-        component: () => import('@/views/Live.vue'),
-      },
-      {
         path: '/events',
         name: 'Events',
         component: () => import('@/views/Events.vue'),
@@ -69,11 +64,6 @@ const routes: RouteRecordRaw[] = [
         name: 'Activities',
         component: () => import('@/views/Activities.vue'),
         meta: { requiresSuperAdmin: true },
-      },
-      {
-        path: '/templates',
-        name: 'Templates',
-        component: () => import('@/views/Templates.vue'),
       },
       {
         path: '/employee-activities',
@@ -103,6 +93,11 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
+  if (to.meta.requiresCompanyAdmin && !(authStore.isSuperAdmin || authStore.isCompanyAdmin)) {
+    next('/dashboard')
+    return
+  }
+
   if (to.path === '/login' && authStore.isAuthenticated) {
     next('/dashboard')
     return
@@ -112,8 +107,6 @@ router.beforeEach((to, _from, next) => {
 })
 
 export default router
-
-
 
 
 

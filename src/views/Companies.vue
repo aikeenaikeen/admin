@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Plus, Delete } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
+import RecognitionConfigForm from '@/components/RecognitionConfigForm.vue'
 
 interface Company {
   id: number
@@ -12,6 +13,19 @@ interface Company {
   slug: string
   isActive: boolean
   createdAt: string
+}
+
+type RecognitionConfig = Record<string, any>
+
+interface RecognitionConfigDefaultsResponse {
+  recognitionConfigDefaults: RecognitionConfig
+}
+
+interface RecognitionConfigSnapshot {
+  recognitionConfigDefaults: RecognitionConfig
+  rawRecognitionConfig: RecognitionConfig | null
+  resolvedRecognitionConfig: RecognitionConfig
+  recognitionConfigUpdatedAt: string | null
 }
 
 const companies = ref<Company[]>([])
@@ -25,144 +39,40 @@ const editingCompanyId = ref<number | null>(null)
 const editingCompanyName = ref('')
 const configLoading = ref(false)
 const configSaving = ref(false)
+const recognitionConfigDefaults = ref<RecognitionConfig | null>(null)
 
 const form = ref({
   name: '',
   slug: '',
-  recognitionConfig: {
-    quality: { minFaceHeight: 20, minBlurVar: 50 },
-    insightface: { threshold: 0.2 },
-    faceTracking: { minEmbeddings: 2, trackMaxAgeSeconds: 2.0 },
-    personTracking: { 
-      enabled: true,
-      detConf: 0.5,
-      iouThreshold: 0.3,
-      trackMaxAgeSeconds: 5.0,
-      faceToPersonIouThreshold: 0.1,
-      faceToPersonContainmentMin: 0.5,
-      employeeLockStrict: true,
-    },
-    presence: { 
-      observationMode: true, 
-      observationIntervalSeconds: 2.0,
-      inThresholdSeconds: 1.0,
-      outThresholdSeconds: 10.0,
-    },
-    optimization: { 
-      personDetectMode: 'on_demand' as const,
-      personDetIntervalFrames: 10,
-      personDetOnNewFace: true,
-    },
-    streaming: { streamFps: 15, streamJpegQuality: 85 },
-    visualization: {
-      drawFaceBoxes: true,
-      drawPersonBoxes: true,
-      drawNames: true,
-    },
-    actionRecognition: {
-      startThreshold: 0.7,
-      endThreshold: 0.4,
-      gapSeconds: 2.0,
-      minDurationSeconds: 1.0,
-      maxIntervalSeconds: 0.0,
-      fps: 8.0,
-      maxFrames: 64,
-      debug: false,
-    },
-  },
+  recognitionConfig: {} as RecognitionConfig,
 })
 
 const showAdvanced = ref(false)
 const showAdvancedEdit = ref(false)
 
-const editConfig = ref({
-  quality: { minFaceHeight: 20, minBlurVar: 50 },
-  insightface: { threshold: 0.2 },
-  faceTracking: { minEmbeddings: 2, trackMaxAgeSeconds: 2.0 },
-  personTracking: { 
-    enabled: true,
-    detConf: 0.5,
-    iouThreshold: 0.3,
-    trackMaxAgeSeconds: 5.0,
-    faceToPersonIouThreshold: 0.1,
-    faceToPersonContainmentMin: 0.5,
-    employeeLockStrict: true,
-  },
-  presence: { 
-    observationMode: true, 
-    observationIntervalSeconds: 2.0,
-    inThresholdSeconds: 1.0,
-    outThresholdSeconds: 10.0,
-  },
-  optimization: { 
-    personDetectMode: 'on_demand' as const,
-    personDetIntervalFrames: 10,
-    personDetOnNewFace: true,
-  },
-  streaming: { streamFps: 15, streamJpegQuality: 85 },
-  visualization: {
-    drawFaceBoxes: true,
-    drawPersonBoxes: true,
-    drawNames: true,
-  },
-  actionRecognition: {
-    startThreshold: 0.7,
-    endThreshold: 0.4,
-    gapSeconds: 2.0,
-    minDurationSeconds: 1.0,
-    maxIntervalSeconds: 0.0,
-    fps: 8.0,
-    maxFrames: 64,
-    debug: false,
-  },
-})
+const editConfig = ref<RecognitionConfig | null>(null)
 
-// Helper для получения дефолтного конфига (DRY)
-function getDefaultConfig() {
-  return {
-    quality: { minFaceHeight: 20, minBlurVar: 50 },
-    insightface: { threshold: 0.2 },
-    faceTracking: { minEmbeddings: 2, trackMaxAgeSeconds: 2.0 },
-    personTracking: { 
-      enabled: true,
-      detConf: 0.5,
-      iouThreshold: 0.3,
-      trackMaxAgeSeconds: 5.0,
-      faceToPersonIouThreshold: 0.1,
-      faceToPersonContainmentMin: 0.5,
-      employeeLockStrict: true,
-    },
-    presence: { 
-      observationMode: true, 
-      observationIntervalSeconds: 2.0,
-      inThresholdSeconds: 1.0,
-      outThresholdSeconds: 10.0,
-    },
-    optimization: { 
-      personDetectMode: 'on_demand' as const,
-      personDetIntervalFrames: 10,
-      personDetOnNewFace: true,
-    },
-    streaming: { streamFps: 15, streamJpegQuality: 85 },
-    visualization: {
-      drawFaceBoxes: true,
-      drawPersonBoxes: true,
-      drawNames: true,
-    },
-    actionRecognition: {
-      startThreshold: 0.7,
-      endThreshold: 0.4,
-      gapSeconds: 2.0,
-      minDurationSeconds: 1.0,
-      maxIntervalSeconds: 0.0,
-      fps: 8.0,
-      maxFrames: 64,
-      debug: false,
-    },
+function cloneRecognitionConfig(config: RecognitionConfig): RecognitionConfig {
+  return JSON.parse(JSON.stringify(config))
+}
+
+function resetCreateForm() {
+  form.value = {
+    name: '',
+    slug: '',
+    recognitionConfig: recognitionConfigDefaults.value
+      ? cloneRecognitionConfig(recognitionConfigDefaults.value)
+      : ({} as RecognitionConfig),
   }
 }
 
 onMounted(async () => {
+  try {
+    await ensureRecognitionConfigDefaultsLoaded()
+    resetCreateForm()
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
+  }
   await loadCompanies()
 })
 
@@ -183,11 +93,7 @@ async function handleSubmit() {
     await apiClient.post('/api/companies', form.value)
     ElMessage.success(t('companies.created'))
     dialogVisible.value = false
-    form.value = {
-      name: '',
-      slug: '',
-      recognitionConfig: getDefaultConfig(),
-    }
+    resetCreateForm()
     await loadCompanies()
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || t('companies.createError'))
@@ -204,6 +110,28 @@ async function toggleCompany(id: number, isActive: boolean) {
   }
 }
 
+async function deleteCompany(id: number) {
+  try {
+    await ElMessageBox.confirm(
+      t('companies.deleteConfirmText'),
+      t('companies.deleteConfirmTitle'),
+      {
+        confirmButtonText: t('common.actions.delete'),
+        cancelButtonText: t('common.actions.cancel'),
+        type: 'warning',
+      }
+    )
+
+    await apiClient.delete(`/api/companies/${id}`)
+    ElMessage.success(t('companies.deleted'))
+    await loadCompanies()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || t('companies.deleteError'))
+    }
+  }
+}
+
 function generateSlug() {
   form.value.slug = form.value.name
     .toLowerCase()
@@ -211,49 +139,54 @@ function generateSlug() {
     .replace(/^-|-$/g, '')
 }
 
-// Deep merge helper для recognitionConfig
-function deepMerge(defaults: any, overrides: any): any {
-  const result = { ...defaults }
-  
-  for (const key in result) {
-    if (overrides && overrides[key] !== undefined) {
-      if (typeof result[key] === 'object' && !Array.isArray(result[key]) && result[key] !== null) {
-        result[key] = deepMerge(result[key], overrides[key])
-      } else {
-        result[key] = overrides[key]
-      }
-    }
+async function ensureRecognitionConfigDefaultsLoaded() {
+  if (recognitionConfigDefaults.value) {
+    return
   }
-  
-  return result
+
+  const response = await apiClient.get<RecognitionConfigDefaultsResponse>(
+    '/api/companies/recognition-config/defaults'
+  )
+  recognitionConfigDefaults.value = response.data.recognitionConfigDefaults
+}
+
+async function openCreateDialog() {
+  try {
+    await ensureRecognitionConfigDefaultsLoaded()
+    resetCreateForm()
+    showAdvanced.value = false
+    dialogVisible.value = true
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
+  }
 }
 
 async function openEditConfig(company: Company) {
   editingCompanyId.value = company.id
   editingCompanyName.value = company.name
   configLoading.value = true
+  editConfig.value = null
   editConfigDialogVisible.value = true
   showAdvancedEdit.value = false
   
   try {
-    const response = await apiClient.get(`/api/companies/${company.id}`)
-    const companyData = response.data
-    
-    // Deep merge: defaults + company.recognitionConfig
-    const defaults = getDefaultConfig()
-    const merged = deepMerge(defaults, companyData.recognitionConfig || {})
-    
-    editConfig.value = merged
+    await ensureRecognitionConfigDefaultsLoaded()
+    const response = await apiClient.get<RecognitionConfigSnapshot>(
+      `/api/companies/${company.id}/recognition-config`
+    )
+    recognitionConfigDefaults.value = response.data.recognitionConfigDefaults
+    editConfig.value = cloneRecognitionConfig(response.data.resolvedRecognitionConfig)
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
     editConfigDialogVisible.value = false
+    editConfig.value = null
   } finally {
     configLoading.value = false
   }
 }
 
 async function saveConfig() {
-  if (!editingCompanyId.value) return
+  if (!editingCompanyId.value || !editConfig.value) return
   
   configSaving.value = true
   try {
@@ -265,6 +198,7 @@ async function saveConfig() {
     editConfigDialogVisible.value = false
     editingCompanyId.value = null
     editingCompanyName.value = ''
+    editConfig.value = null
   } catch (error: any) {
     ElMessage.error(error.response?.data?.error || t('companies.configSaveError'))
   } finally {
@@ -280,7 +214,11 @@ async function saveConfig() {
         <h1 class="page-title">{{ t('companies.title') }}</h1>
       </template>
       <template #extra>
-        <el-button type="primary" :icon="Plus" @click="dialogVisible = true">
+        <el-button
+          type="primary"
+          :icon="Plus"
+          @click="openCreateDialog"
+        >
           {{ t('companies.addButton') }}
         </el-button>
       </template>
@@ -329,6 +267,14 @@ async function saveConfig() {
               >
                 {{ row.isActive ? t('common.actions.disable') : t('common.actions.enable') }}
               </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click="deleteCompany(row.id)"
+              >
+                {{ t('common.actions.delete') }}
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -336,6 +282,7 @@ async function saveConfig() {
     </el-card>
 
     <el-dialog
+      v-if="recognitionConfigDefaults"
       v-model="dialogVisible"
       :title="t('companies.dialog.addTitle')"
       width="800px"
@@ -363,225 +310,12 @@ async function saveConfig() {
           </template>
         </el-form-item>
 
-        <el-divider content-position="left">{{ t('companies.dialog.recognitionSettings') }}</el-divider>
-
-        <el-form-item :label="t('companies.dialog.peopleTracking')">
-          <el-switch v-model="form.recognitionConfig.personTracking.enabled" />
-        </el-form-item>
-
-        <el-form-item :label="t('companies.dialog.observationMode')">
-          <el-switch v-model="form.recognitionConfig.presence.observationMode" />
-        </el-form-item>
-
-        <el-form-item :label="t('companies.dialog.personDetectionMode')">
-          <el-select v-model="form.recognitionConfig.optimization.personDetectMode">
-            <el-option :label="t('companies.dialog.personDetectionOnDemand')" value="on_demand" />
-            <el-option :label="t('companies.dialog.always')" value="always" />
-          </el-select>
-        </el-form-item>
-
-        <el-link type="primary" @click="showAdvanced = !showAdvanced" style="margin-bottom: 16px">
-          {{ showAdvanced ? t('companies.dialog.hideAdvanced') : t('companies.dialog.showAdvanced') }}
-        </el-link>
-
-        <div v-show="showAdvanced">
-          <el-collapse>
-            <el-collapse-item :title="t('companies.dialog.section.quality')" name="quality">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
-                <el-input-number v-model="form.recognitionConfig.quality.minFaceHeight" :min="10" :max="200" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.minBlur')">
-                <el-input-number v-model="form.recognitionConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minBlur') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.recognition')" name="insightface">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
-                <el-input-number v-model="form.recognitionConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.similarityThreshold') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.faceTracking')" name="faceTracking">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
-                <el-input-number v-model="form.recognitionConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minEmbeddings') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceTrackMaxAgeSeconds')">
-                <el-input-number v-model="form.recognitionConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceTrackMaxAgeSeconds') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.personTracking')" name="personTracking">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
-                <el-input-number v-model="form.recognitionConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetectorConfidence') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personIouThreshold')">
-                <el-input-number v-model="form.recognitionConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personIouThreshold') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personTrackMaxAgeSeconds')">
-                <el-input-number v-model="form.recognitionConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personTrackMaxAgeSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
-                <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonIouThreshold') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceToPersonContainmentMin')">
-                <el-input-number v-model="form.recognitionConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonContainmentMin') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.employeeLockStrict')">
-                <el-switch v-model="form.recognitionConfig.personTracking.employeeLockStrict" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.employeeLockStrict') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.presence')" name="presence">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
-                <el-input-number v-model="form.recognitionConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.observationIntervalSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.inThresholdSeconds')">
-                <el-input-number v-model="form.recognitionConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.inThresholdSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.outThresholdSeconds')">
-                <el-input-number v-model="form.recognitionConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.outThresholdSeconds') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.optimization')" name="optimization">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
-                <el-input-number v-model="form.recognitionConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetIntervalFrames') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personDetOnNewFace')">
-                <el-switch v-model="form.recognitionConfig.optimization.personDetOnNewFace" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetOnNewFace') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.streaming')" name="streaming">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.streamFps')">
-                <el-input-number v-model="form.recognitionConfig.streaming.streamFps" :min="1" :max="30" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamFps') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.streamJpegQuality')">
-                <el-input-number v-model="form.recognitionConfig.streaming.streamJpegQuality" :min="30" :max="95" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamJpegQuality') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.actionRecognition')" name="actionRecognition">
-              <el-form label-width="280px">
-                <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionStartThreshold') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionEndThreshold')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionEndThreshold') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionGapSeconds') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMinDurationSeconds')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMaxIntervalSeconds')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionMaxIntervalSeconds') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionFps')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
-                  <el-input-number v-model="form.recognitionConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionDebug')">
-                  <el-switch v-model="form.recognitionConfig.actionRecognition.debug" />
-                </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.visualization')" name="visualization">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
-                <el-switch v-model="form.recognitionConfig.visualization.drawFaceBoxes" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.drawPersonBoxes')">
-                <el-switch v-model="form.recognitionConfig.visualization.drawPersonBoxes" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.drawNames')">
-                <el-switch v-model="form.recognitionConfig.visualization.drawNames" />
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-          </el-collapse>
-        </div>
+        <RecognitionConfigForm
+          :config="form.recognitionConfig"
+          :show-advanced="showAdvanced"
+          :with-divider="true"
+          @update:show-advanced="showAdvanced = $event"
+        />
       </el-form>
 
       <template #footer>
@@ -592,229 +326,18 @@ async function saveConfig() {
 
     <!-- Диалог редактирования recognitionConfig -->
     <el-dialog
+      v-if="editConfig"
       v-model="editConfigDialogVisible"
       :title="t('companies.dialog.configTitle', { name: editingCompanyName })"
       width="800px"
       v-loading="configLoading"
     >
       <el-form :model="editConfig" label-width="200px">
-        <el-form-item :label="t('companies.dialog.peopleTracking')">
-          <el-switch v-model="editConfig.personTracking.enabled" />
-        </el-form-item>
-
-        <el-form-item :label="t('companies.dialog.observationMode')">
-          <el-switch v-model="editConfig.presence.observationMode" />
-        </el-form-item>
-
-        <el-form-item :label="t('companies.dialog.personDetectionMode')">
-          <el-select v-model="editConfig.optimization.personDetectMode">
-            <el-option :label="t('companies.dialog.personDetectionOnDemand')" value="on_demand" />
-            <el-option :label="t('companies.dialog.always')" value="always" />
-          </el-select>
-        </el-form-item>
-
-        <el-link type="primary" @click="showAdvancedEdit = !showAdvancedEdit" style="margin-bottom: 16px">
-          {{ showAdvancedEdit ? t('companies.dialog.hideAdvanced') : t('companies.dialog.showAdvanced') }}
-        </el-link>
-
-        <div v-show="showAdvancedEdit">
-          <el-collapse>
-            <el-collapse-item :title="t('companies.dialog.section.quality')" name="quality">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
-                <el-input-number v-model="editConfig.quality.minFaceHeight" :min="10" :max="200" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.minBlur')">
-                <el-input-number v-model="editConfig.quality.minBlurVar" :min="0" :max="500" :step="10" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minBlur') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.recognition')" name="insightface">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
-                <el-input-number v-model="editConfig.insightface.threshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.similarityThreshold') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.faceTracking')" name="faceTracking">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
-                <el-input-number v-model="editConfig.faceTracking.minEmbeddings" :min="1" :max="10" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.minEmbeddings') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceTrackMaxAgeSeconds')">
-                <el-input-number v-model="editConfig.faceTracking.trackMaxAgeSeconds" :min="0.5" :max="10" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceTrackMaxAgeSeconds') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.personTracking')" name="personTracking">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
-                <el-input-number v-model="editConfig.personTracking.detConf" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetectorConfidence') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personIouThreshold')">
-                <el-input-number v-model="editConfig.personTracking.iouThreshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personIouThreshold') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personTrackMaxAgeSeconds')">
-                <el-input-number v-model="editConfig.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personTrackMaxAgeSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
-                <el-input-number v-model="editConfig.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonIouThreshold') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.faceToPersonContainmentMin')">
-                <el-input-number v-model="editConfig.personTracking.faceToPersonContainmentMin" :min="0" :max="1" :step="0.05" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.faceToPersonContainmentMin') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.employeeLockStrict')">
-                <el-switch v-model="editConfig.personTracking.employeeLockStrict" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.employeeLockStrict') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.presence')" name="presence">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
-                <el-input-number v-model="editConfig.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.observationIntervalSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.inThresholdSeconds')">
-                <el-input-number v-model="editConfig.presence.inThresholdSeconds" :min="0" :max="60" :step="0.5" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.inThresholdSeconds') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.outThresholdSeconds')">
-                <el-input-number v-model="editConfig.presence.outThresholdSeconds" :min="0" :max="300" :step="1" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.outThresholdSeconds') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.optimization')" name="optimization">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
-                <el-input-number v-model="editConfig.optimization.personDetIntervalFrames" :min="1" :max="120" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetIntervalFrames') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.personDetOnNewFace')">
-                <el-switch v-model="editConfig.optimization.personDetOnNewFace" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.personDetOnNewFace') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.streaming')" name="streaming">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.streamFps')">
-                <el-input-number v-model="editConfig.streaming.streamFps" :min="1" :max="30" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamFps') }}</span>
-                </template>
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.streamJpegQuality')">
-                <el-input-number v-model="editConfig.streaming.streamJpegQuality" :min="30" :max="95" />
-                <template #extra>
-                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.streamJpegQuality') }}</span>
-                </template>
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.actionRecognition')" name="actionRecognition">
-              <el-form label-width="280px">
-                <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
-                  <el-input-number v-model="editConfig.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionStartThreshold') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionEndThreshold')">
-                  <el-input-number v-model="editConfig.actionRecognition.endThreshold" :min="0" :max="1" :step="0.01" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionEndThreshold') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
-                  <el-input-number v-model="editConfig.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionGapSeconds') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMinDurationSeconds')">
-                  <el-input-number v-model="editConfig.actionRecognition.minDurationSeconds" :min="0" :max="60" :step="0.1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMaxIntervalSeconds')">
-                  <el-input-number v-model="editConfig.actionRecognition.maxIntervalSeconds" :min="0" :max="3600" :step="1" />
-                  <template #extra>
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">{{ t('companies.dialog.hints.actionMaxIntervalSeconds') }}</span>
-                  </template>
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionFps')">
-                  <el-input-number v-model="editConfig.actionRecognition.fps" :min="1" :max="30" :step="1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
-                  <el-input-number v-model="editConfig.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
-                </el-form-item>
-                <el-form-item :label="t('companies.dialog.fields.actionDebug')">
-                  <el-switch v-model="editConfig.actionRecognition.debug" />
-                </el-form-item>
-              </el-form>
-            </el-collapse-item>
-
-            <el-collapse-item :title="t('companies.dialog.section.visualization')" name="visualization">
-              <el-form label-width="280px">
-              <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
-                <el-switch v-model="editConfig.visualization.drawFaceBoxes" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.drawPersonBoxes')">
-                <el-switch v-model="editConfig.visualization.drawPersonBoxes" />
-              </el-form-item>
-              <el-form-item :label="t('companies.dialog.fields.drawNames')">
-                <el-switch v-model="editConfig.visualization.drawNames" />
-              </el-form-item>
-              </el-form>
-            </el-collapse-item>
-          </el-collapse>
-        </div>
+        <RecognitionConfigForm
+          :config="editConfig"
+          :show-advanced="showAdvancedEdit"
+          @update:show-advanced="showAdvancedEdit = $event"
+        />
       </el-form>
 
       <template #footer>

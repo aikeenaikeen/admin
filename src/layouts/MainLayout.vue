@@ -15,9 +15,7 @@ import {
   VideoCamera,
   TrendCharts,
   OfficeBuilding,
-  Monitor,
   Operation,
-  Briefcase,
   Moon,
   Sunny,
 } from '@element-plus/icons-vue'
@@ -47,15 +45,13 @@ const menuItems = computed(() => {
   const items = [
     { index: '/dashboard', title: t('layout.menu.dashboard'), icon: TrendCharts },
     { index: '/employees', title: t('layout.menu.employees'), icon: User },
-    { index: '/templates', title: t('layout.menu.templates'), icon: Briefcase },
     { index: '/cameras', title: t('layout.menu.cameras'), icon: VideoCamera },
     { index: '/presence', title: t('layout.menu.presence'), icon: Location },
     { index: '/events', title: t('layout.menu.events'), icon: Document },
     { index: '/statistics', title: t('layout.menu.statistics'), icon: TrendCharts },
     { index: '/employee-activities', title: t('layout.menu.employeeActivities'), icon: Operation },
-    { index: '/live', title: t('layout.menu.live'), icon: Monitor },
   ]
-  
+
   if (authStore.isSuperAdmin) {
     items.push({ index: '/activities', title: t('layout.menu.activities'), icon: Operation })
     items.push({ index: '/companies', title: t('layout.menu.companies'), icon: OfficeBuilding })

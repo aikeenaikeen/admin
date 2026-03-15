@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1
-
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -14,7 +12,7 @@ ARG VITE_RECOGNITION_STREAM_URL=
 ENV VITE_RECOGNITION_STREAM_URL=$VITE_RECOGNITION_STREAM_URL
 
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
+RUN npm ci
 
 COPY . .
 RUN npm run build

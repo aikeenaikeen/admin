@@ -16,7 +16,6 @@ interface Event {
   timestamp: string
   employee: {
     name: string
-    role: string | null
   }
   camera?: {
     name: string
@@ -169,13 +168,7 @@ function resetFilters() {
         </el-table-column>
         
         <el-table-column prop="employee.name" :label="t('events.employee')" min-width="180" />
-        
-        <el-table-column :label="t('events.position')" min-width="150">
-          <template #default="{ row }">
-            {{ row.employee.role || t('common.misc.none') }}
-          </template>
-        </el-table-column>
-        
+
         <el-table-column :label="t('events.type')" width="100">
           <template #default="{ row }">
             <el-tag :type="row.type === 'IN' ? 'success' : 'warning'">

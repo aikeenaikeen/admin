@@ -41,13 +41,13 @@ function getRecognitionStreamUrl(cameraId: number): string {
 }
 
 const form = ref({
-  name: t('cameras.streamTitleFallback'),
-  location: '1',
-  ip: '188.0.191.153',
-  rtspPort: 8554,
-  username: 'aikeen',
-  password: 'aikeen',
-  rtspPath: '/user=admin_password=admin_channel=1_stream=0',
+  name: '',
+  location: '',
+  ip: '',
+  rtspPort: 554,
+  username: 'admin',
+  password: '',
+  rtspPath: '',
   recognitionEnabled: true,
 })
 
@@ -183,13 +183,13 @@ function startEdit(camera: Camera) {
 
 function resetFormFields() {
   form.value = {
-    name: t('cameras.streamTitleFallback'),
-    location: '1',
-    ip: '188.0.191.153',
-    rtspPort: 8554,
-    username: 'aikeen',
-    password: 'aikeen',
-    rtspPath: '/user=admin_password=admin_channel=1_stream=0',
+    name: '',
+    location: '',
+    ip: '',
+    rtspPort: 554,
+    username: 'admin',
+    password: '',
+    rtspPath: '',
     recognitionEnabled: true,
   }
   isEditing.value = false

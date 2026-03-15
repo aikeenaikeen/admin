@@ -14,7 +14,6 @@ const { t } = useI18n()
 interface PresenceStatus {
   id: number
   name: string
-  role: string | null
   photoUrl: string | null
   present: boolean
   lastEventType: string | null
@@ -111,7 +110,6 @@ function formatTime(time: string | null): string {
 
           <div class="employee-info">
             <h3 class="employee-name">{{ emp.name }}</h3>
-            <p class="employee-role">{{ emp.role || t('presence.defaultRole') }}</p>
             
             <el-tag :type="emp.present ? 'success' : 'info'" size="large" style="margin-top: 12px;">
               {{ emp.present ? t('presence.present') : t('presence.absent') }}
@@ -203,12 +201,6 @@ function formatTime(time: string | null): string {
   font-size: 18px;
   font-weight: 600;
   color: var(--el-text-color-primary);
-}
-
-.employee-role {
-  margin: 0;
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
 }
 
 .last-event {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Plus, Edit, Check, Close, Setting } from '@element-plus/icons-vue'
+import { Plus, Edit, Check, Close, Setting, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
@@ -200,6 +200,23 @@ async function deprecateActivity(id: number) {
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error(t('activities.updateError'))
+    }
+  }
+}
+
+async function deleteActivity(id: number) {
+  try {
+    await ElMessageBox.confirm(
+      t('activities.deleteConfirmText'),
+      t('activities.deleteConfirmTitle'),
+      { confirmButtonText: t('common.actions.delete'), cancelButtonText: t('common.actions.cancel'), type: 'warning' }
+    )
+    await apiClient.delete(`/api/activities/${id}`)
+    ElMessage.success(t('activities.deleted'))
+    await loadActivities()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || t('activities.deleteError'))
     }
   }
 }
@@ -520,6 +537,15 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
                 @click="startEdit(row)"
               >
                 {{ t('common.actions.edit') }}
+              </el-button>
+
+              <el-button
+                size="small"
+                type="danger"
+                :icon="Delete"
+                @click="deleteActivity(row.id)"
+              >
+                {{ t('common.actions.delete') }}
               </el-button>
 
               <el-button

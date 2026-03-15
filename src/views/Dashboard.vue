@@ -129,10 +129,6 @@ async function loadStats() {
           <el-icon :size="40"><Calendar /></el-icon>
           <span>{{ t('dashboard.quickActions.events') }}</span>
         </router-link>
-        <router-link to="/live" class="quick-link">
-          <el-icon :size="40"><VideoCamera /></el-icon>
-          <span>{{ t('dashboard.quickActions.live') }}</span>
-        </router-link>
       </div>
     </el-card>
   </div>
