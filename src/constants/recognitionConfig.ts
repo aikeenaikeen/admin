@@ -31,6 +31,7 @@ export const RECOMMENDED_RECOGNITION_CONFIG: RecognitionConfig = {
     detConf: 0.45,
     iouThreshold: 0.3,
     trackMaxAgeSeconds: 6,
+    personAssignmentTtlSeconds: 2.5,
     faceToPersonIouThreshold: 0.02,
     faceToPersonContainmentMin: 0.45,
     faceToPersonLooseContainmentMin: 0.25,
@@ -154,6 +155,12 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
     max: 30,
     recommended: 6,
     descriptionKey: 'companies.dialog.hints.personTrackMaxAgeSeconds',
+  },
+  personAssignmentTtlSeconds: {
+    min: 0.5,
+    max: 30,
+    recommended: 2.5,
+    descriptionKey: 'companies.dialog.hints.personAssignmentTtlSeconds',
   },
   faceToPersonIouThreshold: {
     min: 0,

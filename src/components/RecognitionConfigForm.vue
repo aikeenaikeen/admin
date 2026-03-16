@@ -175,6 +175,10 @@ function toggleAdvanced() {
             <el-input-number v-model="config.personTracking.trackMaxAgeSeconds" :min="0.5" :max="30" :step="0.5" />
             <div class="field-hint">{{ hintText('personTrackMaxAgeSeconds') }}</div>
           </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.personAssignmentTtlSeconds')">
+            <el-input-number v-model="config.personTracking.personAssignmentTtlSeconds" :min="0.5" :max="30" :step="0.5" />
+            <div class="field-hint">{{ hintText('personAssignmentTtlSeconds') }}</div>
+          </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.faceToPersonIouThreshold')">
             <el-input-number v-model="config.personTracking.faceToPersonIouThreshold" :min="0" :max="1" :step="0.05" />
             <div class="field-hint">{{ hintText('faceToPersonIouThreshold') }}</div>
