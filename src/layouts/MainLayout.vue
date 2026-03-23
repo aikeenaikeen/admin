@@ -9,7 +9,6 @@ import LogoIcon from '@/components/icons/LogoIcon.vue'
 import { translateUserRole } from '@/utils/uiText'
 import {
   Location,
-  Document,
   Setting,
   User,
   VideoCamera,
@@ -47,9 +46,7 @@ const menuItems = computed(() => {
     { index: '/employees', title: t('layout.menu.employees'), icon: User },
     { index: '/cameras', title: t('layout.menu.cameras'), icon: VideoCamera },
     { index: '/presence', title: t('layout.menu.presence'), icon: Location },
-    { index: '/events', title: t('layout.menu.events'), icon: Document },
     { index: '/statistics', title: t('layout.menu.statistics'), icon: TrendCharts },
-    { index: '/employee-activities', title: t('layout.menu.employeeActivities'), icon: Operation },
   ]
 
   if (authStore.isSuperAdmin) {

@@ -39,8 +39,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: '/events',
-        name: 'Events',
-        component: () => import('@/views/Events.vue'),
+        redirect: '/statistics',
       },
       {
         path: '/statistics',
@@ -67,8 +66,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: '/employee-activities',
-        name: 'EmployeeActivities',
-        component: () => import('@/views/EmployeeActivities.vue'),
+        redirect: '/statistics',
       },
     ],
   },
@@ -107,6 +105,5 @@ router.beforeEach((to, _from, next) => {
 })
 
 export default router
-
 
 

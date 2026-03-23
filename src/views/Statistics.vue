@@ -1,51 +1,350 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, TrendCharts, Calendar } from '@element-plus/icons-vue'
+import { Refresh, Calendar, Search, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
-import { formatDate } from '@/utils/date'
+import { formatDateTime } from '@/utils/date'
+import { translateActivityKind, translateEventType } from '@/utils/uiText'
 
 const { t } = useI18n()
 
-const statistics = ref<any>(null)
-const loading = ref(true)
+interface StatisticsResponse {
+  summary: {
+    totalEvents: number
+    uniqueEmployees: number
+    avgEventsPerDay: string
+  }
+}
 
+interface Employee {
+  id: number
+  name: string
+  photoUrl: string | null
+}
+
+interface PresenceStatus {
+  id: number
+  name: string
+  photoUrl: string | null
+  present: boolean
+  lastEventType: string | null
+  lastEventTime: string | null
+}
+
+interface AssignedActivity {
+  activityId: number
+  enabled: boolean
+  activeFrom: string
+  activity: {
+    id: number
+    code: string
+    name: string
+    kind: string
+    status?: string
+  }
+}
+
+interface EventItem {
+  id: number
+  employeeId: number
+  type: string
+  timestamp: string
+  employee: {
+    name: string
+  }
+  camera?: {
+    name: string
+  }
+}
+
+interface IntervalItem {
+  id: number
+  employeeId: number
+  employee: {
+    id: number
+    name: string
+  }
+  activityId: number
+  activity: {
+    id: number
+    code: string
+    name: string
+    kind: string
+  }
+  startTime: string
+  endTime: string
+  confidence: number
+  confirmedCameraIds: number[]
+}
+
+interface EmployeeDetails {
+  loading: boolean
+  loaded: boolean
+  error: string | null
+  activities: AssignedActivity[]
+  events: EventItem[]
+  eventsTotal: number
+  intervals: IntervalItem[]
+  intervalsTotal: number
+}
+
+const statistics = ref<StatisticsResponse | null>(null)
+const employees = ref<Employee[]>([])
+const presence = ref<PresenceStatus[]>([])
+const employeeDetails = ref<Record<number, EmployeeDetails>>({})
+const loading = ref(true)
+const employeesLoading = ref(false)
+const activeEmployeeId = ref<number | null>(null)
+
+const search = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
+
+const expandedRowKeys = computed(() => (activeEmployeeId.value ? [activeEmployeeId.value] : []))
+
+const presenceByEmployeeId = computed(() => {
+  return new Map(presence.value.map((item) => [item.id, item]))
+})
+
+const displayEmployees = computed(() => {
+  return [...employees.value]
+    .sort((left, right) => {
+      const leftPresent = presenceByEmployeeId.value.get(left.id)?.present ? 1 : 0
+      const rightPresent = presenceByEmployeeId.value.get(right.id)?.present ? 1 : 0
+
+      if (leftPresent !== rightPresent) {
+        return rightPresent - leftPresent
+      }
+
+      return left.name.localeCompare(right.name, 'ru')
+    })
+})
 
 onMounted(async () => {
   const today = new Date()
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-  
+
   dateFrom.value = thirtyDaysAgo.toISOString().split('T')[0]
   dateTo.value = today.toISOString().split('T')[0]
 
-  await loadStatistics()
+  await loadPage()
 })
 
-async function loadStatistics() {
-  loading.value = true
-  try {
-    // Convert to ISO format with time
+function buildDateRange() {
+  let from: string | undefined
+  let to: string | undefined
+
+  if (dateFrom.value) {
     const fromDate = new Date(dateFrom.value)
     fromDate.setHours(0, 0, 0, 0)
-    
+    from = fromDate.toISOString()
+  }
+
+  if (dateTo.value) {
     const toDate = new Date(dateTo.value)
     toDate.setHours(23, 59, 59, 999)
-    
-    const response = await apiClient.get('/api/statistics', {
-      params: {
-        dateFrom: fromDate.toISOString(),
-        dateTo: toDate.toISOString(),
-      },
-    })
-    statistics.value = response.data
+    to = toDate.toISOString()
+  }
+
+  return { from, to }
+}
+
+function resetEmployeeDetails() {
+  employeeDetails.value = {}
+}
+
+function buildEmployeeParams() {
+  const params: Record<string, string> = {}
+  const trimmedSearch = search.value.trim()
+
+  if (trimmedSearch) {
+    params.search = trimmedSearch
+  }
+
+  return params
+}
+
+function syncActiveEmployee(nextEmployees: Employee[]) {
+  if (activeEmployeeId.value && !nextEmployees.some((employee) => employee.id === activeEmployeeId.value)) {
+    activeEmployeeId.value = null
+  }
+}
+
+async function fetchEmployees() {
+  const response = await apiClient.get('/api/employees', {
+    params: buildEmployeeParams(),
+  })
+
+  return response.data as Employee[]
+}
+
+async function loadEmployees() {
+  employeesLoading.value = true
+
+  try {
+    const nextEmployees = await fetchEmployees()
+    employees.value = nextEmployees
+    syncActiveEmployee(nextEmployees)
+  } catch (error) {
+    ElMessage.error(t('employees.loadError'))
+  } finally {
+    employeesLoading.value = false
+  }
+}
+
+async function loadPage() {
+  loading.value = true
+
+  try {
+    const { from, to } = buildDateRange()
+
+    const [statisticsResponse, presenceResponse, nextEmployees] = await Promise.all([
+      apiClient.get('/api/statistics', {
+        params: {
+          dateFrom: from,
+          dateTo: to,
+        },
+      }),
+      apiClient.get('/api/presence'),
+      fetchEmployees(),
+    ])
+
+    statistics.value = statisticsResponse.data
+    presence.value = presenceResponse.data
+    employees.value = nextEmployees
+    syncActiveEmployee(nextEmployees)
+    resetEmployeeDetails()
+
+    if (activeEmployeeId.value) {
+      await loadEmployeeDetails(activeEmployeeId.value, true)
+    }
   } catch (error) {
     ElMessage.error(t('statistics.loadError'))
   } finally {
     loading.value = false
   }
+}
+
+function getEmployeePresence(employeeId: number): PresenceStatus | undefined {
+  return presenceByEmployeeId.value.get(employeeId)
+}
+
+function getEmployeeDetails(employeeId: number): EmployeeDetails | undefined {
+  return employeeDetails.value[employeeId]
+}
+
+async function loadEmployeeDetails(employeeId: number, force = false) {
+  const current = getEmployeeDetails(employeeId)
+
+  if (current?.loaded && !force) {
+    return
+  }
+
+  employeeDetails.value = {
+    ...employeeDetails.value,
+    [employeeId]: {
+      loading: true,
+      loaded: false,
+      error: null,
+      activities: current?.activities || [],
+      events: current?.events || [],
+      eventsTotal: current?.eventsTotal || 0,
+      intervals: current?.intervals || [],
+      intervalsTotal: current?.intervalsTotal || 0,
+    },
+  }
+
+  try {
+    const { from, to } = buildDateRange()
+
+    const [activitiesResponse, eventsResponse, intervalsResponse] = await Promise.all([
+      apiClient.get(`/api/employees/${employeeId}/activities`),
+      apiClient.get('/api/events', {
+        params: {
+          employeeId,
+          dateFrom: from,
+          dateTo: to,
+          page: 1,
+          limit: 20,
+        },
+      }),
+      apiClient.get('/api/activity-intervals', {
+        params: {
+          employeeId,
+          from,
+          to,
+          page: 1,
+          pageSize: 20,
+        },
+      }),
+    ])
+
+    employeeDetails.value = {
+      ...employeeDetails.value,
+      [employeeId]: {
+        loading: false,
+        loaded: true,
+        error: null,
+        activities: activitiesResponse.data?.activities || [],
+        events: eventsResponse.data?.events || [],
+        eventsTotal: eventsResponse.data?.pagination?.total || 0,
+        intervals: intervalsResponse.data?.items || [],
+        intervalsTotal: intervalsResponse.data?.total || 0,
+      },
+    }
+  } catch (error: any) {
+    employeeDetails.value = {
+      ...employeeDetails.value,
+      [employeeId]: {
+        loading: false,
+        loaded: false,
+        error: error.response?.data?.error || t('statistics.employeeLoadError'),
+        activities: [],
+        events: [],
+        eventsTotal: 0,
+        intervals: [],
+        intervalsTotal: 0,
+      },
+    }
+  }
+}
+
+async function applyFilters() {
+  await loadPage()
+}
+
+async function handleRefresh() {
+  await loadPage()
+}
+
+async function handleRowClick(row: Employee, column: { type?: string }) {
+  if (column?.type === 'expand') {
+    return
+  }
+
+  const nextEmployeeId = activeEmployeeId.value === row.id ? null : row.id
+  activeEmployeeId.value = nextEmployeeId
+
+  if (nextEmployeeId) {
+    await loadEmployeeDetails(nextEmployeeId)
+  }
+}
+
+async function handleExpandChange(row: Employee, expandedRows: Employee[]) {
+  const isExpanded = expandedRows.some((item) => item.id === row.id)
+  activeEmployeeId.value = isExpanded ? row.id : null
+
+  if (isExpanded) {
+    await loadEmployeeDetails(row.id)
+  }
+}
+
+function formatDuration(startIso: string, endIso: string): string {
+  const start = new Date(startIso).getTime()
+  const end = new Date(endIso).getTime()
+  const seconds = Math.max(0, Math.round((end - start) / 1000))
+  return t('employeeActivities.durationSeconds', { value: seconds })
 }
 </script>
 
@@ -56,7 +355,7 @@ async function loadStatistics() {
         <h1 class="page-title">{{ t('statistics.title') }}</h1>
       </template>
       <template #extra>
-        <el-button :icon="Refresh" @click="loadStatistics" :loading="loading">
+        <el-button :icon="Refresh" @click="handleRefresh" :loading="loading">
           {{ t('common.actions.refresh') }}
         </el-button>
       </template>
@@ -69,10 +368,10 @@ async function loadStatistics() {
           <span>{{ t('statistics.period') }}</span>
         </div>
       </template>
-      
-      <el-form label-width="100px">
+
+      <el-form label-position="top">
         <el-row :gutter="16">
-          <el-col :xs="24" :sm="10">
+          <el-col :xs="24" :md="8">
             <el-form-item :label="t('statistics.fromDate')">
               <el-date-picker
                 v-model="dateFrom"
@@ -84,8 +383,8 @@ async function loadStatistics() {
               />
             </el-form-item>
           </el-col>
-          
-          <el-col :xs="24" :sm="10">
+
+          <el-col :xs="24" :md="8">
             <el-form-item :label="t('statistics.toDate')">
               <el-date-picker
                 v-model="dateTo"
@@ -97,10 +396,10 @@ async function loadStatistics() {
               />
             </el-form-item>
           </el-col>
-          
-          <el-col :xs="24" :sm="4">
-            <el-form-item label="">
-              <el-button type="primary" @click="loadStatistics" style="width: 100%">
+
+          <el-col :xs="24" :md="5" :lg="4">
+            <el-form-item class="filter-actions">
+              <el-button type="primary" class="apply-filters-button" @click="applyFilters">
                 {{ t('statistics.apply') }}
               </el-button>
             </el-form-item>
@@ -110,81 +409,296 @@ async function loadStatistics() {
     </el-card>
 
     <div v-loading="loading">
-      <div v-if="statistics">
-        <div class="stats-grid">
-          <el-card shadow="hover">
-            <div class="stat-content">
-              <div class="stat-icon primary">
-                <el-icon :size="32"><TrendCharts /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-value">{{ statistics.summary.totalEvents }}</div>
-                <div class="stat-label">{{ t('statistics.totalEvents') }}</div>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card shadow="hover">
-            <div class="stat-content">
-              <div class="stat-icon success">
-                <el-icon :size="32"><TrendCharts /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-value">{{ statistics.summary.uniqueEmployees }}</div>
-                <div class="stat-label">{{ t('statistics.uniqueEmployees') }}</div>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card shadow="hover">
-            <div class="stat-content">
-              <div class="stat-icon warning">
-                <el-icon :size="32"><Calendar /></el-icon>
-              </div>
-              <div class="stat-info">
-                <div class="stat-value">{{ statistics.summary.avgEventsPerDay }}</div>
-                <div class="stat-label">{{ t('statistics.avgEventsPerDay') }}</div>
-              </div>
-            </div>
-          </el-card>
-        </div>
-
-        <el-card shadow="never" style="margin-top: 24px">
-          <template #header>
-            <h3 style="margin: 0;">{{ t('statistics.topEmployees') }}</h3>
-          </template>
-          
-          <el-table :data="statistics.topEmployees" style="width: 100%">
-            <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
-            <el-table-column prop="eventCount" :label="t('statistics.eventCount')" width="180" align="right" />
-          </el-table>
+      <div class="stats-grid">
+        <el-card shadow="hover">
+          <el-statistic :value="statistics?.summary.totalEvents || 0" :title="t('statistics.totalEvents')" />
         </el-card>
 
-        <el-card shadow="never" style="margin-top: 24px">
-          <template #header>
-            <h3 style="margin: 0;">{{ t('statistics.eventsByDay') }}</h3>
-          </template>
-          
-          <el-table :data="statistics.eventsByDay" style="width: 100%">
-            <el-table-column :label="t('common.labels.date')" width="220">
-              <template #default="{ row }">
-                {{ formatDate(row.date) }}
-              </template>
-            </el-table-column>
-            <el-table-column prop="count" :label="t('statistics.total')" min-width="150" align="right" />
-            <el-table-column :label="t('enums.eventType.IN')" min-width="150" align="right">
-              <template #default="{ row }">
-                <el-tag type="success" size="small">{{ row.ins }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column :label="t('enums.eventType.OUT')" min-width="150" align="right">
-              <template #default="{ row }">
-                <el-tag type="warning" size="small">{{ row.outs }}</el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
+        <el-card shadow="hover">
+          <el-statistic :value="statistics?.summary.uniqueEmployees || 0" :title="t('statistics.uniqueEmployees')" />
+        </el-card>
+
+        <el-card shadow="hover">
+          <el-statistic :value="statistics?.summary.avgEventsPerDay || '0'" :title="t('statistics.avgEventsPerDay')" />
         </el-card>
       </div>
+
+      <el-card shadow="never" style="margin-top: 24px">
+        <template #header>
+          <div class="section-header">
+            <span>{{ t('statistics.employeesList') }}</span>
+            <div class="section-header__actions">
+              <el-tag type="info" effect="plain">
+                {{ t('statistics.totalEmployeesLabel', { count: employees.length }) }}
+              </el-tag>
+              <el-input
+                v-model="search"
+                :placeholder="t('statistics.employeeSearchPlaceholder')"
+                clearable
+                :prefix-icon="Search"
+                class="section-search"
+                @keyup.enter="loadEmployees"
+                @clear="loadEmployees"
+              />
+              <el-button type="primary" :icon="Search" @click="loadEmployees">
+                {{ t('common.actions.search') }}
+              </el-button>
+            </div>
+          </div>
+        </template>
+
+        <el-table
+          v-if="displayEmployees.length > 0"
+          v-loading="employeesLoading"
+          :data="displayEmployees"
+          row-key="id"
+          :expand-row-keys="expandedRowKeys"
+          @row-click="handleRowClick"
+          @expand-change="handleExpandChange"
+          style="width: 100%"
+        >
+          <el-table-column type="expand">
+            <template #default="{ row }">
+              <div v-loading="getEmployeeDetails(row.id)?.loading" class="employee-expand">
+                <el-alert
+                  v-if="getEmployeeDetails(row.id)?.error"
+                  :title="getEmployeeDetails(row.id)?.error || t('statistics.employeeLoadError')"
+                  type="error"
+                  show-icon
+                  :closable="false"
+                  style="margin-bottom: 16px"
+                />
+
+                <el-row :gutter="16">
+                  <el-col :xs="24" :lg="9">
+                    <el-card shadow="never">
+                      <div class="employee-summary">
+                        <el-avatar :src="row.photoUrl" :size="96">
+                          <el-icon :size="42"><User /></el-icon>
+                        </el-avatar>
+
+                        <div class="employee-summary__meta">
+                          <div class="employee-summary__name">{{ row.name }}</div>
+
+                          <div class="employee-summary__tags">
+                            <el-tag :type="getEmployeePresence(row.id)?.present ? 'success' : 'info'">
+                              {{ getEmployeePresence(row.id)?.present ? t('statistics.present') : t('statistics.absent') }}
+                            </el-tag>
+                            <el-tag type="primary" effect="plain">ID: {{ row.id }}</el-tag>
+                          </div>
+                        </div>
+                      </div>
+
+                      <el-descriptions :column="1" border style="margin-top: 16px">
+                        <el-descriptions-item :label="t('statistics.lastEvent')">
+                          <span v-if="getEmployeePresence(row.id)?.lastEventType">
+                            {{ translateEventType(getEmployeePresence(row.id)?.lastEventType || '') }}
+                          </span>
+                          <span v-else>{{ t('common.misc.none') }}</span>
+                        </el-descriptions-item>
+                        <el-descriptions-item :label="t('statistics.lastEventTime')">
+                          {{ formatDateTime(getEmployeePresence(row.id)?.lastEventTime || null) }}
+                        </el-descriptions-item>
+                        <el-descriptions-item :label="t('statistics.assignedActivities')">
+                          {{ getEmployeeDetails(row.id)?.activities.length || 0 }}
+                        </el-descriptions-item>
+                        <el-descriptions-item :label="t('statistics.eventsInPeriod')">
+                          {{ getEmployeeDetails(row.id)?.eventsTotal || 0 }}
+                        </el-descriptions-item>
+                        <el-descriptions-item :label="t('statistics.activityIntervalsInPeriod')">
+                          {{ getEmployeeDetails(row.id)?.intervalsTotal || 0 }}
+                        </el-descriptions-item>
+                      </el-descriptions>
+                    </el-card>
+                  </el-col>
+
+                  <el-col :xs="24" :lg="15">
+                    <el-row :gutter="12">
+                      <el-col :xs="24" :sm="8">
+                        <el-card shadow="hover">
+                          <el-statistic
+                            :value="getEmployeeDetails(row.id)?.eventsTotal || 0"
+                            :title="t('statistics.totalEvents')"
+                          />
+                        </el-card>
+                      </el-col>
+
+                      <el-col :xs="24" :sm="8">
+                        <el-card shadow="hover">
+                          <el-statistic
+                            :value="getEmployeeDetails(row.id)?.intervalsTotal || 0"
+                            :title="t('statistics.totalActivityIntervals')"
+                          />
+                        </el-card>
+                      </el-col>
+
+                      <el-col :xs="24" :sm="8">
+                        <el-card shadow="hover">
+                          <el-statistic
+                            :value="getEmployeeDetails(row.id)?.activities.length || 0"
+                            :title="t('statistics.totalAssignedActivities')"
+                          />
+                        </el-card>
+                      </el-col>
+                    </el-row>
+
+                    <el-card shadow="never" style="margin-top: 16px">
+                      <template #header>
+                        <span>{{ t('statistics.assignedActivities') }}</span>
+                      </template>
+
+                      <div
+                        v-if="(getEmployeeDetails(row.id)?.activities.length || 0) > 0"
+                        class="tag-list"
+                      >
+                        <el-tag
+                          v-for="assignment in getEmployeeDetails(row.id)?.activities || []"
+                          :key="assignment.activityId"
+                          effect="plain"
+                        >
+                          {{ assignment.activity.name }} ({{ translateActivityKind(assignment.activity.kind) }})
+                        </el-tag>
+                      </div>
+
+                      <el-empty
+                        v-else
+                        :description="t('statistics.noAssignedActivities')"
+                        :image-size="72"
+                      />
+                    </el-card>
+                  </el-col>
+                </el-row>
+
+                <el-card shadow="never" style="margin-top: 16px">
+                  <el-tabs>
+                    <el-tab-pane
+                      :label="`${t('statistics.recentEvents')} (${getEmployeeDetails(row.id)?.eventsTotal || 0})`"
+                    >
+                      <el-table
+                        v-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                        :data="getEmployeeDetails(row.id)?.events || []"
+                        style="width: 100%"
+                      >
+                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+                        <el-table-column :label="t('common.labels.time')" min-width="220">
+                          <template #default="{ row: eventRow }">
+                            {{ formatDateTime(eventRow.timestamp) }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('events.type')" width="120">
+                          <template #default="{ row: eventRow }">
+                            <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
+                              {{ translateEventType(eventRow.type) }}
+                            </el-tag>
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('events.camera')" min-width="180">
+                          <template #default="{ row: eventRow }">
+                            {{ eventRow.camera?.name || t('common.misc.none') }}
+                          </template>
+                        </el-table-column>
+                      </el-table>
+
+                      <el-empty
+                        v-else
+                        :description="t('statistics.noEvents')"
+                        :image-size="72"
+                      />
+                    </el-tab-pane>
+
+                    <el-tab-pane
+                      :label="`${t('statistics.activityIntervals')} (${getEmployeeDetails(row.id)?.intervalsTotal || 0})`"
+                    >
+                      <el-table
+                        v-if="(getEmployeeDetails(row.id)?.intervals.length || 0) > 0"
+                        :data="getEmployeeDetails(row.id)?.intervals || []"
+                        style="width: 100%"
+                      >
+                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+                        <el-table-column :label="t('common.labels.activity')" min-width="220">
+                          <template #default="{ row: intervalRow }">
+                            {{ intervalRow.activity?.name || intervalRow.activityId }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('statistics.startTime')" min-width="180">
+                          <template #default="{ row: intervalRow }">
+                            {{ formatDateTime(intervalRow.startTime) }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('statistics.endTime')" min-width="180">
+                          <template #default="{ row: intervalRow }">
+                            {{ formatDateTime(intervalRow.endTime) }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('statistics.duration')" width="110">
+                          <template #default="{ row: intervalRow }">
+                            {{ formatDuration(intervalRow.startTime, intervalRow.endTime) }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('statistics.confidence')" width="110">
+                          <template #default="{ row: intervalRow }">
+                            {{ intervalRow.confidence?.toFixed?.(2) ?? intervalRow.confidence }}
+                          </template>
+                        </el-table-column>
+                        <el-table-column :label="t('statistics.cameras')" min-width="180">
+                          <template #default="{ row: intervalRow }">
+                            {{ (intervalRow.confirmedCameraIds || []).join(', ') || t('common.misc.none') }}
+                          </template>
+                        </el-table-column>
+                      </el-table>
+
+                      <el-empty
+                        v-else
+                        :description="t('statistics.noActivityIntervals')"
+                        :image-size="72"
+                      />
+                    </el-tab-pane>
+                  </el-tabs>
+                </el-card>
+              </div>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t('employees.table.photo')" width="110">
+            <template #default="{ row }">
+              <el-avatar :src="row.photoUrl" :size="56">
+                <el-icon :size="24"><User /></el-icon>
+              </el-avatar>
+            </template>
+          </el-table-column>
+
+          <el-table-column prop="name" :label="t('common.labels.employee')" min-width="220" />
+
+          <el-table-column :label="t('common.labels.status')" width="160">
+            <template #default="{ row }">
+              <el-tag :type="getEmployeePresence(row.id)?.present ? 'success' : 'info'">
+                {{ getEmployeePresence(row.id)?.present ? t('statistics.present') : t('statistics.absent') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t('statistics.lastEvent')" width="170">
+            <template #default="{ row }">
+              <span v-if="getEmployeePresence(row.id)?.lastEventType">
+                {{ translateEventType(getEmployeePresence(row.id)?.lastEventType || '') }}
+              </span>
+              <span v-else>{{ t('common.misc.none') }}</span>
+            </template>
+          </el-table-column>
+
+          <el-table-column :label="t('statistics.lastEventTime')" min-width="220">
+            <template #default="{ row }">
+              {{ formatDateTime(getEmployeePresence(row.id)?.lastEventTime || null) }}
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <el-empty
+          v-else
+          :description="t('statistics.emptyEmployees')"
+          :image-size="88"
+        />
+      </el-card>
     </div>
   </div>
 </template>
@@ -192,7 +706,7 @@ async function loadStatistics() {
 <style scoped>
 .page-container {
   padding: 24px;
-  max-width: 1400px;
+  max-width: 1440px;
   margin: 0 auto;
 }
 
@@ -207,73 +721,105 @@ async function loadStatistics() {
   color: var(--el-text-color-primary);
 }
 
+.filter-actions {
+  margin-top: 30px;
+}
+
+:deep(.filter-actions .el-form-item__content) {
+  justify-content: flex-start;
+}
+
+.apply-filters-button {
+  width: 100%;
+  min-width: 160px;
+}
+
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
 }
 
-@media (max-width: 768px) {
-  .stats-grid {
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  }
-  
-  .page-container {
-    padding: 16px;
-  }
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
-@media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
+.section-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.stat-content {
+.section-search {
+  width: 280px;
+}
+
+.employee-expand {
+  padding: 8px 0;
+}
+
+:deep(.el-table__body tr) {
+  cursor: pointer;
+}
+
+:deep(.el-table__body tr:hover > td) {
+  background-color: var(--el-fill-color-light);
+}
+
+.employee-summary {
   display: flex;
   align-items: center;
   gap: 16px;
 }
 
-.stat-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.stat-icon.primary {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.stat-icon.success {
-  background: var(--el-color-success-light-9);
-  color: var(--el-color-success);
-}
-
-.stat-icon.warning {
-  background: var(--el-color-warning-light-9);
-  color: var(--el-color-warning);
-}
-
-.stat-info {
+.employee-summary__meta {
+  min-width: 0;
   flex: 1;
 }
 
-.stat-value {
-  font-size: 32px;
-  font-weight: 700;
+.employee-summary__name {
+  font-size: 18px;
+  font-weight: 600;
   color: var(--el-text-color-primary);
-  line-height: 1;
-  margin-bottom: 8px;
 }
 
-.stat-label {
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
+.employee-summary__tags {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .page-container {
+    padding: 16px;
+  }
+
+  .employee-summary {
+    align-items: flex-start;
+  }
+
+  .section-search {
+    width: 100%;
+  }
+
+  .filter-actions {
+    margin-top: 0;
+  }
+
+  .apply-filters-button {
+    min-width: 0;
+  }
 }
 </style>
