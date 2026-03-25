@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Connection, Delete, VideoCamera, Monitor } from '@element-plus/icons-vue'
+import { Plus, Connection, Delete, VideoCamera, Monitor, Close, Edit } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
 import { resolveBaseUrl } from '@/utils/baseUrl'
+import TableActionsMenu from '@/components/TableActionsMenu.vue'
 
 const { t } = useI18n()
 
@@ -20,6 +21,8 @@ interface Camera {
   recognitionEnabled: boolean
 }
 
+type CameraTableAction = 'video' | 'recognition' | 'test' | 'copy' | 'edit' | 'toggle' | 'delete'
+
 const cameras = ref<Camera[]>([])
 const loading = ref(true)
 const showForm = ref(false)
@@ -29,6 +32,7 @@ const selectedCamera = ref<number | null>(null)
 const streamUrl = ref('')
 const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
+const duplicatingCamera = ref<number | null>(null)
 
 function withCacheBust(url: string): string {
   const sep = url.includes('?') ? '&' : '?'
@@ -135,6 +139,22 @@ async function deleteCamera(id: number) {
   }
 }
 
+async function duplicateCamera(camera: Camera) {
+  try {
+    duplicatingCamera.value = camera.id
+    const response = await apiClient.post(`/api/cameras/${camera.id}/duplicate`)
+    const duplicatedCamera = response.data as Camera
+
+    await loadCameras()
+    startEdit(duplicatedCamera)
+    ElMessage.success(t('cameras.duplicated'))
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || t('cameras.duplicateError'))
+  } finally {
+    duplicatingCamera.value = null
+  }
+}
+
 async function viewStream(id: number, withRecognition = false) {
   try {
     showRecognition.value = withRecognition
@@ -233,6 +253,74 @@ async function testConnection(id: number) {
     testingCamera.value = null
   }
 }
+
+function getCameraActions(row: Camera) {
+  return [
+    {
+      key: 'test',
+      label: t('common.actions.test'),
+      icon: Connection,
+    },
+    {
+      key: 'copy',
+      label: t('common.actions.copy'),
+    },
+    {
+      key: 'edit',
+      label: t('common.actions.edit'),
+      icon: Edit,
+    },
+    {
+      key: 'toggle',
+      label: row.isActive ? t('common.actions.disable') : t('common.actions.enable'),
+    },
+    {
+      key: 'delete',
+      label: t('common.actions.delete'),
+      icon: Delete,
+      divided: true,
+      danger: true,
+    },
+  ]
+}
+
+function handleCameraAction(action: CameraTableAction, row: Camera) {
+  if (action === 'video') {
+    viewStream(row.id, false)
+    return
+  }
+
+  if (action === 'recognition') {
+    viewStream(row.id, true)
+    return
+  }
+
+  if (action === 'test') {
+    testConnection(row.id)
+    return
+  }
+
+  if (action === 'copy') {
+    duplicateCamera(row)
+    return
+  }
+
+  if (action === 'edit') {
+    startEdit(row)
+    return
+  }
+
+  if (action === 'toggle') {
+    toggleCamera(row.id, row.isActive)
+    return
+  }
+
+  deleteCamera(row.id)
+}
+
+function onCameraAction(action: string, row: Camera) {
+  handleCameraAction(action as CameraTableAction, row)
+}
 </script>
 
 <template>
@@ -243,8 +331,8 @@ async function testConnection(id: number) {
       </template>
       <template #extra>
         <el-button
-          type="primary"
-          :icon="Plus"
+          :type="showForm ? 'danger' : 'primary'"
+          :icon="showForm ? Close : Plus"
           @click="showForm ? cancelForm() : startCreate()"
         >
           {{ showForm ? t('common.actions.cancel') : t('cameras.addButton') }}
@@ -294,7 +382,7 @@ async function testConnection(id: number) {
           </el-col>
           
           <el-col :xs="24" :sm="12">
-            <el-form-item :label="t('cameras.form.password')" required>
+            <el-form-item :label="t('cameras.form.password')" :required="!isEditing">
               <el-input v-model="form.password" type="password" show-password />
             </el-form-item>
           </el-col>
@@ -316,7 +404,7 @@ async function testConnection(id: number) {
 
         <el-form-item>
           <el-button type="primary" @click="handleSubmit">{{ isEditing ? t('common.actions.save') : t('common.actions.create') }}</el-button>
-          <el-button @click="cancelForm">{{ t('common.actions.cancel') }}</el-button>
+          <el-button type="danger" plain :icon="Close" @click="cancelForm">{{ t('common.actions.cancel') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -349,9 +437,9 @@ async function testConnection(id: number) {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.labels.actions')" width="530" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="220" fixed="right" align="center">
           <template #default="{ row }">
-            <div class="action-buttons">
+            <div class="camera-actions">
               <el-button
                 size="small"
                 type="primary"
@@ -370,31 +458,10 @@ async function testConnection(id: number) {
               >
                 {{ t('cameras.table.ai') }}
               </el-button>
-              <el-button
-                size="small"
-                :icon="Connection"
-                :loading="testingCamera === row.id"
-                @click="testConnection(row.id)"
-              >
-                {{ t('common.actions.test') }}
-              </el-button>
-              <el-button
-                size="small"
-                @click="startEdit(row)"
-              >
-                {{ t('common.actions.edit') }}
-              </el-button>
-              <el-button
-                size="small"
-                @click="toggleCamera(row.id, row.isActive)"
-              >
-                {{ row.isActive ? t('common.actions.disable') : t('common.actions.enable') }}
-              </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                :icon="Delete"
-                @click="deleteCamera(row.id)"
+              <TableActionsMenu
+                :actions="getCameraActions(row)"
+                :loading="testingCamera === row.id || duplicatingCamera === row.id"
+                @select="onCameraAction($event, row)"
               />
             </div>
           </template>
@@ -458,19 +525,20 @@ async function testConnection(id: number) {
   margin-bottom: 24px;
 }
 
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+.camera-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
   }
-  
-  .action-buttons {
-    flex-direction: column;
+
+  .camera-actions {
+    gap: 6px;
   }
 }
 

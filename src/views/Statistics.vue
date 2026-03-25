@@ -83,11 +83,22 @@ interface EmployeeDetails {
   loaded: boolean
   error: string | null
   activities: AssignedActivity[]
+  activitiesLoading: boolean
   events: EventItem[]
+  eventsLoading: boolean
+  eventsPage: number
+  eventsPageSize: number
   eventsTotal: number
   intervals: IntervalItem[]
+  intervalsLoading: boolean
+  intervalsPage: number
+  intervalsPageSize: number
   intervalsTotal: number
 }
+
+const DEFAULT_EVENTS_PAGE_SIZE = 20
+const DEFAULT_INTERVALS_PAGE_SIZE = 20
+const DETAIL_PAGE_SIZES = [10, 20, 50, 100]
 
 const statistics = ref<StatisticsResponse | null>(null)
 const employees = ref<Employee[]>([])
@@ -234,79 +245,193 @@ function getEmployeeDetails(employeeId: number): EmployeeDetails | undefined {
   return employeeDetails.value[employeeId]
 }
 
-async function loadEmployeeDetails(employeeId: number, force = false) {
-  const current = getEmployeeDetails(employeeId)
-
-  if (current?.loaded && !force) {
-    return
+function createEmployeeDetailsState(current?: Partial<EmployeeDetails>): EmployeeDetails {
+  return {
+    loading: current?.loading ?? false,
+    loaded: current?.loaded ?? false,
+    error: current?.error ?? null,
+    activities: current?.activities ?? [],
+    activitiesLoading: current?.activitiesLoading ?? false,
+    events: current?.events ?? [],
+    eventsLoading: current?.eventsLoading ?? false,
+    eventsPage: current?.eventsPage ?? 1,
+    eventsPageSize: current?.eventsPageSize ?? DEFAULT_EVENTS_PAGE_SIZE,
+    eventsTotal: current?.eventsTotal ?? 0,
+    intervals: current?.intervals ?? [],
+    intervalsLoading: current?.intervalsLoading ?? false,
+    intervalsPage: current?.intervalsPage ?? 1,
+    intervalsPageSize: current?.intervalsPageSize ?? DEFAULT_INTERVALS_PAGE_SIZE,
+    intervalsTotal: current?.intervalsTotal ?? 0,
   }
+}
+
+function updateEmployeeDetails(employeeId: number, patch: Partial<EmployeeDetails>) {
+  const current = createEmployeeDetailsState(getEmployeeDetails(employeeId))
 
   employeeDetails.value = {
     ...employeeDetails.value,
     [employeeId]: {
-      loading: true,
-      loaded: false,
-      error: null,
-      activities: current?.activities || [],
-      events: current?.events || [],
-      eventsTotal: current?.eventsTotal || 0,
-      intervals: current?.intervals || [],
-      intervalsTotal: current?.intervalsTotal || 0,
+      ...current,
+      ...patch,
     },
   }
+}
+
+async function fetchEmployeeActivities(employeeId: number) {
+  const response = await apiClient.get(`/api/employees/${employeeId}/activities`)
+  return response.data?.activities || []
+}
+
+async function fetchEmployeeEvents(employeeId: number, page: number, pageSize: number) {
+  const { from, to } = buildDateRange()
+
+  const response = await apiClient.get('/api/events', {
+    params: {
+      employeeId,
+      dateFrom: from,
+      dateTo: to,
+      page,
+      limit: pageSize,
+    },
+  })
+
+  return {
+    items: response.data?.events || [],
+    total: response.data?.pagination?.total || 0,
+    page: response.data?.pagination?.page || page,
+    pageSize: response.data?.pagination?.limit || pageSize,
+  }
+}
+
+async function fetchEmployeeIntervals(employeeId: number, page: number, pageSize: number) {
+  const { from, to } = buildDateRange()
+
+  const response = await apiClient.get('/api/activity-intervals', {
+    params: {
+      employeeId,
+      from,
+      to,
+      page,
+      pageSize,
+    },
+  })
+
+  return {
+    items: response.data?.items || [],
+    total: response.data?.total || 0,
+    page: response.data?.page || page,
+    pageSize: response.data?.pageSize || pageSize,
+  }
+}
+
+async function loadEmployeeDetails(employeeId: number, force = false) {
+  const current = createEmployeeDetailsState(getEmployeeDetails(employeeId))
+
+  if (current.loaded && !force) {
+    return
+  }
+
+  updateEmployeeDetails(employeeId, {
+    loading: true,
+    loaded: false,
+    error: null,
+    activitiesLoading: true,
+    eventsLoading: true,
+    intervalsLoading: true,
+  })
 
   try {
-    const { from, to } = buildDateRange()
-
     const [activitiesResponse, eventsResponse, intervalsResponse] = await Promise.all([
-      apiClient.get(`/api/employees/${employeeId}/activities`),
-      apiClient.get('/api/events', {
-        params: {
-          employeeId,
-          dateFrom: from,
-          dateTo: to,
-          page: 1,
-          limit: 20,
-        },
-      }),
-      apiClient.get('/api/activity-intervals', {
-        params: {
-          employeeId,
-          from,
-          to,
-          page: 1,
-          pageSize: 20,
-        },
-      }),
+      fetchEmployeeActivities(employeeId),
+      fetchEmployeeEvents(employeeId, current.eventsPage, current.eventsPageSize),
+      fetchEmployeeIntervals(employeeId, current.intervalsPage, current.intervalsPageSize),
     ])
 
-    employeeDetails.value = {
-      ...employeeDetails.value,
-      [employeeId]: {
-        loading: false,
-        loaded: true,
-        error: null,
-        activities: activitiesResponse.data?.activities || [],
-        events: eventsResponse.data?.events || [],
-        eventsTotal: eventsResponse.data?.pagination?.total || 0,
-        intervals: intervalsResponse.data?.items || [],
-        intervalsTotal: intervalsResponse.data?.total || 0,
-      },
-    }
+    updateEmployeeDetails(employeeId, {
+      loading: false,
+      loaded: true,
+      error: null,
+      activitiesLoading: false,
+      eventsLoading: false,
+      intervalsLoading: false,
+      activities: activitiesResponse,
+      events: eventsResponse.items,
+      eventsPage: eventsResponse.page,
+      eventsPageSize: eventsResponse.pageSize,
+      eventsTotal: eventsResponse.total,
+      intervals: intervalsResponse.items,
+      intervalsPage: intervalsResponse.page,
+      intervalsPageSize: intervalsResponse.pageSize,
+      intervalsTotal: intervalsResponse.total,
+    })
   } catch (error: any) {
-    employeeDetails.value = {
-      ...employeeDetails.value,
-      [employeeId]: {
-        loading: false,
-        loaded: false,
-        error: error.response?.data?.error || t('statistics.employeeLoadError'),
-        activities: [],
-        events: [],
-        eventsTotal: 0,
-        intervals: [],
-        intervalsTotal: 0,
-      },
-    }
+    updateEmployeeDetails(employeeId, {
+      loading: false,
+      loaded: false,
+      error: error.response?.data?.error || t('statistics.employeeLoadError'),
+      activitiesLoading: false,
+      eventsLoading: false,
+      intervalsLoading: false,
+      activities: [],
+      events: [],
+      eventsPage: 1,
+      eventsPageSize: DEFAULT_EVENTS_PAGE_SIZE,
+      eventsTotal: 0,
+      intervals: [],
+      intervalsPage: 1,
+      intervalsPageSize: DEFAULT_INTERVALS_PAGE_SIZE,
+      intervalsTotal: 0,
+    })
+  }
+}
+
+async function loadEmployeeEvents(employeeId: number, page: number, pageSize: number) {
+  updateEmployeeDetails(employeeId, {
+    eventsLoading: true,
+    eventsPage: page,
+    eventsPageSize: pageSize,
+  })
+
+  try {
+    const response = await fetchEmployeeEvents(employeeId, page, pageSize)
+
+    updateEmployeeDetails(employeeId, {
+      eventsLoading: false,
+      events: response.items,
+      eventsPage: response.page,
+      eventsPageSize: response.pageSize,
+      eventsTotal: response.total,
+    })
+  } catch (error: any) {
+    updateEmployeeDetails(employeeId, {
+      eventsLoading: false,
+    })
+    ElMessage.error(error.response?.data?.error || t('statistics.employeeLoadError'))
+  }
+}
+
+async function loadEmployeeIntervals(employeeId: number, page: number, pageSize: number) {
+  updateEmployeeDetails(employeeId, {
+    intervalsLoading: true,
+    intervalsPage: page,
+    intervalsPageSize: pageSize,
+  })
+
+  try {
+    const response = await fetchEmployeeIntervals(employeeId, page, pageSize)
+
+    updateEmployeeDetails(employeeId, {
+      intervalsLoading: false,
+      intervals: response.items,
+      intervalsPage: response.page,
+      intervalsPageSize: response.pageSize,
+      intervalsTotal: response.total,
+    })
+  } catch (error: any) {
+    updateEmployeeDetails(employeeId, {
+      intervalsLoading: false,
+    })
+    ElMessage.error(error.response?.data?.error || t('statistics.employeeLoadError'))
   }
 }
 
@@ -338,6 +463,24 @@ async function handleExpandChange(row: Employee, expandedRows: Employee[]) {
   if (isExpanded) {
     await loadEmployeeDetails(row.id)
   }
+}
+
+async function handleEventsPageChange(employeeId: number, page: number) {
+  const details = createEmployeeDetailsState(getEmployeeDetails(employeeId))
+  await loadEmployeeEvents(employeeId, page, details.eventsPageSize)
+}
+
+async function handleEventsPageSizeChange(employeeId: number, pageSize: number) {
+  await loadEmployeeEvents(employeeId, 1, pageSize)
+}
+
+async function handleIntervalsPageChange(employeeId: number, page: number) {
+  const details = createEmployeeDetailsState(getEmployeeDetails(employeeId))
+  await loadEmployeeIntervals(employeeId, page, details.intervalsPageSize)
+}
+
+async function handleIntervalsPageSizeChange(employeeId: number, pageSize: number) {
+  await loadEmployeeIntervals(employeeId, 1, pageSize)
 }
 
 function formatDuration(startIso: string, endIso: string): string {
@@ -502,12 +645,6 @@ function formatDuration(startIso: string, endIso: string): string {
                         <el-descriptions-item :label="t('statistics.assignedActivities')">
                           {{ getEmployeeDetails(row.id)?.activities.length || 0 }}
                         </el-descriptions-item>
-                        <el-descriptions-item :label="t('statistics.eventsInPeriod')">
-                          {{ getEmployeeDetails(row.id)?.eventsTotal || 0 }}
-                        </el-descriptions-item>
-                        <el-descriptions-item :label="t('statistics.activityIntervalsInPeriod')">
-                          {{ getEmployeeDetails(row.id)?.intervalsTotal || 0 }}
-                        </el-descriptions-item>
                       </el-descriptions>
                     </el-card>
                   </el-col>
@@ -571,11 +708,10 @@ function formatDuration(startIso: string, endIso: string): string {
 
                 <el-card shadow="never" style="margin-top: 16px">
                   <el-tabs>
-                    <el-tab-pane
-                      :label="`${t('statistics.recentEvents')} (${getEmployeeDetails(row.id)?.eventsTotal || 0})`"
-                    >
+                    <el-tab-pane :label="t('statistics.recentEvents')">
                       <el-table
                         v-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
                         :data="getEmployeeDetails(row.id)?.events || []"
                         style="width: 100%"
                       >
@@ -599,18 +735,30 @@ function formatDuration(startIso: string, endIso: string): string {
                         </el-table-column>
                       </el-table>
 
+                      <div v-if="(getEmployeeDetails(row.id)?.eventsTotal || 0) > 0" class="detail-pagination">
+                        <el-pagination
+                          :current-page="getEmployeeDetails(row.id)?.eventsPage || 1"
+                          :page-size="getEmployeeDetails(row.id)?.eventsPageSize || DEFAULT_EVENTS_PAGE_SIZE"
+                          :page-sizes="DETAIL_PAGE_SIZES"
+                          :total="getEmployeeDetails(row.id)?.eventsTotal || 0"
+                          layout="total, sizes, prev, pager, next"
+                          @current-change="handleEventsPageChange(row.id, $event)"
+                          @size-change="handleEventsPageSizeChange(row.id, $event)"
+                        />
+                      </div>
+
                       <el-empty
                         v-else
+                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
                         :description="t('statistics.noEvents')"
                         :image-size="72"
                       />
                     </el-tab-pane>
 
-                    <el-tab-pane
-                      :label="`${t('statistics.activityIntervals')} (${getEmployeeDetails(row.id)?.intervalsTotal || 0})`"
-                    >
+                    <el-tab-pane :label="t('statistics.activityIntervals')">
                       <el-table
                         v-if="(getEmployeeDetails(row.id)?.intervals.length || 0) > 0"
+                        v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
                         :data="getEmployeeDetails(row.id)?.intervals || []"
                         style="width: 100%"
                       >
@@ -647,8 +795,21 @@ function formatDuration(startIso: string, endIso: string): string {
                         </el-table-column>
                       </el-table>
 
+                      <div v-if="(getEmployeeDetails(row.id)?.intervalsTotal || 0) > 0" class="detail-pagination">
+                        <el-pagination
+                          :current-page="getEmployeeDetails(row.id)?.intervalsPage || 1"
+                          :page-size="getEmployeeDetails(row.id)?.intervalsPageSize || DEFAULT_INTERVALS_PAGE_SIZE"
+                          :page-sizes="DETAIL_PAGE_SIZES"
+                          :total="getEmployeeDetails(row.id)?.intervalsTotal || 0"
+                          layout="total, sizes, prev, pager, next"
+                          @current-change="handleIntervalsPageChange(row.id, $event)"
+                          @size-change="handleIntervalsPageSizeChange(row.id, $event)"
+                        />
+                      </div>
+
                       <el-empty
                         v-else
+                        v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
                         :description="t('statistics.noActivityIntervals')"
                         :image-size="72"
                       />
@@ -801,6 +962,12 @@ function formatDuration(startIso: string, endIso: string): string {
   gap: 8px;
 }
 
+.detail-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
@@ -820,6 +987,11 @@ function formatDuration(startIso: string, endIso: string): string {
 
   .apply-filters-button {
     min-width: 0;
+  }
+
+  .detail-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 }
 </style>

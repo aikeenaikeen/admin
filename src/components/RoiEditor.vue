@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue'
+import { Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
@@ -292,7 +293,9 @@ function onImgLoad() {
         
         <el-button
           v-if="drawing"
-          type="warning"
+          type="danger"
+          plain
+          :icon="Close"
           @click="cancelCurrentPolygon"
         >
           {{ t('common.actions.cancel') }}
@@ -348,7 +351,9 @@ function onImgLoad() {
     </div>
     
     <div class="editor-actions">
-      <el-button @click="handleCancel">{{ t('common.actions.cancel') }}</el-button>
+      <el-button type="danger" plain :icon="Close" @click="handleCancel">
+        {{ t('common.actions.cancel') }}
+      </el-button>
       <el-button type="primary" @click="handleSave">
         {{ t('roiEditor.saveZones') }}
       </el-button>

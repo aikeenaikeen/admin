@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Delete, User, Upload, Setting } from '@element-plus/icons-vue'
+import { Plus, Delete, User, Upload, Setting, Close, Edit } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import apiClient from '@/api/client'
 import { translateActivityKind } from '@/utils/uiText'
+import TableActionsMenu from '@/components/TableActionsMenu.vue'
 
 const { t } = useI18n()
 
@@ -29,6 +30,8 @@ interface CompanyActivity {
   activeModelVersionId?: number | null
   activity: Activity
 }
+
+type EmployeeTableAction = 'activities' | 'edit' | 'delete'
 
 const employees = ref<Employee[]>([])
 const loading = ref(true)
@@ -218,6 +221,46 @@ async function saveEmployeeActivities() {
     ElMessage.error(e.response?.data?.error || t('employees.activitiesSaveError'))
   }
 }
+
+function getEmployeeActions() {
+  return [
+    {
+      key: 'activities',
+      label: t('common.labels.activity'),
+      icon: Setting,
+    },
+    {
+      key: 'edit',
+      label: t('common.actions.edit'),
+      icon: Edit,
+    },
+    {
+      key: 'delete',
+      label: t('common.actions.delete'),
+      icon: Delete,
+      divided: true,
+      danger: true,
+    },
+  ]
+}
+
+function handleEmployeeAction(action: EmployeeTableAction, row: Employee) {
+  if (action === 'activities') {
+    openEmployeeActivities(row)
+    return
+  }
+
+  if (action === 'edit') {
+    startEdit(row)
+    return
+  }
+
+  deleteEmployee(row.id)
+}
+
+function onEmployeeAction(action: string, row: Employee) {
+  handleEmployeeAction(action as EmployeeTableAction, row)
+}
 </script>
 
 <template>
@@ -227,7 +270,11 @@ async function saveEmployeeActivities() {
         <h1 class="page-title">{{ t('employees.title') }}</h1>
       </template>
       <template #extra>
-        <el-button type="primary" :icon="Plus" @click="startCreate">
+        <el-button
+          :type="dialogVisible ? 'danger' : 'primary'"
+          :icon="dialogVisible ? Close : Plus"
+          @click="dialogVisible ? resetForm() : startCreate()"
+        >
           {{ dialogVisible ? t('common.actions.cancel') : t('employees.addButton') }}
         </el-button>
       </template>
@@ -247,30 +294,12 @@ async function saveEmployeeActivities() {
         
         <el-table-column prop="name" :label="t('employees.table.name')" min-width="180" />
 
-        <el-table-column :label="t('common.labels.actions')" width="380" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="112" fixed="right" align="center">
           <template #default="{ row }">
-              <el-button
-                size="small"
-                :icon="Setting"
-                @click="openEmployeeActivities(row)"
-              >
-                {{ t('common.labels.activity') }}
-              </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                :icon="Delete"
-                @click="deleteEmployee(row.id)"
-              >
-                {{ t('common.actions.delete') }}
-              </el-button>
-              <el-button
-                size="small"
-                @click="startEdit(row)"
-              >
-                {{ t('common.actions.edit') }}
-              </el-button>
-              
+            <TableActionsMenu
+              :actions="getEmployeeActions()"
+              @select="onEmployeeAction($event, row)"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -296,7 +325,9 @@ async function saveEmployeeActivities() {
       </el-checkbox-group>
 
       <template #footer>
-        <el-button @click="activitiesDialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="activitiesDialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="saveEmployeeActivities">{{ t('common.actions.save') }}</el-button>
       </template>
     </el-dialog>
@@ -352,7 +383,9 @@ async function saveEmployeeActivities() {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="dialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="handleSubmit">
           {{ isEditing ? t('common.actions.save') : t('common.actions.create') }}
         </el-button>

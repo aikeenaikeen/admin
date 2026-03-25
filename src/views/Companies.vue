@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, Close, Setting } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
 import RecognitionConfigForm from '@/components/RecognitionConfigForm.vue'
+import TableActionsMenu from '@/components/TableActionsMenu.vue'
 import {
   RECOMMENDED_RECOGNITION_CONFIG,
   type RecognitionConfig,
@@ -24,6 +25,8 @@ interface RecognitionConfigSnapshot {
   resolvedRecognitionConfig: RecognitionConfig
   recognitionConfigUpdatedAt: string | null
 }
+
+type CompanyTableAction = 'configure' | 'toggle' | 'delete'
 
 const companies = ref<Company[]>([])
 const loading = ref(true)
@@ -176,6 +179,45 @@ async function saveConfig() {
     configSaving.value = false
   }
 }
+
+function getCompanyActions(row: Company) {
+  return [
+    {
+      key: 'configure',
+      label: t('companies.configureRecognition'),
+      icon: Setting,
+    },
+    {
+      key: 'toggle',
+      label: row.isActive ? t('common.actions.disable') : t('common.actions.enable'),
+    },
+    {
+      key: 'delete',
+      label: t('common.actions.delete'),
+      icon: Delete,
+      divided: true,
+      danger: true,
+    },
+  ]
+}
+
+function handleCompanyAction(action: CompanyTableAction, row: Company) {
+  if (action === 'configure') {
+    openEditConfig(row)
+    return
+  }
+
+  if (action === 'toggle') {
+    toggleCompany(row.id, row.isActive)
+    return
+  }
+
+  deleteCompany(row.id)
+}
+
+function onCompanyAction(action: string, row: Company) {
+  handleCompanyAction(action as CompanyTableAction, row)
+}
 </script>
 
 <template>
@@ -221,32 +263,12 @@ async function saveConfig() {
           </template>
         </el-table-column>
         
-        <el-table-column :label="t('common.labels.actions')" width="420" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="112" fixed="right" align="center">
           <template #default="{ row }">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <el-button
-                size="small"
-                type="primary"
-                @click="openEditConfig(row)"
-              >
-                {{ t('companies.configureRecognition') }}
-              </el-button>
-              <el-button
-                size="small"
-                :type="row.isActive ? 'warning' : 'success'"
-                @click="toggleCompany(row.id, row.isActive)"
-              >
-                {{ row.isActive ? t('common.actions.disable') : t('common.actions.enable') }}
-              </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                :icon="Delete"
-                @click="deleteCompany(row.id)"
-              >
-                {{ t('common.actions.delete') }}
-              </el-button>
-            </div>
+            <TableActionsMenu
+              :actions="getCompanyActions(row)"
+              @select="onCompanyAction($event, row)"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -289,7 +311,9 @@ async function saveConfig() {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="dialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="handleSubmit">{{ t('common.actions.create') }}</el-button>
       </template>
     </el-dialog>
@@ -311,7 +335,15 @@ async function saveConfig() {
       </el-form>
 
       <template #footer>
-        <el-button @click="editConfigDialogVisible = false" :disabled="configSaving">{{ t('common.actions.cancel') }}</el-button>
+        <el-button
+          type="danger"
+          plain
+          :icon="Close"
+          @click="editConfigDialogVisible = false"
+          :disabled="configSaving"
+        >
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="saveConfig" :loading="configSaving">{{ t('common.actions.save') }}</el-button>
       </template>
     </el-dialog>

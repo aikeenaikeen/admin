@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
+import TableActionsMenu from '@/components/TableActionsMenu.vue'
 import {
   translateActivityStatus,
   translateModelStatus,
@@ -71,6 +72,7 @@ interface TrainingAsset {
 
 type TrainingStep = 1 | 2 | 3 | 4
 type DraftAnnotation = { startSec: number; endSec: number; type: 'POSITIVE' | 'NEGATIVE' }
+type ActivityTableAction = 'publish' | 'deprecate' | 'edit' | 'delete' | 'training' | 'companies'
 
 interface PersistedTrainingUiState {
   step?: TrainingStep
@@ -1093,6 +1095,90 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
     companySettings.value[companyId].enabled = enabled
   }
 }
+
+function getActivityActions(row: Activity) {
+  const actions = []
+
+  if (row.status === 'DRAFT') {
+    actions.push({
+      key: 'publish',
+      label: t('common.actions.publish'),
+      icon: Check,
+    })
+  }
+
+  if (row.status === 'ACTIVE') {
+    actions.push({
+      key: 'deprecate',
+      label: t('activities.deprecateButton'),
+      icon: Close,
+    })
+  }
+
+  if (row.status !== 'DEPRECATED') {
+    actions.push({
+      key: 'edit',
+      label: t('common.actions.edit'),
+      icon: Edit,
+    })
+  }
+
+  actions.push({
+    key: 'training',
+    label: t('common.actions.openTraining'),
+  })
+
+  if (row.status === 'ACTIVE') {
+    actions.push({
+      key: 'companies',
+      label: t('layout.menu.companies'),
+      icon: Setting,
+    })
+  }
+
+  actions.push({
+    key: 'delete',
+    label: t('common.actions.delete'),
+    icon: Delete,
+    divided: true,
+    danger: true,
+  })
+
+  return actions
+}
+
+function handleActivityAction(action: ActivityTableAction, row: Activity) {
+  if (action === 'publish') {
+    publishActivity(row.id)
+    return
+  }
+
+  if (action === 'deprecate') {
+    deprecateActivity(row.id)
+    return
+  }
+
+  if (action === 'edit') {
+    startEdit(row)
+    return
+  }
+
+  if (action === 'training') {
+    openTraining(row)
+    return
+  }
+
+  if (action === 'companies') {
+    openCompanySettings(row)
+    return
+  }
+
+  deleteActivity(row.id)
+}
+
+function onActivityAction(action: string, row: Activity) {
+  handleActivityAction(action as ActivityTableAction, row)
+}
 </script>
 
 <template>
@@ -1134,64 +1220,12 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
           </template>
         </el-table-column>
         
-        <el-table-column :label="t('common.labels.actions')" width="450" fixed="right">
+        <el-table-column :label="t('common.labels.actions')" width="112" fixed="right" align="center">
           <template #default="{ row }">
-            <div class="action-buttons">
-              <el-button
-                v-if="row.status === 'DRAFT'"
-                size="small"
-                type="success"
-                :icon="Check"
-                @click="publishActivity(row.id)"
-              >
-                {{ t('common.actions.publish') }}
-              </el-button>
-              
-              <el-button
-                v-if="row.status === 'ACTIVE'"
-                size="small"
-                type="warning"
-                :icon="Close"
-                @click="deprecateActivity(row.id)"
-              >
-                {{ t('activities.deprecateButton') }}
-              </el-button>
-              
-              <el-button
-                v-if="row.status !== 'DEPRECATED'"
-                size="small"
-                :icon="Edit"
-                @click="startEdit(row)"
-              >
-                {{ t('common.actions.edit') }}
-              </el-button>
-
-              <el-button
-                size="small"
-                type="danger"
-                :icon="Delete"
-                @click="deleteActivity(row.id)"
-              >
-                {{ t('common.actions.delete') }}
-              </el-button>
-
-              <el-button
-                size="small"
-                @click="openTraining(row)"
-              >
-                {{ t('common.actions.openTraining') }}
-              </el-button>
-              
-              <el-button
-                v-if="row.status === 'ACTIVE'"
-                size="small"
-                type="primary"
-                :icon="Setting"
-                @click="openCompanySettings(row)"
-              >
-                {{ t('layout.menu.companies') }}
-              </el-button>
-            </div>
+            <TableActionsMenu
+              :actions="getActivityActions(row)"
+              @select="onActivityAction($event, row)"
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -1219,7 +1253,9 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="dialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="handleSubmit(false)">
           {{ isEditing ? t('common.actions.save') : t('common.actions.create') }}
         </el-button>
@@ -1763,7 +1799,9 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
       </div>
 
       <template #footer>
-        <el-button @click="trainingDialogVisible = false">{{ t('common.actions.close') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="trainingDialogVisible = false">
+          {{ t('common.actions.close') }}
+        </el-button>
         <el-button v-if="trainingStep > 1" @click="goToPreviousTrainingStep">
           {{ t('activities.dialog.previousStep') }}
         </el-button>
@@ -1846,7 +1884,9 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
       </el-table>
 
       <template #footer>
-        <el-button @click="companyDialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="companyDialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="saveCompanySettings">
           {{ t('common.actions.save') }}
         </el-button>
@@ -1889,16 +1929,6 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
   font-size: 24px;
   font-weight: 600;
   color: var(--el-text-color-primary);
-}
-
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.action-buttons :deep(.el-button) {
-  margin: 0;
 }
 
 .training-wizard {
@@ -2293,10 +2323,6 @@ function toggleCompanyAccess(companyId: number, enabled: boolean) {
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
-  }
-  
-  .action-buttons {
-    flex-direction: column;
   }
 
   .training-step-grid {

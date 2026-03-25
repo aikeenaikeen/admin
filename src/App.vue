@@ -37,6 +37,14 @@ body {
 #app {
   min-height: 100vh;
 }
+
+.el-page-header__left {
+  display: none !important;
+}
+
+.el-page-header__content {
+  margin-left: 0 !important;
+}
 </style>
 
 

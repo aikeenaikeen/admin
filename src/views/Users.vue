@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, Close } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { translateUserRole } from '@/utils/uiText'
@@ -221,7 +221,9 @@ async function deleteUser(userId: number) {
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">{{ t('common.actions.cancel') }}</el-button>
+        <el-button type="danger" plain :icon="Close" @click="dialogVisible = false">
+          {{ t('common.actions.cancel') }}
+        </el-button>
         <el-button type="primary" @click="handleSubmit">{{ t('common.actions.create') }}</el-button>
       </template>
     </el-dialog>
