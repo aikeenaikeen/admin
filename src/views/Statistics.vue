@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import { Refresh, Calendar, Search, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
+import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import { formatDateTime } from '@/utils/date'
+import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
 import { translateActivityKind, translateEventType } from '@/utils/uiText'
 
 const { t } = useI18n()
@@ -53,9 +55,14 @@ interface EventItem {
   employee: {
     name: string
   }
-  camera?: {
-    name: string
-  }
+  camera?: CameraDisplayInfo | null
+}
+
+interface CameraInfo extends CameraDisplayInfo {
+  ip: string
+  rtspPort: number
+  isActive: boolean
+  recognitionEnabled: boolean
 }
 
 interface IntervalItem {
@@ -103,10 +110,13 @@ const DETAIL_PAGE_SIZES = [10, 20, 50, 100]
 const statistics = ref<StatisticsResponse | null>(null)
 const employees = ref<Employee[]>([])
 const presence = ref<PresenceStatus[]>([])
+const cameras = ref<CameraInfo[]>([])
 const employeeDetails = ref<Record<number, EmployeeDetails>>({})
 const loading = ref(true)
 const employeesLoading = ref(false)
 const activeEmployeeId = ref<number | null>(null)
+const streamDialogVisible = ref(false)
+const streamDialogCamera = ref<CameraDisplayInfo | null>(null)
 
 const search = ref('')
 const dateFrom = ref('')
@@ -116,6 +126,10 @@ const expandedRowKeys = computed(() => (activeEmployeeId.value ? [activeEmployee
 
 const presenceByEmployeeId = computed(() => {
   return new Map(presence.value.map((item) => [item.id, item]))
+})
+
+const camerasById = computed(() => {
+  return new Map(cameras.value.map((camera) => [camera.id, camera]))
 })
 
 const displayEmployees = computed(() => {
@@ -210,7 +224,7 @@ async function loadPage() {
   try {
     const { from, to } = buildDateRange()
 
-    const [statisticsResponse, presenceResponse, nextEmployees] = await Promise.all([
+    const [statisticsResponse, presenceResponse, nextEmployees, nextCameras] = await Promise.all([
       apiClient.get('/api/statistics', {
         params: {
           dateFrom: from,
@@ -219,11 +233,16 @@ async function loadPage() {
       }),
       apiClient.get('/api/presence'),
       fetchEmployees(),
+      apiClient.get('/api/cameras').catch(() => {
+        ElMessage.error(t('cameras.loadError'))
+        return { data: [] }
+      }),
     ])
 
     statistics.value = statisticsResponse.data
     presence.value = presenceResponse.data
     employees.value = nextEmployees
+    cameras.value = nextCameras.data
     syncActiveEmployee(nextEmployees)
     resetEmployeeDetails()
 
@@ -489,6 +508,31 @@ function formatDuration(startIso: string, endIso: string): string {
   const seconds = Math.max(0, Math.round((end - start) / 1000))
   return t('employeeActivities.durationSeconds', { value: seconds })
 }
+
+function formatCameraDisplay(camera?: Pick<CameraDisplayInfo, 'name' | 'location'> | null): string {
+  return formatCameraLabel(camera) || t('common.misc.none')
+}
+
+function getFallbackCamera(cameraId: number): CameraDisplayInfo {
+  return {
+    id: cameraId,
+    name: t('statistics.cameraFallback', { id: cameraId }),
+    location: null,
+  }
+}
+
+function getIntervalCameras(cameraIds: number[]): CameraDisplayInfo[] {
+  return (cameraIds || []).map((cameraId) => camerasById.value.get(cameraId) || getFallbackCamera(cameraId))
+}
+
+function openCameraStream(camera?: CameraDisplayInfo | null) {
+  if (!camera) {
+    return
+  }
+
+  streamDialogCamera.value = camera
+  streamDialogVisible.value = true
+}
 </script>
 
 <template>
@@ -730,7 +774,18 @@ function formatDuration(startIso: string, endIso: string): string {
                         </el-table-column>
                         <el-table-column :label="t('events.camera')" min-width="180">
                           <template #default="{ row: eventRow }">
-                            {{ eventRow.camera?.name || t('common.misc.none') }}
+                            <el-button
+                              v-if="eventRow.camera?.id"
+                              link
+                              type="primary"
+                              class="camera-link"
+                              @click.stop="openCameraStream(eventRow.camera)"
+                            >
+                              {{ formatCameraDisplay(eventRow.camera) }}
+                            </el-button>
+                            <span v-else>
+                              {{ formatCameraDisplay(eventRow.camera) }}
+                            </span>
                           </template>
                         </el-table-column>
                       </el-table>
@@ -790,7 +845,22 @@ function formatDuration(startIso: string, endIso: string): string {
                         </el-table-column>
                         <el-table-column :label="t('statistics.cameras')" min-width="180">
                           <template #default="{ row: intervalRow }">
-                            {{ (intervalRow.confirmedCameraIds || []).join(', ') || t('common.misc.none') }}
+                            <div
+                              v-if="(intervalRow.confirmedCameraIds || []).length > 0"
+                              class="camera-link-list"
+                            >
+                              <el-button
+                                v-for="camera in getIntervalCameras(intervalRow.confirmedCameraIds || [])"
+                                :key="camera.id"
+                                link
+                                type="primary"
+                                class="camera-link"
+                                @click.stop="openCameraStream(camera)"
+                              >
+                                {{ formatCameraDisplay(camera) }}
+                              </el-button>
+                            </div>
+                            <span v-else>{{ t('common.misc.none') }}</span>
                           </template>
                         </el-table-column>
                       </el-table>
@@ -861,6 +931,11 @@ function formatDuration(startIso: string, endIso: string): string {
         />
       </el-card>
     </div>
+
+    <CameraStreamDialog
+      v-model="streamDialogVisible"
+      :camera="streamDialogCamera"
+    />
   </div>
 </template>
 
@@ -960,6 +1035,19 @@ function formatDuration(startIso: string, endIso: string): string {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.camera-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.camera-link {
+  height: auto;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
 }
 
 .detail-pagination {

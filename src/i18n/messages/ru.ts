@@ -321,6 +321,7 @@ const ru = {
     duration: 'Длительность',
     confidence: 'Уверенность',
     cameras: 'Камеры',
+    cameraFallback: 'Камера #{id}',
     noAssignedActivities: 'У сотрудника нет назначенных активностей',
     noEvents: 'Нет событий за выбранный период',
     noActivityIntervals: 'Нет интервалов активностей за выбранный период',

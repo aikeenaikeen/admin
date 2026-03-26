@@ -321,6 +321,7 @@ const en = {
     duration: 'Duration',
     confidence: 'Confidence',
     cameras: 'Cameras',
+    cameraFallback: 'Camera #{id}',
     noAssignedActivities: 'This employee has no assigned activities',
     noEvents: 'No events for the selected period',
     noActivityIntervals: 'No activity intervals for the selected period',

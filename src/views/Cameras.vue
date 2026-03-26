@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { Plus, Connection, Delete, VideoCamera, Monitor, Close, Edit } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
-import { resolveBaseUrl } from '@/utils/baseUrl'
+import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
 
 const { t } = useI18n()
@@ -27,22 +27,11 @@ const cameras = ref<Camera[]>([])
 const loading = ref(true)
 const showForm = ref(false)
 const isEditing = ref(false)
-const dialogVisible = ref(false)
-const selectedCamera = ref<number | null>(null)
-const streamUrl = ref('')
-const showRecognition = ref(false)
 const testingCamera = ref<number | null>(null)
 const duplicatingCamera = ref<number | null>(null)
-
-function withCacheBust(url: string): string {
-  const sep = url.includes('?') ? '&' : '?'
-  return `${url}${sep}ts=${Date.now()}`
-}
-
-function getRecognitionStreamUrl(cameraId: number): string {
-  const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
-  return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
-}
+const streamDialogVisible = ref(false)
+const streamDialogCamera = ref<Camera | null>(null)
+const streamDialogRecognition = ref(false)
 
 const form = ref({
   name: '',
@@ -155,29 +144,10 @@ async function duplicateCamera(camera: Camera) {
   }
 }
 
-async function viewStream(id: number, withRecognition = false) {
-  try {
-    showRecognition.value = withRecognition
-    
-    if (withRecognition) {
-      streamUrl.value = getRecognitionStreamUrl(id)
-    } else {
-      const response = await apiClient.get(`/api/cameras/${id}/stream-url`)
-      streamUrl.value = withCacheBust(response.data.mjpegUrl)
-    }
-    
-    selectedCamera.value = id
-    dialogVisible.value = true
-  } catch (error) {
-    ElMessage.error(t('cameras.streamUrlError'))
-  }
-}
-
-function closeStream() {
-  dialogVisible.value = false
-  selectedCamera.value = null
-  streamUrl.value = ''
-  showRecognition.value = false
+function openCameraStream(camera: Camera, withRecognition = false) {
+  streamDialogCamera.value = camera
+  streamDialogRecognition.value = withRecognition
+  streamDialogVisible.value = true
 }
 
 function startCreate() {
@@ -286,12 +256,12 @@ function getCameraActions(row: Camera) {
 
 function handleCameraAction(action: CameraTableAction, row: Camera) {
   if (action === 'video') {
-    viewStream(row.id, false)
+    openCameraStream(row, false)
     return
   }
 
   if (action === 'recognition') {
-    viewStream(row.id, true)
+    openCameraStream(row, true)
     return
   }
 
@@ -445,7 +415,7 @@ function onCameraAction(action: string, row: Camera) {
                 type="primary"
                 :icon="VideoCamera"
                 :disabled="!row.isActive"
-                @click="viewStream(row.id, false)"
+                @click="openCameraStream(row, false)"
               >
                 {{ t('cameras.table.video') }}
               </el-button>
@@ -454,7 +424,7 @@ function onCameraAction(action: string, row: Camera) {
                 type="success"
                 :icon="Monitor"
                 :disabled="!row.isActive || !row.recognitionEnabled"
-                @click="viewStream(row.id, true)"
+                @click="openCameraStream(row, true)"
               >
                 {{ t('cameras.table.ai') }}
               </el-button>
@@ -469,37 +439,11 @@ function onCameraAction(action: string, row: Camera) {
       </el-table>
     </el-card>
 
-    <el-dialog
-      v-model="dialogVisible"
-      :title="cameras.find(c => c.id === selectedCamera)?.name || t('cameras.streamTitleFallback')"
-      width="90%"
-      @close="closeStream"
-      center
-    >
-      <div v-if="showRecognition" class="recognition-indicator">
-        <el-tag type="success" size="large">
-          <el-icon><Monitor /></el-icon>
-          {{ t('cameras.recognitionMode') }}
-        </el-tag>
-      </div>
-      
-      <div class="stream-container">
-        <img
-          v-if="streamUrl"
-          :src="streamUrl"
-          :alt="t('cameras.imageAlt')"
-          class="stream-image"
-        />
-      </div>
-      
-      <el-alert
-        v-if="showRecognition"
-        :title="t('cameras.recognitionHint')"
-        type="info"
-        :closable="false"
-        style="margin-top: 16px"
-      />
-    </el-dialog>
+    <CameraStreamDialog
+      v-model="streamDialogVisible"
+      :camera="streamDialogCamera"
+      :recognition="streamDialogRecognition"
+    />
   </div>
 </template>
 
@@ -540,28 +484,5 @@ function onCameraAction(action: string, row: Camera) {
   .camera-actions {
     gap: 6px;
   }
-}
-
-.recognition-indicator {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 16px;
-}
-
-.stream-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-  background: var(--el-fill-color-light);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.stream-image {
-  max-width: 100%;
-  max-height: 70vh;
-  display: block;
-  border-radius: 8px;
 }
 </style>
