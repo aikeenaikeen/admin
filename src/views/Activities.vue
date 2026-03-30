@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue'
 import { Plus, Edit, Check, Close, Setting, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
@@ -15,6 +15,7 @@ import {
 
 type ActivityStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED'
 type ModelVersionStatus = 'DRAFT' | 'STAGING' | 'ACTIVE' | 'DEPRECATED'
+type TrainingJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED'
 
 interface ModelVersion {
   id: number
@@ -70,6 +71,49 @@ interface TrainingAsset {
   annotations?: TrainingAnnotation[]
 }
 
+interface TrainingJobLiveProgress {
+  phase?: string
+  percent?: number
+  message?: string
+  updatedAt?: string
+  currentEpoch?: number
+  totalEpochs?: number
+  trainLoss?: number
+  bestEpoch?: number
+  staleEpochs?: number
+  earlyStopped?: boolean
+  assetCount?: number
+  processedAssets?: number
+  totalAssets?: number
+  clipCount?: number
+  durationSec?: number
+  metrics?: Record<string, any>
+}
+
+interface TrainingJobLogHistoryEntry extends TrainingJobLiveProgress {
+  timestamp?: string
+}
+
+interface TrainingJob {
+  id: number
+  status: TrainingJobStatus
+  modelVersionId?: number | null
+  modelVersion?: ModelVersion | null
+  createdAt: string
+  updatedAt: string
+  error?: string | null
+  logs?: {
+    live?: TrainingJobLiveProgress
+    history?: TrainingJobLogHistoryEntry[]
+    metrics?: Record<string, any>
+    bestEpoch?: number
+    epochsTrained?: number
+    durationSec?: number
+    earlyStopped?: boolean
+    dataset?: Record<string, any>
+  } | null
+}
+
 type TrainingStep = 1 | 2 | 3 | 4
 type DraftAnnotation = { startSec: number; endSec: number; type: 'POSITIVE' | 'NEGATIVE' }
 type ActivityTableAction = 'publish' | 'deprecate' | 'edit' | 'delete' | 'training' | 'companies'
@@ -113,6 +157,8 @@ const trimRange = ref<[number, number]>([0, 0])
 const creatingClip = ref(false)
 const selectedAnnotationIndex = ref<number | null>(null)
 const deletingTrainingAssetId = ref<number | null>(null)
+const trainingJobsPollHandle = ref<ReturnType<typeof setInterval> | null>(null)
+const refreshingTrainingJobs = ref(false)
 
 type TrimDragMode = 'start' | 'end' | 'range'
 type AnnotationDragMode = 'start' | 'end' | 'range'
@@ -150,6 +196,7 @@ const statusTagType = computed(() => (status: ActivityStatus) => {
 })
 
 const trainingAssets = computed<TrainingAsset[]>(() => trainingActivity.value?.trainingAssets || [])
+const trainingJobs = computed<TrainingJob[]>(() => trainingActivity.value?.trainingJobs || [])
 
 const trainingVideoAssets = computed<TrainingAsset[]>(() =>
   trainingAssets.value.filter((asset) => isVideoAsset(asset))
@@ -233,6 +280,155 @@ const canGoNext = computed(() => {
   return canOpenStep((trainingStep.value + 1) as TrainingStep)
 })
 
+function isTrainingJobActive(status: TrainingJobStatus | string | null | undefined): boolean {
+  return status === 'QUEUED' || status === 'RUNNING'
+}
+
+function stopTrainingJobsPolling() {
+  if (trainingJobsPollHandle.value !== null) {
+    clearInterval(trainingJobsPollHandle.value)
+    trainingJobsPollHandle.value = null
+  }
+}
+
+async function refreshTrainingJobs() {
+  if (!trainingActivity.value?.id || refreshingTrainingJobs.value) return
+
+  try {
+    refreshingTrainingJobs.value = true
+    const full = await apiClient.get(`/api/activities/${trainingActivity.value.id}`)
+    if (trainingActivity.value?.id === full.data?.id) {
+      trainingActivity.value = full.data
+    }
+  } catch (error) {
+    console.error('Failed to refresh training jobs', error)
+  } finally {
+    refreshingTrainingJobs.value = false
+  }
+}
+
+function syncTrainingJobsPolling() {
+  const shouldPoll =
+    trainingDialogVisible.value &&
+    trainingStep.value === 4 &&
+    trainingJobs.value.some((job) => isTrainingJobActive(job.status))
+
+  if (!shouldPoll) {
+    stopTrainingJobsPolling()
+    return
+  }
+
+  if (trainingJobsPollHandle.value !== null) return
+
+  trainingJobsPollHandle.value = setInterval(() => {
+    void refreshTrainingJobs()
+  }, 5000)
+  void refreshTrainingJobs()
+}
+
+function getTrainingJobStatusTagType(status: TrainingJobStatus | string | null | undefined) {
+  switch (status) {
+    case 'RUNNING':
+      return 'warning'
+    case 'SUCCEEDED':
+      return 'success'
+    case 'FAILED':
+      return 'danger'
+    case 'CANCELLED':
+      return 'info'
+    case 'QUEUED':
+    default:
+      return ''
+  }
+}
+
+function getTrainingJobLiveProgress(job: TrainingJob | null | undefined): TrainingJobLiveProgress | null {
+  return job?.logs?.live && typeof job.logs.live === 'object' ? job.logs.live : null
+}
+
+function getTrainingJobHistory(job: TrainingJob | null | undefined): TrainingJobLogHistoryEntry[] {
+  return Array.isArray(job?.logs?.history) ? job!.logs!.history! : []
+}
+
+function getTrainingJobPhaseText(phase: string | null | undefined): string {
+  if (!phase) return t('common.misc.none')
+  const key = `activities.dialog.trainingPhases.${phase}`
+  const translated = t(key)
+  return translated === key ? phase : translated
+}
+
+function getTrainingJobProgressPercent(job: TrainingJob): number {
+  const live = getTrainingJobLiveProgress(job)
+  if (live && Number.isFinite(live.percent)) {
+    return Math.min(Math.max(Number(live.percent), 0), 100)
+  }
+  if (job.status === 'SUCCEEDED' || job.status === 'FAILED' || job.status === 'CANCELLED') {
+    return 100
+  }
+  return 0
+}
+
+function formatTrainingMetric(value: number | null | undefined): string {
+  if (!Number.isFinite(value)) return '—'
+  return Number(value).toFixed(3)
+}
+
+function getTrainingJobSecondaryText(job: TrainingJob): string {
+  const live = getTrainingJobLiveProgress(job)
+  const parts: string[] = []
+
+  if (live?.currentEpoch && live?.totalEpochs) {
+    parts.push(`${t('activities.dialog.currentEpoch')}: ${live.currentEpoch}/${live.totalEpochs}`)
+  }
+  if (Number.isFinite(live?.trainLoss)) {
+    parts.push(`loss: ${formatTrainingMetric(live?.trainLoss)}`)
+  }
+  if (Number.isFinite(live?.metrics?.f1)) {
+    parts.push(`F1: ${formatTrainingMetric(live?.metrics?.f1)}`)
+  }
+  if (parts.length > 0) return parts.join(' · ')
+
+  if (job.status === 'FAILED' && job.error) return job.error
+
+  if (job.status === 'SUCCEEDED') {
+    const bestEpoch = Number(job.logs?.bestEpoch || 0)
+    const epochsTrained = Number(job.logs?.epochsTrained || 0)
+    const summary: string[] = []
+    if (bestEpoch > 0) summary.push(`${t('activities.dialog.bestEpoch')}: ${bestEpoch}`)
+    if (epochsTrained > 0) summary.push(`${t('activities.dialog.epochsTrained')}: ${epochsTrained}`)
+    if (Number.isFinite(job.logs?.durationSec)) {
+      summary.push(`${t('activities.dialog.trainingDuration')}: ${Math.round(Number(job.logs?.durationSec))}s`)
+    }
+    if (summary.length > 0) return summary.join(' · ')
+  }
+
+  if (job.status === 'QUEUED') return t('activities.dialog.trainingQueuedHint')
+  if (job.status === 'RUNNING') return t('activities.dialog.trainingRunningHint')
+  if (job.status === 'CANCELLED') return t('activities.dialog.trainingCancelled')
+
+  return '—'
+}
+
+function getTrainingJobHeartbeat(job: TrainingJob): string {
+  const live = getTrainingJobLiveProgress(job)
+  return formatDateTime(live?.updatedAt || job.updatedAt || job.createdAt)
+}
+
+function getTrainingJobHistoryText(entry: TrainingJobLogHistoryEntry): string {
+  const parts: string[] = []
+  if (entry.message) parts.push(entry.message)
+  if (entry.currentEpoch && entry.totalEpochs) {
+    parts.push(`${t('activities.dialog.currentEpoch')}: ${entry.currentEpoch}/${entry.totalEpochs}`)
+  }
+  if (Number.isFinite(entry.trainLoss)) {
+    parts.push(`loss: ${formatTrainingMetric(entry.trainLoss)}`)
+  }
+  if (Number.isFinite(entry.metrics?.f1)) {
+    parts.push(`F1: ${formatTrainingMetric(entry.metrics?.f1)}`)
+  }
+  return parts.join(' · ')
+}
+
 onMounted(async () => {
   await loadActivities()
   await loadCompanies()
@@ -241,7 +437,16 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   detachTrimDragListeners()
   detachAnnotationDragListeners()
+  stopTrainingJobsPolling()
 })
+
+watch(
+  [trainingDialogVisible, trainingStep, trainingJobs],
+  () => {
+    syncTrainingJobsPolling()
+  },
+  { deep: true }
+)
 
 function getTrainingUiStateStorageKey(activityId: number): string {
   return `activity-training-ui:${activityId}`
@@ -1001,6 +1206,28 @@ async function startTraining() {
   }
 }
 
+async function cancelTraining(job: TrainingJob) {
+  try {
+    await ElMessageBox.confirm(
+      t('activities.dialog.cancelTrainingConfirmText', { id: job.id }),
+      t('activities.dialog.cancelTrainingConfirmTitle'),
+      {
+        confirmButtonText: t('activities.dialog.cancelTraining'),
+        cancelButtonText: t('common.actions.cancel'),
+        type: 'warning',
+      }
+    )
+
+    await apiClient.post(`/api/training-jobs/${job.id}/cancel`, {})
+    ElMessage.success(t('activities.dialog.cancelTrainingSuccess'))
+    await refreshTrainingJobs()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || t('activities.dialog.cancelTrainingError'))
+    }
+  }
+}
+
 async function promoteModelVersion(modelVersionId: number) {
   try {
     await apiClient.post(`/api/models/${modelVersionId}/promote`, {})
@@ -1727,11 +1954,61 @@ function onActivityAction(action: string, row: Activity) {
               <el-button type="success" @click="startTraining">{{ t('activities.dialog.startTraining') }}</el-button>
             </div>
 
-            <el-table :data="trainingActivity?.trainingJobs || []" style="width: 100%">
+            <el-table :data="trainingJobs" row-key="id" style="width: 100%">
+              <el-table-column type="expand" width="48">
+                <template #default="{ row }">
+                  <div class="training-job-details">
+                    <el-descriptions :column="2" border size="small">
+                      <el-descriptions-item :label="t('activities.dialog.progress')">
+                        {{ getTrainingJobPhaseText(getTrainingJobLiveProgress(row)?.phase || row.status) }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.lastHeartbeat')">
+                        {{ getTrainingJobHeartbeat(row) }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.bestEpoch')">
+                        {{ row.logs?.bestEpoch || t('common.misc.none') }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.epochsTrained')">
+                        {{ row.logs?.epochsTrained || t('common.misc.none') }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.trainingDuration')">
+                        <span v-if="row.logs?.durationSec">{{ Math.round(Number(row.logs.durationSec)) }}s</span>
+                        <span v-else>{{ t('common.misc.none') }}</span>
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.trainingError')">
+                        {{ row.error || t('common.misc.none') }}
+                      </el-descriptions-item>
+                    </el-descriptions>
+
+                    <div class="training-job-history">
+                      <div class="training-job-history-title">{{ t('activities.dialog.trainingLogHistory') }}</div>
+                      <el-timeline v-if="getTrainingJobHistory(row).length > 0">
+                        <el-timeline-item
+                          v-for="(entry, index) in getTrainingJobHistory(row)"
+                          :key="`${row.id}-${index}`"
+                          :timestamp="formatDateTime(entry.timestamp)"
+                        >
+                          <div class="training-job-history-entry">
+                            <div class="training-job-history-phase">
+                              {{ getTrainingJobPhaseText(entry.phase) }}
+                            </div>
+                            <div class="training-job-history-text">
+                              {{ getTrainingJobHistoryText(entry) || t('common.misc.none') }}
+                            </div>
+                          </div>
+                        </el-timeline-item>
+                      </el-timeline>
+                      <el-empty v-else :description="t('activities.dialog.noTrainingLogs')" />
+                    </div>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column prop="id" :label="t('common.labels.number')" width="70" />
               <el-table-column :label="t('common.labels.status')" width="120">
                 <template #default="{ row }">
-                  {{ translateTrainingJobStatus(row.status) }}
+                  <el-tag :type="getTrainingJobStatusTagType(row.status)" effect="light">
+                    {{ translateTrainingJobStatus(row.status) }}
+                  </el-tag>
                 </template>
               </el-table-column>
               <el-table-column :label="t('activities.dialog.modelVersion')" min-width="140">
@@ -1739,11 +2016,46 @@ function onActivityAction(action: string, row: Activity) {
                   {{ row.modelVersion?.id || row.modelVersionId || t('common.misc.none') }}
                 </template>
               </el-table-column>
+              <el-table-column :label="t('activities.dialog.progress')" min-width="320">
+                <template #default="{ row }">
+                  <div class="training-job-progress-cell">
+                    <div class="training-job-progress-topline">
+                      <span class="training-job-progress-phase">
+                        {{ getTrainingJobPhaseText(getTrainingJobLiveProgress(row)?.phase || row.status) }}
+                      </span>
+                      <span class="training-job-progress-heartbeat">
+                        {{ t('activities.dialog.lastHeartbeat') }}: {{ getTrainingJobHeartbeat(row) }}
+                      </span>
+                    </div>
+                    <el-progress
+                      :percentage="getTrainingJobProgressPercent(row)"
+                      :status="row.status === 'FAILED' ? 'exception' : row.status === 'SUCCEEDED' ? 'success' : undefined"
+                      :stroke-width="10"
+                    />
+                    <div class="training-job-progress-text">
+                      {{ getTrainingJobLiveProgress(row)?.message || getTrainingJobSecondaryText(row) }}
+                    </div>
+                    <div v-if="getTrainingJobSecondaryText(row) !== (getTrainingJobLiveProgress(row)?.message || '')" class="training-job-progress-subtext">
+                      {{ getTrainingJobSecondaryText(row) }}
+                    </div>
+                  </div>
+                </template>
+              </el-table-column>
               <el-table-column :label="t('activities.dialog.createdAt')" min-width="180">
                 <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
               </el-table-column>
-              <el-table-column :label="t('common.labels.actions')" width="160">
+              <el-table-column :label="t('common.labels.actions')" width="220">
                 <template #default="{ row }">
+                  <el-button
+                    v-if="isTrainingJobActive(row.status)"
+                    size="small"
+                    type="danger"
+                    plain
+                    :icon="Close"
+                    @click="cancelTraining(row)"
+                  >
+                    {{ t('activities.dialog.cancelTraining') }}
+                  </el-button>
                   <el-button
                     v-if="(row.modelVersion?.id || row.modelVersionId) && ((row.modelVersion?.status || ((trainingActivity?.modelVersions || []).find((m:any)=>m.id===row.modelVersionId)?.status)) === 'STAGING')"
                     size="small"
@@ -2318,6 +2630,52 @@ function onActivityAction(action: string, row: Activity) {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.training-job-progress-cell {
+  display: grid;
+  gap: 8px;
+}
+
+.training-job-progress-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.training-job-progress-phase {
+  font-weight: 600;
+}
+
+.training-job-progress-heartbeat,
+.training-job-progress-text,
+.training-job-progress-subtext,
+.training-job-history-text {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.training-job-progress-subtext {
+  margin-top: -4px;
+}
+
+.training-job-details {
+  display: grid;
+  gap: 16px;
+  padding: 4px 8px 12px;
+}
+
+.training-job-history {
+  display: grid;
+  gap: 12px;
+}
+
+.training-job-history-title,
+.training-job-history-phase {
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
