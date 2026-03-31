@@ -1228,6 +1228,40 @@ async function cancelTraining(job: TrainingJob) {
   }
 }
 
+async function deleteModelVersion(modelVersion: ModelVersion) {
+  try {
+    await ElMessageBox.confirm(
+      t('activities.dialog.deleteModelVersionConfirmText', {
+        version: modelVersion.version,
+        id: modelVersion.id,
+      }),
+      t('activities.dialog.deleteModelVersionConfirmTitle'),
+      {
+        confirmButtonText: t('common.actions.delete'),
+        cancelButtonText: t('common.actions.cancel'),
+        type: 'warning',
+      }
+    )
+
+    await apiClient.delete(`/api/models/${modelVersion.id}`)
+    ElMessage.success(t('activities.dialog.deleteModelVersionSuccess'))
+
+    if (trainingActivity.value) {
+      await openTraining(trainingActivity.value, annotationsAssetId.value ?? undefined)
+    }
+
+    const currentSelectedActivityId = selectedActivity.value?.id
+    if (currentSelectedActivityId && currentSelectedActivityId === trainingActivity.value?.id) {
+      const full = await apiClient.get(`/api/activities/${currentSelectedActivityId}`)
+      selectedActivity.value = full.data
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.response?.data?.error || t('activities.dialog.deleteModelVersionError'))
+    }
+  }
+}
+
 async function promoteModelVersion(modelVersionId: number) {
   try {
     await apiClient.post(`/api/models/${modelVersionId}/promote`, {})
@@ -1496,25 +1530,27 @@ function onActivityAction(action: string, row: Activity) {
     <el-dialog
       v-model="trainingDialogVisible"
       :title="t('activities.dialog.trainingTitle', { name: trainingActivity?.name || '' })"
-      width="1100px"
+      width="min(1240px, calc(100vw - 32px))"
     >
       <div class="training-wizard">
-        <div class="training-step-grid">
-          <button
-            v-for="step in trainingWizardSteps"
-            :key="step.id"
-            type="button"
-            class="training-step-card"
-            :class="{ 'is-active': trainingStep === step.id, 'is-locked': !canOpenStep(step.id) }"
-            :disabled="!canOpenStep(step.id)"
-            @click="openTrainingStep(step.id)"
-          >
-            <span class="training-step-index">{{ step.id }}</span>
-            <span class="training-step-copy">
-              <span class="training-step-title">{{ step.title }}</span>
-              <span class="training-step-description">{{ step.description }}</span>
-            </span>
-          </button>
+        <div class="training-step-strip">
+          <div class="training-step-grid">
+            <button
+              v-for="step in trainingWizardSteps"
+              :key="step.id"
+              type="button"
+              class="training-step-card"
+              :class="{ 'is-active': trainingStep === step.id, 'is-locked': !canOpenStep(step.id) }"
+              :disabled="!canOpenStep(step.id)"
+              @click="openTrainingStep(step.id)"
+            >
+              <span class="training-step-index">{{ step.id }}</span>
+              <span class="training-step-copy">
+                <span class="training-step-title">{{ step.title }}</span>
+                <span class="training-step-description">{{ step.description }}</span>
+              </span>
+            </button>
+          </div>
         </div>
 
         <div v-if="trainingStep === 1">
@@ -1524,9 +1560,10 @@ function onActivityAction(action: string, row: Activity) {
                 <div class="training-step-content-title">{{ t('activities.dialog.steps.uploadTitle') }}</div>
                 <div class="training-step-content-hint">{{ t('activities.dialog.stepUploadHint') }}</div>
               </div>
-              <div style="flex:1;"></div>
-              <input ref="uploadInputRef" type="file" multiple style="display:none" @change="onFilesSelected" />
-              <el-button type="primary" @click="onPickFiles">{{ t('common.actions.upload') }}</el-button>
+              <div class="training-step-header-actions">
+                <input ref="uploadInputRef" type="file" multiple style="display:none" @change="onFilesSelected" />
+                <el-button type="primary" @click="onPickFiles">{{ t('common.actions.upload') }}</el-button>
+              </div>
             </div>
 
             <div v-if="trainingAssets.length === 0" class="training-empty-state">
@@ -1775,8 +1812,9 @@ function onActivityAction(action: string, row: Activity) {
                     <div class="training-step-content-title">{{ t('activities.dialog.annotationsTitle') }}</div>
                     <div class="training-step-content-hint">{{ t('activities.dialog.annotationStepHint') }}</div>
                   </div>
-                  <div style="flex:1;"></div>
-                  <el-button type="primary" :disabled="!annotationsAssetId" @click="saveAnnotations">{{ t('common.actions.save') }}</el-button>
+                  <div class="training-step-header-actions">
+                    <el-button type="primary" :disabled="!annotationsAssetId" @click="saveAnnotations">{{ t('common.actions.save') }}</el-button>
+                  </div>
                 </div>
 
                 <div v-if="!annotationsAssetId" class="training-empty-state">
@@ -1950,12 +1988,14 @@ function onActivityAction(action: string, row: Activity) {
                 <div class="training-step-content-title">{{ t('activities.dialog.steps.trainTitle') }}</div>
                 <div class="training-step-content-hint">{{ t('activities.dialog.stepTrainHint') }}</div>
               </div>
-              <div style="flex:1;"></div>
-              <el-button type="success" @click="startTraining">{{ t('activities.dialog.startTraining') }}</el-button>
+              <div class="training-step-header-actions">
+                <el-button type="success" @click="startTraining">{{ t('activities.dialog.startTraining') }}</el-button>
+              </div>
             </div>
 
-            <el-table :data="trainingJobs" row-key="id" style="width: 100%">
-              <el-table-column type="expand" width="48">
+            <div class="training-table-shell">
+              <el-table :data="trainingJobs" row-key="id" class="training-table training-table--jobs">
+                <el-table-column type="expand" width="48">
                 <template #default="{ row }">
                   <div class="training-job-details">
                     <el-descriptions :column="2" border size="small">
@@ -2046,27 +2086,31 @@ function onActivityAction(action: string, row: Activity) {
               </el-table-column>
               <el-table-column :label="t('common.labels.actions')" width="220">
                 <template #default="{ row }">
-                  <el-button
-                    v-if="isTrainingJobActive(row.status)"
-                    size="small"
-                    type="danger"
-                    plain
-                    :icon="Close"
-                    @click="cancelTraining(row)"
-                  >
-                    {{ t('activities.dialog.cancelTraining') }}
-                  </el-button>
-                  <el-button
-                    v-if="(row.modelVersion?.id || row.modelVersionId) && ((row.modelVersion?.status || ((trainingActivity?.modelVersions || []).find((m:any)=>m.id===row.modelVersionId)?.status)) === 'STAGING')"
-                    size="small"
-                    type="primary"
-                    @click="promoteModelVersion(row.modelVersion?.id || row.modelVersionId)"
-                  >
-                    {{ t('common.actions.activate') }}
-                  </el-button>
+                  <div class="training-table-actions">
+                    <el-button
+                      v-if="isTrainingJobActive(row.status)"
+                      size="small"
+                      type="danger"
+                      plain
+                      :icon="Close"
+                      @click="cancelTraining(row)"
+                    >
+                      {{ t('activities.dialog.cancelTraining') }}
+                    </el-button>
+                    <el-button
+                      v-if="row.status === 'SUCCEEDED' && (row.modelVersion?.id || row.modelVersionId) && ((row.modelVersion?.status || ((trainingActivity?.modelVersions || []).find((m:any)=>m.id===row.modelVersionId)?.status)) === 'STAGING')"
+                      size="small"
+                      type="primary"
+                      :icon="Check"
+                      @click="promoteModelVersion(row.modelVersion?.id || row.modelVersionId)"
+                    >
+                      {{ t('common.actions.activate') }}
+                    </el-button>
+                  </div>
                 </template>
               </el-table-column>
-            </el-table>
+              </el-table>
+            </div>
           </el-card>
 
           <el-card shadow="never">
@@ -2077,35 +2121,49 @@ function onActivityAction(action: string, row: Activity) {
               </div>
             </div>
 
-            <el-table :data="trainingActivity?.modelVersions || []" style="width: 100%">
-              <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
-              <el-table-column prop="version" :label="t('activities.dialog.modelVersion')" width="90">
-                <template #default="{ row }">v{{ row.version }}</template>
-              </el-table-column>
-              <el-table-column :label="t('common.labels.status')" width="120">
-                <template #default="{ row }">
-                  {{ translateModelStatus(row.status) }}
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('activities.dialog.artifact')" min-width="260">
-                <template #default="{ row }">
-                  <span v-if="row.artifactUri" style="word-break: break-all;">{{ row.artifactUri }}</span>
-                  <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('common.labels.actions')" width="160">
-                <template #default="{ row }">
-                  <el-button
-                    v-if="row.status === 'STAGING'"
-                    size="small"
-                    type="primary"
-                    @click="promoteModelVersion(row.id)"
-                  >
-                    {{ t('common.actions.activate') }}
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
+            <div class="training-table-shell">
+              <el-table :data="trainingActivity?.modelVersions || []" class="training-table training-table--models">
+                <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
+                <el-table-column prop="version" :label="t('activities.dialog.modelVersion')" width="90">
+                  <template #default="{ row }">v{{ row.version }}</template>
+                </el-table-column>
+                <el-table-column :label="t('common.labels.status')" width="120">
+                  <template #default="{ row }">
+                    {{ translateModelStatus(row.status) }}
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('activities.dialog.artifact')" min-width="320">
+                  <template #default="{ row }">
+                    <span v-if="row.artifactUri" style="word-break: break-all;">{{ row.artifactUri }}</span>
+                    <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('common.labels.actions')" width="220">
+                  <template #default="{ row }">
+                    <div class="training-table-actions">
+                      <el-button
+                        v-if="row.status === 'STAGING'"
+                        size="small"
+                        type="primary"
+                        :icon="Check"
+                        @click="promoteModelVersion(row.id)"
+                      >
+                        {{ t('common.actions.activate') }}
+                      </el-button>
+                      <el-button
+                        size="small"
+                        type="danger"
+                        plain
+                        :icon="Delete"
+                        @click="deleteModelVersion(row)"
+                      >
+                        {{ t('common.actions.delete') }}
+                      </el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
           </el-card>
         </div>
       </div>
@@ -2248,10 +2306,17 @@ function onActivityAction(action: string, row: Activity) {
   gap: 16px;
 }
 
+.training-step-strip {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
 .training-step-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(240px, 1fr));
   gap: 12px;
+  min-width: 1032px;
 }
 
 .training-step-card {
@@ -2317,8 +2382,18 @@ function onActivityAction(action: string, row: Activity) {
 .training-step-header {
   display: flex;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.training-step-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .training-step-content-title {
@@ -2632,6 +2707,38 @@ function onActivityAction(action: string, row: Activity) {
   flex-wrap: wrap;
 }
 
+.training-table-shell {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.training-table {
+  min-width: 100%;
+}
+
+.training-table--jobs {
+  min-width: 1180px;
+}
+
+.training-table--models {
+  min-width: 920px;
+}
+
+.training-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.training-table-actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+.training-table-actions .el-button {
+  white-space: nowrap;
+}
+
 .training-job-progress-cell {
   display: grid;
   gap: 8px;
@@ -2683,12 +2790,23 @@ function onActivityAction(action: string, row: Activity) {
     padding: 16px;
   }
 
+  .training-step-strip {
+    overflow-x: visible;
+  }
+
   .training-step-grid {
     grid-template-columns: 1fr;
+    min-width: 0;
   }
 
   .training-step-header {
     flex-direction: column;
+  }
+
+  .training-step-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-left: 0;
   }
 
   .asset-preview-header {
