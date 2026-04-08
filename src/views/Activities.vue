@@ -117,6 +117,24 @@ interface TrainingJob {
 type TrainingStep = 1 | 2 | 3 | 4
 type DraftAnnotation = { startSec: number; endSec: number; type: 'POSITIVE' | 'NEGATIVE' }
 type ActivityTableAction = 'publish' | 'deprecate' | 'edit' | 'delete' | 'training' | 'companies'
+type ObjectCueSource = 'coco' | 'custom'
+type ObjectCueRegion = 'person_bbox' | 'upper_body' | 'expanded_person_bbox'
+
+interface ActivityObjectCueForm {
+  enabled: boolean
+  code: string
+  label: string
+  source: ObjectCueSource
+  className: string
+  classId: number | null
+  region: ObjectCueRegion
+  minConfidence: number
+  windowFrames: number
+  minDetections: number
+  scoreBoost: number
+  missingPenalty: number
+  maxAdjustment: number
+}
 
 interface PersistedTrainingUiState {
   step?: TrainingStep
@@ -131,6 +149,7 @@ const loading = ref(true)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingActivityId = ref<number | null>(null)
+const editingDetectorSpec = ref<any | null>(null)
 const companyDialogVisible = ref(false)
 const selectedActivity = ref<Activity | null>(null)
 const companySettings = ref<Record<number, CompanyActivity>>({})
@@ -184,6 +203,7 @@ const activeAnnotationDrag = ref<AnnotationDragState | null>(null)
 const form = ref({
   name: '',
   description: '',
+  objectCues: [] as ActivityObjectCueForm[],
 })
 
 const statusTagType = computed(() => (status: ActivityStatus) => {
@@ -273,6 +293,17 @@ const trainingWizardSteps = computed(() => [
     title: t('activities.dialog.steps.trainTitle'),
     description: t('activities.dialog.steps.trainDescription'),
   },
+])
+
+const objectCueSourceOptions = computed(() => [
+  { label: t('activities.dialog.objectCues.sources.coco'), value: 'coco' as ObjectCueSource },
+  { label: t('activities.dialog.objectCues.sources.custom'), value: 'custom' as ObjectCueSource },
+])
+
+const objectCueRegionOptions = computed(() => [
+  { label: t('activities.dialog.objectCues.regions.person_bbox'), value: 'person_bbox' as ObjectCueRegion },
+  { label: t('activities.dialog.objectCues.regions.upper_body'), value: 'upper_body' as ObjectCueRegion },
+  { label: t('activities.dialog.objectCues.regions.expanded_person_bbox'), value: 'expanded_person_bbox' as ObjectCueRegion },
 ])
 
 const canGoNext = computed(() => {
@@ -534,14 +565,15 @@ async function loadCompanies() {
 
 async function handleSubmit(openTrainingAfterSave: boolean = false) {
   try {
+    const payload = buildActivityPayload()
     if (isEditing.value && editingActivityId.value) {
-      await apiClient.put(`/api/activities/${editingActivityId.value}`, form.value)
+      await apiClient.put(`/api/activities/${editingActivityId.value}`, payload)
       ElMessage.success(t('activities.updated'))
       if (openTrainingAfterSave) {
         await openTraining({ id: editingActivityId.value } as any)
       }
     } else {
-      const created = await apiClient.post('/api/activities', form.value)
+      const created = await apiClient.post('/api/activities', payload)
       ElMessage.success(t('activities.created'))
       if (openTrainingAfterSave) {
         await openTraining(created.data)
@@ -628,10 +660,12 @@ function startCreate() {
 function startEdit(activity: Activity) {
   isEditing.value = true
   editingActivityId.value = activity.id
+  editingDetectorSpec.value = activity.detectorSpec ?? null
   dialogVisible.value = true
   form.value = {
     name: activity.name,
     description: activity.description || '',
+    objectCues: extractObjectCuesFromDetectorSpec(activity.detectorSpec),
   }
 }
 
@@ -639,10 +673,128 @@ function resetForm() {
   dialogVisible.value = false
   isEditing.value = false
   editingActivityId.value = null
+  editingDetectorSpec.value = null
   form.value = {
     name: '',
     description: '',
+    objectCues: [],
   }
+}
+
+function createDefaultObjectCue(): ActivityObjectCueForm {
+  return {
+    enabled: true,
+    code: '',
+    label: '',
+    source: 'coco',
+    className: '',
+    classId: null,
+    region: 'person_bbox',
+    minConfidence: 0.35,
+    windowFrames: 8,
+    minDetections: 2,
+    scoreBoost: 0.1,
+    missingPenalty: 0.08,
+    maxAdjustment: 0.2,
+  }
+}
+
+function normalizeObjectCue(raw: any): ActivityObjectCueForm {
+  const next = createDefaultObjectCue()
+  const region = String(raw?.region || '').trim() as ObjectCueRegion
+  const source = String(raw?.source || '').trim() as ObjectCueSource
+
+  return {
+    ...next,
+    enabled: raw?.enabled !== false,
+    code: String(raw?.code || ''),
+    label: String(raw?.label || ''),
+    source: source === 'custom' ? 'custom' : 'coco',
+    className: String(raw?.className || ''),
+    classId: Number.isInteger(raw?.classId) ? Number(raw.classId) : null,
+    region: ['person_bbox', 'upper_body', 'expanded_person_bbox'].includes(region) ? region : 'person_bbox',
+    minConfidence: clampUnitNumber(raw?.minConfidence, next.minConfidence),
+    windowFrames: clampInt(raw?.windowFrames, next.windowFrames, 1, 120),
+    minDetections: clampInt(raw?.minDetections, next.minDetections, 1, 120),
+    scoreBoost: clampUnitNumber(raw?.scoreBoost, next.scoreBoost),
+    missingPenalty: clampUnitNumber(raw?.missingPenalty, next.missingPenalty),
+    maxAdjustment: clampUnitNumber(raw?.maxAdjustment, next.maxAdjustment),
+  }
+}
+
+function clampUnitNumber(value: unknown, fallback: number): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  return Math.max(0, Math.min(1, numeric))
+}
+
+function clampInt(value: unknown, fallback: number, min: number, max: number): number {
+  const numeric = typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : fallback
+  return Math.max(min, Math.min(max, numeric))
+}
+
+function extractObjectCuesFromDetectorSpec(detectorSpec: any): ActivityObjectCueForm[] {
+  const actionRecognition =
+    detectorSpec && typeof detectorSpec === 'object'
+      ? detectorSpec.actionRecognition || detectorSpec
+      : null
+  const cues = Array.isArray(actionRecognition?.objectCues) ? actionRecognition.objectCues : []
+  return cues.map((cue: any) => normalizeObjectCue(cue))
+}
+
+function buildActivityPayload() {
+  const objectCues = form.value.objectCues
+    .map((cue) => normalizeObjectCue(cue))
+    .filter((cue) => cue.code.trim() || cue.className.trim() || cue.label.trim())
+    .map((cue) => ({
+      enabled: cue.enabled,
+      code: cue.code.trim() || cue.className.trim() || cue.label.trim(),
+      label: cue.label.trim() || undefined,
+      source: cue.source,
+      className: cue.className.trim() || undefined,
+      classId: cue.classId ?? undefined,
+      region: cue.region,
+      minConfidence: cue.minConfidence,
+      windowFrames: cue.windowFrames,
+      minDetections: Math.min(cue.minDetections, cue.windowFrames),
+      scoreBoost: cue.scoreBoost,
+      missingPenalty: cue.missingPenalty,
+      maxAdjustment: cue.maxAdjustment,
+    }))
+
+  const detectorSpec =
+    editingDetectorSpec.value && typeof editingDetectorSpec.value === 'object'
+      ? { ...editingDetectorSpec.value }
+      : {}
+  const actionRecognition =
+    detectorSpec.actionRecognition && typeof detectorSpec.actionRecognition === 'object'
+      ? { ...detectorSpec.actionRecognition }
+      : {}
+
+  if (objectCues.length) {
+    actionRecognition.objectCues = objectCues
+  } else {
+    delete actionRecognition.objectCues
+  }
+
+  if (Object.keys(actionRecognition).length > 0) {
+    detectorSpec.actionRecognition = actionRecognition
+  } else {
+    delete detectorSpec.actionRecognition
+  }
+
+  return {
+    name: form.value.name,
+    description: form.value.description,
+    detectorSpec: Object.keys(detectorSpec).length ? detectorSpec : null,
+  }
+}
+
+function addObjectCue() {
+  form.value.objectCues.push(createDefaultObjectCue())
+}
+
+function removeObjectCue(index: number) {
+  form.value.objectCues.splice(index, 1)
 }
 
 function isVideoAsset(asset: TrainingAsset | null | undefined): boolean {
@@ -1496,7 +1648,7 @@ function onActivityAction(action: string, row: Activity) {
     <el-dialog
       v-model="dialogVisible"
       :title="isEditing ? t('activities.dialog.editTitle') : t('activities.dialog.createTitle')"
-      width="600px"
+      width="min(900px, calc(100vw - 32px))"
     >
       <el-form :model="form" label-width="150px">
         <el-form-item :label="t('activities.dialog.name')" required>
@@ -1511,6 +1663,130 @@ function onActivityAction(action: string, row: Activity) {
             :placeholder="t('activities.dialog.descriptionPlaceholder')"
           />
         </el-form-item>
+
+        <el-divider content-position="left">
+          {{ t('activities.dialog.objectCues.title') }}
+        </el-divider>
+
+        <el-alert
+          class="object-cues-hint"
+          type="info"
+          :closable="false"
+          :title="t('activities.dialog.objectCues.hint')"
+        />
+
+        <div class="object-cues-list">
+          <el-empty
+            v-if="form.objectCues.length === 0"
+            :description="t('activities.dialog.objectCues.empty')"
+            :image-size="64"
+          >
+            <el-button type="primary" plain :icon="Plus" @click="addObjectCue">
+              {{ t('activities.dialog.objectCues.add') }}
+            </el-button>
+          </el-empty>
+
+          <template v-else>
+            <el-card
+              v-for="(cue, index) in form.objectCues"
+              :key="index"
+              class="object-cue-card"
+              shadow="never"
+            >
+              <template #header>
+                <div class="object-cue-card-header">
+                  <el-switch v-model="cue.enabled" />
+                  <strong>{{ cue.label || cue.code || cue.className || t('activities.dialog.objectCues.untitled') }}</strong>
+                  <el-button type="danger" plain size="small" :icon="Delete" @click="removeObjectCue(index)">
+                    {{ t('common.actions.delete') }}
+                  </el-button>
+                </div>
+              </template>
+
+              <el-row :gutter="12">
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.code')" label-width="130px">
+                    <el-input v-model="cue.code" placeholder="cell_phone" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.label')" label-width="130px">
+                    <el-input v-model="cue.label" :placeholder="t('activities.dialog.objectCues.labelPlaceholder')" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.source')" label-width="130px">
+                    <el-select v-model="cue.source" style="width: 100%">
+                      <el-option
+                        v-for="option in objectCueSourceOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.className')" label-width="130px">
+                    <el-input v-model="cue.className" placeholder="cell phone" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.region')" label-width="130px">
+                    <el-select v-model="cue.region" style="width: 100%">
+                      <el-option
+                        v-for="option in objectCueRegionOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.minConfidence')" label-width="130px">
+                    <el-input-number v-model="cue.minConfidence" :min="0" :max="1" :step="0.05" :precision="2" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item :label="t('activities.dialog.objectCues.windowFrames')" label-width="130px">
+                    <el-input-number v-model="cue.windowFrames" :min="1" :max="120" :step="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item :label="t('activities.dialog.objectCues.minDetections')" label-width="130px">
+                    <el-input-number v-model="cue.minDetections" :min="1" :max="cue.windowFrames" :step="1" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="8">
+                  <el-form-item :label="t('activities.dialog.objectCues.maxAdjustment')" label-width="130px">
+                    <el-input-number v-model="cue.maxAdjustment" :min="0" :max="1" :step="0.05" :precision="2" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.scoreBoost')" label-width="130px">
+                    <el-input-number v-model="cue.scoreBoost" :min="0" :max="1" :step="0.05" :precision="2" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="12">
+                  <el-form-item :label="t('activities.dialog.objectCues.missingPenalty')" label-width="130px">
+                    <el-input-number v-model="cue.missingPenalty" :min="0" :max="1" :step="0.05" :precision="2" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-card>
+          </template>
+
+          <el-button
+            v-if="form.objectCues.length > 0"
+            type="primary"
+            plain
+            :icon="Plus"
+            @click="addObjectCue"
+          >
+            {{ t('activities.dialog.objectCues.add') }}
+          </el-button>
+        </div>
       </el-form>
 
       <template #footer>
@@ -2304,6 +2580,30 @@ function onActivityAction(action: string, row: Activity) {
 .training-wizard {
   display: grid;
   gap: 16px;
+}
+
+.object-cues-hint {
+  margin-bottom: 12px;
+}
+
+.object-cues-list {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+}
+
+.object-cue-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.object-cue-card-header strong {
+  flex: 1;
+}
+
+.object-cue-card :deep(.el-form-item) {
+  margin-bottom: 12px;
 }
 
 .training-step-strip {
