@@ -61,6 +61,7 @@ export const RECOMMENDED_RECOGNITION_CONFIG: RecognitionConfig = {
   actionRecognition: {
     startThreshold: 0.68,
     endThreshold: 0.42,
+    conflictWinnerMargin: 0.08,
     gapSeconds: 2,
     minDurationSeconds: 1.5,
     maxIntervalSeconds: 0,
@@ -241,6 +242,12 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
     max: 1,
     recommended: 0.42,
     descriptionKey: 'companies.dialog.hints.actionEndThreshold',
+  },
+  actionConflictWinnerMargin: {
+    min: 0,
+    max: 1,
+    recommended: 0.08,
+    descriptionKey: 'companies.dialog.hints.actionConflictWinnerMargin',
   },
   actionGapSeconds: {
     min: 0.1,
