@@ -602,6 +602,13 @@ const ru = {
         title: 'Объектные подсказки',
         hint: 'Объекты мягко меняют уверенность активности: найденный объект повышает score, отсутствие понижает, но не выключает активность напрямую.',
         empty: 'Объектные подсказки не настроены',
+        objects: 'Объекты',
+        selectPlaceholder: 'Выберите объекты из YOLO-модели',
+        catalogMeta: 'Модель: {model}, классов: {count}',
+        catalogEmpty: 'Список объектов ещё не загружен',
+        loadError: 'Не удалось загрузить список объектов YOLO',
+        applyRecommended: 'Рекомендуемые',
+        recommendedHint: 'Рекомендуется: область {region}; мин. уверенность {minConfidence}; окно {windowFrames} кадров; мин. детекций {minDetections}; +score {scoreBoost}; -score {missingPenalty}; макс. поправка {maxAdjustment}.',
         add: 'Добавить объект',
         untitled: 'Новый объект',
         code: 'Код',
@@ -618,6 +625,7 @@ const ru = {
         maxAdjustment: 'Макс. поправка',
         sources: {
           coco: 'COCO YOLO',
+          openImages: 'Open Images V7 YOLO',
           custom: 'Custom YOLO',
         },
         regions: {

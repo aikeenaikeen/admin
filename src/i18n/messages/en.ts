@@ -602,6 +602,13 @@ const en = {
         title: 'Object cues',
         hint: 'Objects softly adjust activity confidence: a detected object raises the score, a missing object lowers it, but it never hard-blocks the activity.',
         empty: 'No object cues configured',
+        objects: 'Objects',
+        selectPlaceholder: 'Select objects from the YOLO model',
+        catalogMeta: 'Model: {model}, classes: {count}',
+        catalogEmpty: 'Object class list is not loaded yet',
+        loadError: 'Failed to load YOLO object classes',
+        applyRecommended: 'Recommended',
+        recommendedHint: 'Recommended: region {region}; min confidence {minConfidence}; {windowFrames}-frame window; min detections {minDetections}; +score {scoreBoost}; -score {missingPenalty}; max adjustment {maxAdjustment}.',
         add: 'Add object',
         untitled: 'New object',
         code: 'Code',
@@ -618,6 +625,7 @@ const en = {
         maxAdjustment: 'Max adjustment',
         sources: {
           coco: 'COCO YOLO',
+          openImages: 'Open Images V7 YOLO',
           custom: 'Custom YOLO',
         },
         regions: {

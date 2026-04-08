@@ -117,8 +117,24 @@ interface TrainingJob {
 type TrainingStep = 1 | 2 | 3 | 4
 type DraftAnnotation = { startSec: number; endSec: number; type: 'POSITIVE' | 'NEGATIVE' }
 type ActivityTableAction = 'publish' | 'deprecate' | 'edit' | 'delete' | 'training' | 'companies'
-type ObjectCueSource = 'coco' | 'custom'
+type ObjectCueSource = 'coco' | 'open_images_v7' | 'custom'
 type ObjectCueRegion = 'person_bbox' | 'upper_body' | 'expanded_person_bbox'
+
+interface ObjectClassOption {
+  classId: number
+  className: string
+  code: string
+  label: string
+  source: ObjectCueSource
+  modelName: string
+}
+
+interface ObjectClassCatalog {
+  modelName: string
+  source: string
+  classes: ObjectClassOption[]
+  updatedAt: string
+}
 
 interface ActivityObjectCueForm {
   enabled: boolean
@@ -135,6 +151,17 @@ interface ActivityObjectCueForm {
   missingPenalty: number
   maxAdjustment: number
 }
+
+const RECOMMENDED_OBJECT_CUE_SETTINGS = {
+  enabled: true,
+  region: 'person_bbox' as ObjectCueRegion,
+  minConfidence: 0.35,
+  windowFrames: 8,
+  minDetections: 2,
+  scoreBoost: 0.1,
+  missingPenalty: 0.08,
+  maxAdjustment: 0.2,
+} as const
 
 interface PersistedTrainingUiState {
   step?: TrainingStep
@@ -205,6 +232,9 @@ const form = ref({
   description: '',
   objectCues: [] as ActivityObjectCueForm[],
 })
+const objectClassCatalog = ref<ObjectClassCatalog | null>(null)
+const objectClassOptions = ref<ObjectClassOption[]>([])
+const loadingObjectClasses = ref(false)
 
 const statusTagType = computed(() => (status: ActivityStatus) => {
   switch (status) {
@@ -297,6 +327,7 @@ const trainingWizardSteps = computed(() => [
 
 const objectCueSourceOptions = computed(() => [
   { label: t('activities.dialog.objectCues.sources.coco'), value: 'coco' as ObjectCueSource },
+  { label: t('activities.dialog.objectCues.sources.openImages'), value: 'open_images_v7' as ObjectCueSource },
   { label: t('activities.dialog.objectCues.sources.custom'), value: 'custom' as ObjectCueSource },
 ])
 
@@ -305,6 +336,38 @@ const objectCueRegionOptions = computed(() => [
   { label: t('activities.dialog.objectCues.regions.upper_body'), value: 'upper_body' as ObjectCueRegion },
   { label: t('activities.dialog.objectCues.regions.expanded_person_bbox'), value: 'expanded_person_bbox' as ObjectCueRegion },
 ])
+
+const objectCueSelectOptions = computed<ObjectClassOption[]>(() => {
+  const byCode = new Map<string, ObjectClassOption>()
+  for (const option of objectClassOptions.value) {
+    byCode.set(option.code, option)
+  }
+  for (const cue of form.value.objectCues) {
+    if (!cue.code || byCode.has(cue.code)) continue
+    byCode.set(cue.code, {
+      classId: cue.classId ?? -1,
+      className: cue.className || cue.code,
+      code: cue.code,
+      label: cue.label || cue.className || cue.code,
+      source: cue.source,
+      modelName: objectClassCatalog.value?.modelName || 'unknown',
+    })
+  }
+  return Array.from(byCode.values()).sort((a, b) => a.label.localeCompare(b.label))
+})
+
+const selectedObjectCueCodes = computed<string[]>({
+  get() {
+    return form.value.objectCues.map((cue) => cue.code).filter(Boolean)
+  },
+  set(codes) {
+    const existingByCode = new Map(form.value.objectCues.map((cue) => [cue.code, cue]))
+    const optionByCode = new Map(objectCueSelectOptions.value.map((option) => [option.code, option]))
+    form.value.objectCues = codes
+      .map((code) => existingByCode.get(code) ?? createObjectCueFromOption(optionByCode.get(code)))
+      .filter((cue): cue is ActivityObjectCueForm => Boolean(cue))
+  },
+})
 
 const canGoNext = computed(() => {
   if (trainingStep.value >= 4) return false
@@ -563,6 +626,33 @@ async function loadCompanies() {
   }
 }
 
+async function loadObjectClasses(refresh = false) {
+  if (loadingObjectClasses.value) return
+
+  try {
+    loadingObjectClasses.value = true
+    const response = await apiClient.get('/api/object-classes', {
+      params: refresh ? { refresh: true } : undefined,
+    })
+    const catalog = response.data as ObjectClassCatalog
+    objectClassCatalog.value = catalog
+    objectClassOptions.value = Array.isArray(catalog.classes)
+      ? catalog.classes.map(normalizeObjectClassOption).filter((item): item is ObjectClassOption => Boolean(item))
+      : []
+  } catch (error) {
+    console.error('Failed to load object classes', error)
+    ElMessage.warning(t('activities.dialog.objectCues.loadError'))
+  } finally {
+    loadingObjectClasses.value = false
+  }
+}
+
+function ensureObjectClassesLoaded() {
+  if (objectClassOptions.value.length === 0) {
+    void loadObjectClasses()
+  }
+}
+
 async function handleSubmit(openTrainingAfterSave: boolean = false) {
   try {
     const payload = buildActivityPayload()
@@ -654,6 +744,7 @@ async function deleteActivity(id: number) {
 
 function startCreate() {
   resetForm()
+  ensureObjectClassesLoaded()
   dialogVisible.value = true
 }
 
@@ -667,6 +758,7 @@ function startEdit(activity: Activity) {
     description: activity.description || '',
     objectCues: extractObjectCuesFromDetectorSpec(activity.detectorSpec),
   }
+  ensureObjectClassesLoaded()
 }
 
 function resetForm() {
@@ -683,33 +775,69 @@ function resetForm() {
 
 function createDefaultObjectCue(): ActivityObjectCueForm {
   return {
-    enabled: true,
+    enabled: RECOMMENDED_OBJECT_CUE_SETTINGS.enabled,
     code: '',
     label: '',
-    source: 'coco',
+    source: 'open_images_v7',
     className: '',
     classId: null,
-    region: 'person_bbox',
-    minConfidence: 0.35,
-    windowFrames: 8,
-    minDetections: 2,
-    scoreBoost: 0.1,
-    missingPenalty: 0.08,
-    maxAdjustment: 0.2,
+    region: RECOMMENDED_OBJECT_CUE_SETTINGS.region,
+    minConfidence: RECOMMENDED_OBJECT_CUE_SETTINGS.minConfidence,
+    windowFrames: RECOMMENDED_OBJECT_CUE_SETTINGS.windowFrames,
+    minDetections: RECOMMENDED_OBJECT_CUE_SETTINGS.minDetections,
+    scoreBoost: RECOMMENDED_OBJECT_CUE_SETTINGS.scoreBoost,
+    missingPenalty: RECOMMENDED_OBJECT_CUE_SETTINGS.missingPenalty,
+    maxAdjustment: RECOMMENDED_OBJECT_CUE_SETTINGS.maxAdjustment,
+  }
+}
+
+function normalizeObjectCueSource(value: unknown): ObjectCueSource {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'open_images_v7' || normalized === 'open-images-v7' || normalized === 'oiv7') {
+    return 'open_images_v7'
+  }
+  return normalized === 'custom' ? 'custom' : 'coco'
+}
+
+function normalizeObjectClassOption(raw: any): ObjectClassOption | null {
+  const classId = Number(raw?.classId)
+  const className = String(raw?.className || '').trim()
+  const label = String(raw?.label || className).trim()
+  const code = String(raw?.code || className.toLowerCase().replace(/[^a-z0-9]+/g, '_')).trim()
+  if (!Number.isInteger(classId) || !className || !code) return null
+
+  return {
+    classId,
+    className,
+    code,
+    label: label || className,
+    source: normalizeObjectCueSource(raw?.source),
+    modelName: String(raw?.modelName || objectClassCatalog.value?.modelName || '').trim(),
+  }
+}
+
+function createObjectCueFromOption(option: ObjectClassOption | undefined): ActivityObjectCueForm | null {
+  if (!option) return null
+  return {
+    ...createDefaultObjectCue(),
+    code: option.code,
+    label: option.label,
+    source: option.source,
+    className: option.className,
+    classId: option.classId >= 0 ? option.classId : null,
   }
 }
 
 function normalizeObjectCue(raw: any): ActivityObjectCueForm {
   const next = createDefaultObjectCue()
   const region = String(raw?.region || '').trim() as ObjectCueRegion
-  const source = String(raw?.source || '').trim() as ObjectCueSource
 
   return {
     ...next,
     enabled: raw?.enabled !== false,
     code: String(raw?.code || ''),
     label: String(raw?.label || ''),
-    source: source === 'custom' ? 'custom' : 'coco',
+    source: normalizeObjectCueSource(raw?.source),
     className: String(raw?.className || ''),
     classId: Number.isInteger(raw?.classId) ? Number(raw.classId) : null,
     region: ['person_bbox', 'upper_body', 'expanded_person_bbox'].includes(region) ? region : 'person_bbox',
@@ -789,12 +917,40 @@ function buildActivityPayload() {
   }
 }
 
-function addObjectCue() {
-  form.value.objectCues.push(createDefaultObjectCue())
-}
-
 function removeObjectCue(index: number) {
   form.value.objectCues.splice(index, 1)
+}
+
+function getObjectCueSourceLabel(source: ObjectCueSource | string): string {
+  const option = objectCueSourceOptions.value.find((item) => item.value === source)
+  return option?.label || source
+}
+
+function formatCueNumber(value: number): string {
+  return Number(value).toFixed(2).replace(/\.?0+$/, '')
+}
+
+function getObjectCueRecommendedHint(): string {
+  return t('activities.dialog.objectCues.recommendedHint', {
+    region: t(`activities.dialog.objectCues.regions.${RECOMMENDED_OBJECT_CUE_SETTINGS.region}`),
+    minConfidence: formatCueNumber(RECOMMENDED_OBJECT_CUE_SETTINGS.minConfidence),
+    windowFrames: RECOMMENDED_OBJECT_CUE_SETTINGS.windowFrames,
+    minDetections: RECOMMENDED_OBJECT_CUE_SETTINGS.minDetections,
+    scoreBoost: formatCueNumber(RECOMMENDED_OBJECT_CUE_SETTINGS.scoreBoost),
+    missingPenalty: formatCueNumber(RECOMMENDED_OBJECT_CUE_SETTINGS.missingPenalty),
+    maxAdjustment: formatCueNumber(RECOMMENDED_OBJECT_CUE_SETTINGS.maxAdjustment),
+  })
+}
+
+function applyRecommendedObjectCueSettings(cue: ActivityObjectCueForm) {
+  cue.enabled = RECOMMENDED_OBJECT_CUE_SETTINGS.enabled
+  cue.region = RECOMMENDED_OBJECT_CUE_SETTINGS.region
+  cue.minConfidence = RECOMMENDED_OBJECT_CUE_SETTINGS.minConfidence
+  cue.windowFrames = RECOMMENDED_OBJECT_CUE_SETTINGS.windowFrames
+  cue.minDetections = RECOMMENDED_OBJECT_CUE_SETTINGS.minDetections
+  cue.scoreBoost = RECOMMENDED_OBJECT_CUE_SETTINGS.scoreBoost
+  cue.missingPenalty = RECOMMENDED_OBJECT_CUE_SETTINGS.missingPenalty
+  cue.maxAdjustment = RECOMMENDED_OBJECT_CUE_SETTINGS.maxAdjustment
 }
 
 function isVideoAsset(asset: TrainingAsset | null | undefined): boolean {
@@ -1676,15 +1832,56 @@ function onActivityAction(action: string, row: Activity) {
         />
 
         <div class="object-cues-list">
+          <el-form-item :label="t('activities.dialog.objectCues.objects')" label-width="150px">
+            <div class="object-cue-select">
+              <el-select
+                v-model="selectedObjectCueCodes"
+                multiple
+                filterable
+                collapse-tags
+                collapse-tags-tooltip
+                :max-collapse-tags="3"
+                :loading="loadingObjectClasses"
+                :placeholder="t('activities.dialog.objectCues.selectPlaceholder')"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="option in objectCueSelectOptions"
+                  :key="option.code"
+                  :label="option.label"
+                  :value="option.code"
+                >
+                  <div class="object-cue-option">
+                    <span>{{ option.label }}</span>
+                    <small>#{{ option.classId }} · {{ getObjectCueSourceLabel(option.source) }}</small>
+                  </div>
+                </el-option>
+              </el-select>
+              <div class="object-cue-select-meta">
+                <span v-if="objectClassCatalog">
+                  {{ t('activities.dialog.objectCues.catalogMeta', {
+                    model: objectClassCatalog.modelName,
+                    count: objectClassOptions.length,
+                  }) }}
+                </span>
+                <span v-else>{{ t('activities.dialog.objectCues.catalogEmpty') }}</span>
+                <el-button
+                  link
+                  type="primary"
+                  :loading="loadingObjectClasses"
+                  @click="loadObjectClasses(true)"
+                >
+                  {{ t('common.actions.refresh') }}
+                </el-button>
+              </div>
+            </div>
+          </el-form-item>
+
           <el-empty
             v-if="form.objectCues.length === 0"
             :description="t('activities.dialog.objectCues.empty')"
             :image-size="64"
-          >
-            <el-button type="primary" plain :icon="Plus" @click="addObjectCue">
-              {{ t('activities.dialog.objectCues.add') }}
-            </el-button>
-          </el-empty>
+          />
 
           <template v-else>
             <el-card
@@ -1696,41 +1893,28 @@ function onActivityAction(action: string, row: Activity) {
               <template #header>
                 <div class="object-cue-card-header">
                   <el-switch v-model="cue.enabled" />
-                  <strong>{{ cue.label || cue.code || cue.className || t('activities.dialog.objectCues.untitled') }}</strong>
+                  <div class="object-cue-card-title">
+                    <strong>{{ cue.label || cue.code || cue.className || t('activities.dialog.objectCues.untitled') }}</strong>
+                    <span>
+                      {{ cue.className || cue.code }}
+                      <template v-if="cue.classId !== null">#{{ cue.classId }}</template>
+                      · {{ getObjectCueSourceLabel(cue.source) }}
+                    </span>
+                  </div>
+                  <el-button type="primary" plain size="small" @click="applyRecommendedObjectCueSettings(cue)">
+                    {{ t('activities.dialog.objectCues.applyRecommended') }}
+                  </el-button>
                   <el-button type="danger" plain size="small" :icon="Delete" @click="removeObjectCue(index)">
                     {{ t('common.actions.delete') }}
                   </el-button>
                 </div>
               </template>
 
+              <div class="object-cue-card-hint">
+                {{ getObjectCueRecommendedHint() }}
+              </div>
+
               <el-row :gutter="12">
-                <el-col :xs="24" :sm="12">
-                  <el-form-item :label="t('activities.dialog.objectCues.code')" label-width="130px">
-                    <el-input v-model="cue.code" placeholder="cell_phone" />
-                  </el-form-item>
-                </el-col>
-                <el-col :xs="24" :sm="12">
-                  <el-form-item :label="t('activities.dialog.objectCues.label')" label-width="130px">
-                    <el-input v-model="cue.label" :placeholder="t('activities.dialog.objectCues.labelPlaceholder')" />
-                  </el-form-item>
-                </el-col>
-                <el-col :xs="24" :sm="12">
-                  <el-form-item :label="t('activities.dialog.objectCues.source')" label-width="130px">
-                    <el-select v-model="cue.source" style="width: 100%">
-                      <el-option
-                        v-for="option in objectCueSourceOptions"
-                        :key="option.value"
-                        :label="option.label"
-                        :value="option.value"
-                      />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :xs="24" :sm="12">
-                  <el-form-item :label="t('activities.dialog.objectCues.className')" label-width="130px">
-                    <el-input v-model="cue.className" placeholder="cell phone" />
-                  </el-form-item>
-                </el-col>
                 <el-col :xs="24" :sm="12">
                   <el-form-item :label="t('activities.dialog.objectCues.region')" label-width="130px">
                     <el-select v-model="cue.region" style="width: 100%">
@@ -1776,16 +1960,6 @@ function onActivityAction(action: string, row: Activity) {
               </el-row>
             </el-card>
           </template>
-
-          <el-button
-            v-if="form.objectCues.length > 0"
-            type="primary"
-            plain
-            :icon="Plus"
-            @click="addObjectCue"
-          >
-            {{ t('activities.dialog.objectCues.add') }}
-          </el-button>
         </div>
       </el-form>
 
@@ -2592,14 +2766,61 @@ function onActivityAction(action: string, row: Activity) {
   width: 100%;
 }
 
+.object-cue-select {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.object-cue-select-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.object-cue-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.object-cue-option small {
+  color: var(--el-text-color-secondary);
+}
+
 .object-cue-card-header {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.object-cue-card-header strong {
+.object-cue-card-title {
+  display: grid;
+  gap: 2px;
   flex: 1;
+  min-width: 0;
+}
+
+.object-cue-card-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.object-cue-card-title span {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.object-cue-card-hint {
+  margin-bottom: 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .object-cue-card :deep(.el-form-item) {
