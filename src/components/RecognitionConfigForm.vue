@@ -259,6 +259,10 @@ function toggleAdvanced() {
             <el-input-number v-model="config.actionRecognition.conflictWinnerMargin" :min="0" :max="1" :step="0.01" />
             <div class="field-hint">{{ hintText('actionConflictWinnerMargin') }}</div>
           </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionScoreSmoothingAlpha')">
+            <el-input-number v-model="config.actionRecognition.scoreSmoothingAlpha" :min="0" :max="1" :step="0.01" />
+            <div class="field-hint">{{ hintText('actionScoreSmoothingAlpha') }}</div>
+          </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionGapSeconds')">
             <el-input-number v-model="config.actionRecognition.gapSeconds" :min="0.1" :max="30" :step="0.1" />
             <div class="field-hint">{{ hintText('actionGapSeconds') }}</div>
