@@ -94,6 +94,28 @@ interface TrainingJobLogHistoryEntry extends TrainingJobLiveProgress {
   timestamp?: string
 }
 
+interface TrainingJobQualityGate {
+  enabled?: boolean
+  passed?: boolean
+  accuracy?: number | null
+  f1?: number | null
+  f1MetricKey?: 'f1' | 'macroF1'
+  minAccuracy?: number
+  minF1?: number
+  reason?: string | null
+}
+
+interface TrainingJobCalibration {
+  enabled?: boolean
+  type?: string | null
+  applied?: boolean
+  temperature?: number | null
+  sampleCount?: number
+  nllBefore?: number | null
+  nllAfter?: number | null
+  reason?: string | null
+}
+
 interface TrainingJob {
   id: number
   status: TrainingJobStatus
@@ -111,7 +133,58 @@ interface TrainingJob {
     durationSec?: number
     earlyStopped?: boolean
     dataset?: Record<string, any>
+    qualityGate?: TrainingJobQualityGate
+    calibration?: TrainingJobCalibration
   } | null
+}
+
+interface TrainingPreviewFrame {
+  index: number
+  timeSec: number
+  imageUrl: string
+}
+
+interface TrainingPreviewItem {
+  index: number
+  assetId: number
+  assetUri: string
+  sourceActivityId?: number | null
+  sourceActivityCode?: string | null
+  sourceActivityName?: string | null
+  isAutoNegative?: boolean
+  startSec: number
+  endSec: number
+  label: number
+  labelCode: string
+  cropPolicy?: string | null
+  frames: TrainingPreviewFrame[]
+}
+
+interface TrainingPreviewSummary {
+  trainingMode?: string
+  cropPolicy?: string | null
+  totalAssets?: number
+  selectedAssetCount?: number
+  autoNegativeAssetCount?: number
+  ignoredNonVideoAssetCount?: number
+  totalClips?: number
+  previewClipCount?: number
+  labelStats?: Record<string, number>
+  labelStatsByCode?: Record<string, number>
+  notes?: string[]
+}
+
+interface TrainingPreviewData {
+  trainingJobId: number
+  trainingJobType: string
+  generatedAt: string
+  previewConfig?: {
+    maxPreviewClips?: number
+    framesPerClip?: number
+    previewSize?: number
+  } | null
+  summary?: TrainingPreviewSummary | null
+  items: TrainingPreviewItem[]
 }
 
 type TrainingStep = 1 | 2 | 3 | 4
@@ -205,6 +278,10 @@ const selectedAnnotationIndex = ref<number | null>(null)
 const deletingTrainingAssetId = ref<number | null>(null)
 const trainingJobsPollHandle = ref<ReturnType<typeof setInterval> | null>(null)
 const refreshingTrainingJobs = ref(false)
+const trainingPreviewDialogVisible = ref(false)
+const loadingTrainingPreview = ref(false)
+const trainingPreviewData = ref<TrainingPreviewData | null>(null)
+const trainingPreviewJob = ref<TrainingJob | null>(null)
 
 type TrimDragMode = 'start' | 'end' | 'range'
 type AnnotationDragMode = 'start' | 'end' | 'range'
@@ -477,12 +554,20 @@ function getTrainingJobSecondaryText(job: TrainingJob): string {
   if (Number.isFinite(live?.trainLoss)) {
     parts.push(`loss: ${formatTrainingMetric(live?.trainLoss)}`)
   }
-  if (Number.isFinite(live?.metrics?.f1)) {
-    parts.push(`F1: ${formatTrainingMetric(live?.metrics?.f1)}`)
+  const liveF1 = Number.isFinite(live?.metrics?.macroF1) ? live?.metrics?.macroF1 : live?.metrics?.f1
+  const liveF1Label = Number.isFinite(live?.metrics?.macroF1) ? 'macroF1' : 'F1'
+  if (Number.isFinite(liveF1)) {
+    parts.push(`${liveF1Label}: ${formatTrainingMetric(liveF1)}`)
   }
   if (parts.length > 0) return parts.join(' · ')
 
-  if (job.status === 'FAILED' && job.error) return job.error
+  if (job.status === 'FAILED') {
+    const qualityGate = getTrainingJobQualityGate(job)
+    if (qualityGate?.enabled && qualityGate.passed === false) {
+      return getTrainingJobQualityGateSummary(job)
+    }
+    if (job.error) return job.error
+  }
 
   if (job.status === 'SUCCEEDED') {
     const bestEpoch = Number(job.logs?.bestEpoch || 0)
@@ -508,6 +593,84 @@ function getTrainingJobHeartbeat(job: TrainingJob): string {
   return formatDateTime(live?.updatedAt || job.updatedAt || job.createdAt)
 }
 
+function getTrainingJobDatasetWarnings(job: TrainingJob): string[] {
+  const warnings = job.logs?.dataset?.warnings
+  return Array.isArray(warnings) ? warnings.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
+}
+
+function getTrainingJobQualityGate(job: TrainingJob): TrainingJobQualityGate | null {
+  return job.logs?.qualityGate && typeof job.logs.qualityGate === 'object' ? job.logs.qualityGate : null
+}
+
+function getTrainingJobQualityGateSummary(job: TrainingJob): string {
+  const qualityGate = getTrainingJobQualityGate(job)
+  if (!qualityGate?.enabled) return t('common.misc.none')
+  if (qualityGate.passed) {
+    const parts: string[] = [t('activities.dialog.qualityGatePassed')]
+    if (Number.isFinite(qualityGate.accuracy)) parts.push(`acc: ${formatTrainingMetric(qualityGate.accuracy)}`)
+    if (Number.isFinite(qualityGate.f1)) {
+      const label = qualityGate.f1MetricKey === 'macroF1' ? 'macroF1' : 'F1'
+      parts.push(`${label}: ${formatTrainingMetric(qualityGate.f1)}`)
+    }
+    return parts.join(' · ')
+  }
+  return qualityGate.reason || t('activities.dialog.qualityGateFailed')
+}
+
+function getTrainingJobCalibration(job: TrainingJob): TrainingJobCalibration | null {
+  return job.logs?.calibration && typeof job.logs.calibration === 'object' ? job.logs.calibration : null
+}
+
+function getTrainingJobCalibrationSummary(job: TrainingJob): string {
+  const calibration = getTrainingJobCalibration(job)
+  if (!calibration?.enabled) return t('common.misc.none')
+  const temperature = Number.isFinite(calibration.temperature) ? formatTrainingMetric(calibration.temperature) : '—'
+  if (calibration.applied) return `${t('activities.dialog.calibrationApplied')} · T=${temperature}`
+  return calibration.reason || t('activities.dialog.calibrationSkipped')
+}
+
+function canPreviewTrainingJob(job: TrainingJob): boolean {
+  return !isTrainingJobActive(job.status)
+}
+
+function getTrainingPreviewLabelStats(summary: TrainingPreviewSummary | null | undefined): Array<[string, number]> {
+  const source = summary?.labelStatsByCode && Object.keys(summary.labelStatsByCode).length > 0
+    ? summary.labelStatsByCode
+    : (summary?.labelStats || {})
+  return Object.entries(source).filter(([, value]) => Number.isFinite(value))
+}
+
+async function openTrainingPreview(job: TrainingJob) {
+  try {
+    loadingTrainingPreview.value = true
+    trainingPreviewJob.value = job
+    trainingPreviewDialogVisible.value = true
+    trainingPreviewData.value = null
+
+    const response = await apiClient.get(`/api/training-jobs/${job.id}/preview`, {
+      params: {
+        maxPreviewClips: 12,
+        framesPerClip: 4,
+        previewSize: 160,
+      },
+    })
+    trainingPreviewData.value = response.data as TrainingPreviewData
+  } catch (error: any) {
+    trainingPreviewDialogVisible.value = false
+    trainingPreviewJob.value = null
+    trainingPreviewData.value = null
+    ElMessage.error(error.response?.data?.error || t('activities.dialog.trainingPreviewError'))
+  } finally {
+    loadingTrainingPreview.value = false
+  }
+}
+
+function closeTrainingPreview() {
+  trainingPreviewDialogVisible.value = false
+  trainingPreviewJob.value = null
+  trainingPreviewData.value = null
+}
+
 function getTrainingJobHistoryText(entry: TrainingJobLogHistoryEntry): string {
   const parts: string[] = []
   if (entry.message) parts.push(entry.message)
@@ -517,8 +680,10 @@ function getTrainingJobHistoryText(entry: TrainingJobLogHistoryEntry): string {
   if (Number.isFinite(entry.trainLoss)) {
     parts.push(`loss: ${formatTrainingMetric(entry.trainLoss)}`)
   }
-  if (Number.isFinite(entry.metrics?.f1)) {
-    parts.push(`F1: ${formatTrainingMetric(entry.metrics?.f1)}`)
+  const historyF1 = Number.isFinite(entry.metrics?.macroF1) ? entry.metrics?.macroF1 : entry.metrics?.f1
+  const historyF1Label = Number.isFinite(entry.metrics?.macroF1) ? 'macroF1' : 'F1'
+  if (Number.isFinite(historyF1)) {
+    parts.push(`${historyF1Label}: ${formatTrainingMetric(historyF1)}`)
   }
   return parts.join(' · ')
 }
@@ -2009,6 +2174,7 @@ function onActivityAction(action: string, row: Activity) {
               <div>
                 <div class="training-step-content-title">{{ t('activities.dialog.steps.uploadTitle') }}</div>
                 <div class="training-step-content-hint">{{ t('activities.dialog.stepUploadHint') }}</div>
+                <div class="training-step-content-hint" style="margin-top: 6px;">{{ t('activities.dialog.stepUploadPersonHint') }}</div>
               </div>
               <div class="training-step-header-actions">
                 <input ref="uploadInputRef" type="file" multiple style="display:none" @change="onFilesSelected" />
@@ -2468,7 +2634,54 @@ function onActivityAction(action: string, row: Activity) {
                       <el-descriptions-item :label="t('activities.dialog.trainingError')">
                         {{ row.error || t('common.misc.none') }}
                       </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.qualityGate')">
+                        {{ getTrainingJobQualityGateSummary(row) }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.calibration')">
+                        {{ getTrainingJobCalibrationSummary(row) }}
+                      </el-descriptions-item>
+                      <el-descriptions-item :label="t('activities.dialog.datasetWarnings')">
+                        <span v-if="getTrainingJobDatasetWarnings(row).length > 0">{{ getTrainingJobDatasetWarnings(row).length }}</span>
+                        <span v-else>{{ t('common.misc.none') }}</span>
+                      </el-descriptions-item>
                     </el-descriptions>
+
+                    <el-alert
+                      v-if="getTrainingJobQualityGate(row)?.enabled && getTrainingJobQualityGate(row)?.passed === false"
+                      :title="t('activities.dialog.qualityGateFailed')"
+                      :description="getTrainingJobQualityGateSummary(row)"
+                      type="error"
+                      show-icon
+                      :closable="false"
+                      style="margin-top: 12px;"
+                    />
+
+                    <el-alert
+                      v-if="getTrainingJobCalibration(row)?.enabled"
+                      :title="t('activities.dialog.calibration')"
+                      :description="getTrainingJobCalibrationSummary(row)"
+                      :type="getTrainingJobCalibration(row)?.applied ? 'success' : 'info'"
+                      show-icon
+                      :closable="false"
+                      style="margin-top: 12px;"
+                    />
+
+                    <el-alert
+                      v-if="getTrainingJobDatasetWarnings(row).length > 0"
+                      :title="t('activities.dialog.datasetWarnings')"
+                      type="warning"
+                      show-icon
+                      :closable="false"
+                      style="margin-top: 12px;"
+                    >
+                      <template #default>
+                        <div class="training-job-warning-list">
+                          <div v-for="(warning, index) in getTrainingJobDatasetWarnings(row)" :key="`${row.id}-warning-${index}`">
+                            {{ warning }}
+                          </div>
+                        </div>
+                      </template>
+                    </el-alert>
 
                     <div class="training-job-history">
                       <div class="training-job-history-title">{{ t('activities.dialog.trainingLogHistory') }}</div>
@@ -2534,9 +2747,17 @@ function onActivityAction(action: string, row: Activity) {
               <el-table-column :label="t('activities.dialog.createdAt')" min-width="180">
                 <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
               </el-table-column>
-              <el-table-column :label="t('common.labels.actions')" width="220">
+              <el-table-column :label="t('common.labels.actions')" width="320">
                 <template #default="{ row }">
                   <div class="training-table-actions">
+                    <el-button
+                      v-if="canPreviewTrainingJob(row)"
+                      size="small"
+                      plain
+                      @click="openTrainingPreview(row)"
+                    >
+                      {{ t('activities.dialog.trainingPreviewButton') }}
+                    </el-button>
                     <el-button
                       v-if="isTrainingJobActive(row.status)"
                       size="small"
@@ -2709,6 +2930,135 @@ function onActivityAction(action: string, row: Activity) {
         </el-button>
         <el-button type="primary" @click="saveCompanySettings">
           {{ t('common.actions.save') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="trainingPreviewDialogVisible"
+      :title="t('activities.dialog.trainingPreviewTitle', { id: trainingPreviewJob?.id || '' })"
+      width="min(1180px, calc(100vw - 32px))"
+      @closed="closeTrainingPreview"
+    >
+      <div v-loading="loadingTrainingPreview" class="training-preview-dialog">
+        <el-alert
+          type="info"
+          :closable="false"
+          :title="t('activities.dialog.trainingPreviewHint')"
+          style="margin-bottom: 16px;"
+        />
+
+        <template v-if="trainingPreviewData">
+          <el-descriptions :column="3" border size="small" class="training-preview-summary">
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewGeneratedAt')">
+              {{ formatDateTime(trainingPreviewData.generatedAt) }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewMode')">
+              {{
+                trainingPreviewData.summary?.trainingMode === 'multiclass'
+                  ? t('activities.dialog.trainingPreviewModeMulticlass')
+                  : t('activities.dialog.trainingPreviewModeBinary')
+              }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewCropPolicy')">
+              {{ trainingPreviewData.summary?.cropPolicy || t('common.misc.none') }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewAssets')">
+              {{ trainingPreviewData.summary?.selectedAssetCount || 0 }} / {{ trainingPreviewData.summary?.totalAssets || 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewAutoNegatives')">
+              {{ trainingPreviewData.summary?.autoNegativeAssetCount || 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item :label="t('activities.dialog.trainingPreviewClips')">
+              {{ trainingPreviewData.summary?.previewClipCount || 0 }} / {{ trainingPreviewData.summary?.totalClips || 0 }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <div v-if="getTrainingPreviewLabelStats(trainingPreviewData.summary).length > 0" class="training-preview-label-stats">
+            <div class="training-preview-section-title">{{ t('activities.dialog.trainingPreviewLabelStats') }}</div>
+            <div class="training-preview-label-tags">
+              <el-tag
+                v-for="[label, count] in getTrainingPreviewLabelStats(trainingPreviewData.summary)"
+                :key="`${label}-${count}`"
+                effect="plain"
+              >
+                {{ label }}: {{ count }}
+              </el-tag>
+            </div>
+          </div>
+
+          <el-alert
+            v-if="Array.isArray(trainingPreviewData.summary?.notes) && trainingPreviewData.summary?.notes.length > 0"
+            type="warning"
+            show-icon
+            :closable="false"
+            style="margin-top: 16px;"
+          >
+            <template #title>{{ t('activities.dialog.trainingPreviewNotes') }}</template>
+            <template #default>
+              <div class="training-preview-notes">
+                <div v-for="(note, index) in trainingPreviewData.summary?.notes || []" :key="`${index}-${note}`">
+                  {{ note }}
+                </div>
+              </div>
+            </template>
+          </el-alert>
+
+          <div class="training-sample-preview-grid">
+            <el-card
+              v-for="item in trainingPreviewData.items"
+              :key="`${item.assetId}-${item.index}`"
+              shadow="never"
+              class="training-sample-preview-card"
+            >
+              <template #header>
+                <div class="training-sample-preview-header">
+                  <div class="training-sample-preview-title">
+                    <strong>{{ t('activities.dialog.trainingPreviewClipTitle', { index: item.index }) }}</strong>
+                    <span>
+                      {{ formatSeconds(item.startSec) }} - {{ formatSeconds(item.endSec) }}
+                    </span>
+                  </div>
+                  <div class="training-sample-preview-tags">
+                    <el-tag size="small" effect="plain">{{ item.labelCode }}</el-tag>
+                    <el-tag v-if="item.isAutoNegative" size="small" type="warning" effect="plain">
+                      {{ t('activities.dialog.trainingPreviewAutoNegativeTag') }}
+                    </el-tag>
+                  </div>
+                </div>
+              </template>
+
+              <div class="training-sample-preview-meta">
+                <div><strong>{{ t('activities.dialog.trainingPreviewAsset') }}:</strong> #{{ item.assetId }}</div>
+                <div v-if="item.sourceActivityName">
+                  <strong>{{ t('activities.dialog.trainingPreviewSourceActivity') }}:</strong> {{ item.sourceActivityName }}
+                </div>
+                <div><strong>{{ t('activities.dialog.trainingPreviewCropPolicy') }}:</strong> {{ item.cropPolicy || t('common.misc.none') }}</div>
+              </div>
+
+              <div class="training-sample-preview-frames">
+                <div
+                  v-for="frame in item.frames"
+                  :key="`${item.index}-${frame.index}`"
+                  class="training-sample-preview-frame"
+                >
+                  <img :src="frame.imageUrl" :alt="`${item.labelCode}-${frame.index}`" />
+                  <span>{{ formatSeconds(frame.timeSec) }}</span>
+                </div>
+              </div>
+            </el-card>
+          </div>
+        </template>
+
+        <el-empty
+          v-else-if="!loadingTrainingPreview"
+          :description="t('activities.dialog.trainingPreviewEmpty')"
+        />
+      </div>
+
+      <template #footer>
+        <el-button type="danger" plain :icon="Close" @click="closeTrainingPreview">
+          {{ t('common.actions.close') }}
         </el-button>
       </template>
     </el-dialog>
@@ -3306,6 +3656,97 @@ function onActivityAction(action: string, row: Activity) {
   font-weight: 600;
 }
 
+.training-preview-dialog {
+  display: grid;
+  gap: 16px;
+}
+
+.training-preview-summary {
+  width: 100%;
+}
+
+.training-preview-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.training-preview-label-stats,
+.training-preview-notes {
+  display: grid;
+  gap: 8px;
+}
+
+.training-preview-label-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.training-sample-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.training-sample-preview-card {
+  border-radius: 14px;
+}
+
+.training-sample-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.training-sample-preview-title {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.training-sample-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.training-sample-preview-meta {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 12px;
+}
+
+.training-sample-preview-frames {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.training-sample-preview-frame {
+  display: grid;
+  gap: 6px;
+}
+
+.training-sample-preview-frame img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: #111827;
+}
+
+.training-sample-preview-frame span {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
@@ -3332,6 +3773,14 @@ function onActivityAction(action: string, row: Activity) {
 
   .asset-preview-header {
     flex-direction: column;
+  }
+
+  .training-sample-preview-header {
+    flex-direction: column;
+  }
+
+  .training-sample-preview-tags {
+    justify-content: flex-start;
   }
 }
 </style>
