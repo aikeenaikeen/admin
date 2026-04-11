@@ -52,6 +52,10 @@ interface CompanyActivity {
   activeModelVersionId?: number | null
   overrides?: any | null
   overridesText?: string
+  actionStartThreshold?: number | null
+  actionEndThreshold?: number | null
+  actionMinConsecutiveStartWindows?: number | null
+  actionConflictWinnerMargin?: number | null
 }
 
 interface TrainingAnnotation {
@@ -236,6 +240,35 @@ const RECOMMENDED_OBJECT_CUE_SETTINGS = {
   maxAdjustment: 0.2,
 } as const
 
+const RECOMMENDED_ACTION_RECOGNITION_SETTINGS = {
+  startThreshold: 0.75,
+  endThreshold: 0.45,
+  minConsecutiveStartWindows: 2,
+  conflictWinnerMargin: 0.08,
+} as const
+
+const ACTION_RECOGNITION_THRESHOLD_KEYS = [
+  'startThreshold',
+  'endThreshold',
+  'minConsecutiveStartWindows',
+  'conflictWinnerMargin',
+] as const
+
+const ACTION_RECOGNITION_SPEC_KEYS = [
+  ...ACTION_RECOGNITION_THRESHOLD_KEYS,
+  'conflictGroup',
+  'cropPolicy',
+  'personBboxHoldSeconds',
+  'objectCues',
+] as const
+
+type ActionRecognitionEditableSettings = {
+  actionStartThreshold?: number | null
+  actionEndThreshold?: number | null
+  actionMinConsecutiveStartWindows?: number | null
+  actionConflictWinnerMargin?: number | null
+}
+
 interface PersistedTrainingUiState {
   step?: TrainingStep
   trimAssetId?: number | null
@@ -307,6 +340,11 @@ const activeAnnotationDrag = ref<AnnotationDragState | null>(null)
 const form = ref({
   name: '',
   description: '',
+  actionStartThreshold: null as number | null,
+  actionEndThreshold: null as number | null,
+  actionMinConsecutiveStartWindows: null as number | null,
+  actionConflictWinnerMargin: null as number | null,
+  actionConflictGroup: '',
   objectCues: [] as ActivityObjectCueForm[],
 })
 const objectClassCatalog = ref<ObjectClassCatalog | null>(null)
@@ -918,9 +956,15 @@ function startEdit(activity: Activity) {
   editingActivityId.value = activity.id
   editingDetectorSpec.value = activity.detectorSpec ?? null
   dialogVisible.value = true
+  const actionSettings = extractActionRecognitionSettings(activity.detectorSpec)
   form.value = {
     name: activity.name,
     description: activity.description || '',
+    actionStartThreshold: actionSettings.actionStartThreshold,
+    actionEndThreshold: actionSettings.actionEndThreshold,
+    actionMinConsecutiveStartWindows: actionSettings.actionMinConsecutiveStartWindows,
+    actionConflictWinnerMargin: actionSettings.actionConflictWinnerMargin,
+    actionConflictGroup: actionSettings.actionConflictGroup,
     objectCues: extractObjectCuesFromDetectorSpec(activity.detectorSpec),
   }
   ensureObjectClassesLoaded()
@@ -934,6 +978,11 @@ function resetForm() {
   form.value = {
     name: '',
     description: '',
+    actionStartThreshold: null,
+    actionEndThreshold: null,
+    actionMinConsecutiveStartWindows: null,
+    actionConflictWinnerMargin: null,
+    actionConflictGroup: '',
     objectCues: [],
   }
 }
@@ -1025,6 +1074,117 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   return Math.max(min, Math.min(max, numeric))
 }
 
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function extractActionRecognitionSection(source: any): Record<string, any> {
+  if (!isRecord(source)) return {}
+  const nested = isRecord(source.actionRecognition) ? source.actionRecognition : null
+  if (!nested) return source
+
+  const { actionRecognition: _ignored, ...topLevel } = source
+  return {
+    ...topLevel,
+    ...nested,
+  }
+}
+
+function normalizeOptionalUnitNumber(value: unknown): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return undefined
+  return Math.max(0, Math.min(1, numeric))
+}
+
+function normalizeOptionalPositiveInt(value: unknown, max: number): number | undefined {
+  if (value === null || value === undefined || value === '') return undefined
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return undefined
+  return Math.max(1, Math.min(max, Math.trunc(numeric)))
+}
+
+function extractActionRecognitionSettings(source: any) {
+  const actionRecognition = extractActionRecognitionSection(source)
+
+  return {
+    actionStartThreshold: normalizeOptionalUnitNumber(actionRecognition.startThreshold) ?? null,
+    actionEndThreshold: normalizeOptionalUnitNumber(actionRecognition.endThreshold) ?? null,
+    actionMinConsecutiveStartWindows: normalizeOptionalPositiveInt(actionRecognition.minConsecutiveStartWindows, 20) ?? null,
+    actionConflictWinnerMargin: normalizeOptionalUnitNumber(actionRecognition.conflictWinnerMargin) ?? null,
+    actionConflictGroup: typeof actionRecognition.conflictGroup === 'string' ? actionRecognition.conflictGroup : '',
+  }
+}
+
+function applyActionRecognitionThresholds(
+  actionRecognition: Record<string, any>,
+  settings: ActionRecognitionEditableSettings
+) {
+  const startThreshold = normalizeOptionalUnitNumber(settings.actionStartThreshold)
+  const endThreshold = normalizeOptionalUnitNumber(settings.actionEndThreshold)
+  const minConsecutiveStartWindows = normalizeOptionalPositiveInt(settings.actionMinConsecutiveStartWindows, 20)
+  const conflictWinnerMargin = normalizeOptionalUnitNumber(settings.actionConflictWinnerMargin)
+
+  if (startThreshold !== undefined) actionRecognition.startThreshold = startThreshold
+  else delete actionRecognition.startThreshold
+
+  if (endThreshold !== undefined) actionRecognition.endThreshold = endThreshold
+  else delete actionRecognition.endThreshold
+
+  if (minConsecutiveStartWindows !== undefined) actionRecognition.minConsecutiveStartWindows = minConsecutiveStartWindows
+  else delete actionRecognition.minConsecutiveStartWindows
+
+  if (conflictWinnerMargin !== undefined) actionRecognition.conflictWinnerMargin = conflictWinnerMargin
+  else delete actionRecognition.conflictWinnerMargin
+}
+
+function applyRecommendedActionRecognitionSettings(target: ActionRecognitionEditableSettings) {
+  target.actionStartThreshold = RECOMMENDED_ACTION_RECOGNITION_SETTINGS.startThreshold
+  target.actionEndThreshold = RECOMMENDED_ACTION_RECOGNITION_SETTINGS.endThreshold
+  target.actionMinConsecutiveStartWindows = RECOMMENDED_ACTION_RECOGNITION_SETTINGS.minConsecutiveStartWindows
+  target.actionConflictWinnerMargin = RECOMMENDED_ACTION_RECOGNITION_SETTINGS.conflictWinnerMargin
+}
+
+function clearActionRecognitionSettings(target: ActionRecognitionEditableSettings) {
+  target.actionStartThreshold = null
+  target.actionEndThreshold = null
+  target.actionMinConsecutiveStartWindows = null
+  target.actionConflictWinnerMargin = null
+}
+
+function getActionRecognitionRecommendedHint(): string {
+  return t('activities.dialog.actionRecognition.recommendedHint', {
+    startThreshold: formatCueNumber(RECOMMENDED_ACTION_RECOGNITION_SETTINGS.startThreshold),
+    endThreshold: formatCueNumber(RECOMMENDED_ACTION_RECOGNITION_SETTINGS.endThreshold),
+    minConsecutiveStartWindows: RECOMMENDED_ACTION_RECOGNITION_SETTINGS.minConsecutiveStartWindows,
+    conflictWinnerMargin: formatCueNumber(RECOMMENDED_ACTION_RECOGNITION_SETTINGS.conflictWinnerMargin),
+  })
+}
+
+function buildCompanyOverrides(settings: CompanyActivity, parsedOverrides: any): any | null {
+  const overrides = isRecord(parsedOverrides) ? { ...parsedOverrides } : {}
+  const actionRecognition = isRecord(overrides.actionRecognition)
+    ? { ...overrides.actionRecognition }
+    : {}
+
+  for (const key of ACTION_RECOGNITION_THRESHOLD_KEYS) {
+    if (actionRecognition[key] === undefined && overrides[key] !== undefined) {
+      actionRecognition[key] = overrides[key]
+    }
+    delete overrides[key]
+  }
+
+  applyActionRecognitionThresholds(actionRecognition, settings)
+
+  if (Object.keys(actionRecognition).length > 0) {
+    overrides.actionRecognition = actionRecognition
+  } else {
+    delete overrides.actionRecognition
+  }
+
+  return Object.keys(overrides).length > 0 ? overrides : null
+}
+
 function extractObjectCuesFromDetectorSpec(detectorSpec: any): ActivityObjectCueForm[] {
   const actionRecognition =
     detectorSpec && typeof detectorSpec === 'object'
@@ -1062,6 +1222,22 @@ function buildActivityPayload() {
     detectorSpec.actionRecognition && typeof detectorSpec.actionRecognition === 'object'
       ? { ...detectorSpec.actionRecognition }
       : {}
+
+  for (const key of ACTION_RECOGNITION_SPEC_KEYS) {
+    if (actionRecognition[key] === undefined && detectorSpec[key] !== undefined) {
+      actionRecognition[key] = detectorSpec[key]
+    }
+    delete detectorSpec[key]
+  }
+
+  applyActionRecognitionThresholds(actionRecognition, form.value)
+
+  const conflictGroup = form.value.actionConflictGroup.trim()
+  if (conflictGroup) {
+    actionRecognition.conflictGroup = conflictGroup
+  } else {
+    delete actionRecognition.conflictGroup
+  }
 
   if (objectCues.length) {
     actionRecognition.objectCues = objectCues
@@ -1773,12 +1949,17 @@ async function openCompanySettings(activity: Activity) {
   for (const c of companies.value) {
     const existing = existingByCompanyId.get(c.id)
     const overrides = existing?.overrides ?? null
+    const actionSettings = extractActionRecognitionSettings(overrides)
     next[c.id] = {
       enabled: Boolean(existing?.enabled),
       allowedModelVersionId: existing?.allowedModelVersionId ?? null,
       activeModelVersionId: existing?.activeModelVersionId ?? null,
       overrides,
       overridesText: overrides ? JSON.stringify(overrides, null, 2) : '',
+      actionStartThreshold: actionSettings.actionStartThreshold,
+      actionEndThreshold: actionSettings.actionEndThreshold,
+      actionMinConsecutiveStartWindows: actionSettings.actionMinConsecutiveStartWindows,
+      actionConflictWinnerMargin: actionSettings.actionConflictWinnerMargin,
     }
   }
 
@@ -1794,16 +1975,15 @@ async function saveCompanySettings() {
       const settings = companySettings.value[company.id] || { enabled: false }
 
       // Parse overrides JSON (if provided)
-      let overrides: any | null | undefined = null
+      let parsedOverrides: any | null = null
       if (settings.overridesText && settings.overridesText.trim().length > 0) {
         try {
-          overrides = JSON.parse(settings.overridesText)
+          parsedOverrides = JSON.parse(settings.overridesText)
         } catch (e) {
           throw new Error(t('activities.invalidOverridesJson', { name: company.name }))
         }
-      } else {
-        overrides = null
       }
+      const overrides = buildCompanyOverrides(settings, parsedOverrides)
 
       return apiClient.post(`/api/activities/${activityId}/companies/${company.id}/enable`, {
         enabled: Boolean(settings.enabled),
@@ -1824,7 +2004,17 @@ async function saveCompanySettings() {
 
 function toggleCompanyAccess(companyId: number, enabled: boolean) {
   if (!companySettings.value[companyId]) {
-    companySettings.value[companyId] = { enabled, allowedModelVersionId: null, activeModelVersionId: null, overrides: null, overridesText: '' }
+    companySettings.value[companyId] = {
+      enabled,
+      allowedModelVersionId: null,
+      activeModelVersionId: null,
+      overrides: null,
+      overridesText: '',
+      actionStartThreshold: null,
+      actionEndThreshold: null,
+      actionMinConsecutiveStartWindows: null,
+      actionConflictWinnerMargin: null,
+    }
   } else {
     companySettings.value[companyId].enabled = enabled
   }
@@ -1984,6 +2174,59 @@ function onActivityAction(action: string, row: Activity) {
             :placeholder="t('activities.dialog.descriptionPlaceholder')"
           />
         </el-form-item>
+
+        <el-divider content-position="left">
+          {{ t('activities.dialog.actionRecognition.title') }}
+        </el-divider>
+
+        <el-alert
+          class="action-recognition-hint"
+          type="info"
+          :closable="false"
+          :title="t('activities.dialog.actionRecognition.hint')"
+        />
+
+        <div class="action-recognition-settings">
+          <div class="action-recognition-settings-bar">
+            <span>{{ getActionRecognitionRecommendedHint() }}</span>
+            <div class="action-recognition-settings-actions">
+              <el-button type="primary" plain size="small" @click="applyRecommendedActionRecognitionSettings(form)">
+                {{ t('activities.dialog.actionRecognition.applyRecommended') }}
+              </el-button>
+              <el-button plain size="small" @click="clearActionRecognitionSettings(form)">
+                {{ t('activities.dialog.actionRecognition.clear') }}
+              </el-button>
+            </div>
+          </div>
+
+          <el-row :gutter="12">
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('activities.dialog.actionRecognition.startThreshold')" label-width="150px">
+                <el-input-number v-model="form.actionStartThreshold" :min="0" :max="1" :step="0.01" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('activities.dialog.actionRecognition.endThreshold')" label-width="150px">
+                <el-input-number v-model="form.actionEndThreshold" :min="0" :max="1" :step="0.01" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('activities.dialog.actionRecognition.minConsecutiveStartWindows')" label-width="150px">
+                <el-input-number v-model="form.actionMinConsecutiveStartWindows" :min="1" :max="20" :step="1" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('activities.dialog.actionRecognition.conflictWinnerMargin')" label-width="150px">
+                <el-input-number v-model="form.actionConflictWinnerMargin" :min="0" :max="1" :step="0.01" :precision="2" style="width: 100%" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item :label="t('activities.dialog.actionRecognition.conflictGroup')" label-width="150px">
+                <el-input v-model="form.actionConflictGroup" :placeholder="t('activities.dialog.actionRecognition.conflictGroupPlaceholder')" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
 
         <el-divider content-position="left">
           {{ t('activities.dialog.objectCues.title') }}
@@ -2910,6 +3153,47 @@ function onActivityAction(action: string, row: Activity) {
           </template>
         </el-table-column>
 
+        <el-table-column :label="t('activities.dialog.actionRecognition.companyColumn')" min-width="520">
+          <template #default="{ row }">
+            <div v-if="companySettings[row.id]?.enabled" class="company-action-settings">
+              <div class="company-action-settings-hint">
+                {{ t('activities.dialog.actionRecognition.companyHint') }}
+              </div>
+              <el-row :gutter="8">
+                <el-col :span="12">
+                  <el-form-item :label="t('activities.dialog.actionRecognition.startThreshold')" label-width="115px">
+                    <el-input-number v-model="companySettings[row.id].actionStartThreshold" :min="0" :max="1" :step="0.01" :precision="2" size="small" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="t('activities.dialog.actionRecognition.endThreshold')" label-width="115px">
+                    <el-input-number v-model="companySettings[row.id].actionEndThreshold" :min="0" :max="1" :step="0.01" :precision="2" size="small" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="t('activities.dialog.actionRecognition.minConsecutiveStartWindowsShort')" label-width="115px">
+                    <el-input-number v-model="companySettings[row.id].actionMinConsecutiveStartWindows" :min="1" :max="20" :step="1" size="small" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="t('activities.dialog.actionRecognition.conflictWinnerMargin')" label-width="115px">
+                    <el-input-number v-model="companySettings[row.id].actionConflictWinnerMargin" :min="0" :max="1" :step="0.01" :precision="2" size="small" style="width: 100%" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <div class="company-action-settings-actions">
+                <el-button link type="primary" @click="applyRecommendedActionRecognitionSettings(companySettings[row.id])">
+                  {{ t('activities.dialog.actionRecognition.applyRecommended') }}
+                </el-button>
+                <el-button link @click="clearActionRecognitionSettings(companySettings[row.id])">
+                  {{ t('activities.dialog.actionRecognition.clear') }}
+                </el-button>
+              </div>
+            </div>
+            <span v-else style="color: var(--el-text-color-secondary);">{{ t('common.misc.none') }}</span>
+          </template>
+        </el-table-column>
+
         <el-table-column :label="t('activities.dialog.overrides')" min-width="350">
           <template #default="{ row }">
             <el-input
@@ -3104,6 +3388,51 @@ function onActivityAction(action: string, row: Activity) {
 .training-wizard {
   display: grid;
   gap: 16px;
+}
+
+.action-recognition-hint {
+  margin-bottom: 12px;
+}
+
+.action-recognition-settings {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-fill-color-light);
+}
+
+.action-recognition-settings-bar,
+.company-action-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.action-recognition-settings-bar span,
+.company-action-settings-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.action-recognition-settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.action-recognition-settings :deep(.el-form-item),
+.company-action-settings :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.company-action-settings {
+  display: grid;
+  gap: 8px;
 }
 
 .object-cues-hint {
