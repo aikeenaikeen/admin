@@ -83,6 +83,20 @@ interface IntervalItem {
   endTime: string
   confidence: number
   confirmedCameraIds: number[]
+  meta?: Record<string, any> | null
+}
+
+interface ActivityEvidenceFrame {
+  url: string
+  capturedAt?: string
+  score?: number
+  rawScore?: number
+  effectiveScore?: number
+  smoothScore?: number
+  cropPolicy?: string
+  modelVersionId?: number
+  windowIndex?: number
+  frameOffset?: number
 }
 
 interface EmployeeDetails {
@@ -117,6 +131,8 @@ const employeesLoading = ref(false)
 const activeEmployeeId = ref<number | null>(null)
 const streamDialogVisible = ref(false)
 const streamDialogCamera = ref<CameraDisplayInfo | null>(null)
+const evidenceDialogVisible = ref(false)
+const evidenceDialogInterval = ref<IntervalItem | null>(null)
 
 const search = ref('')
 const dateFrom = ref('')
@@ -131,6 +147,8 @@ const presenceByEmployeeId = computed(() => {
 const camerasById = computed(() => {
   return new Map(cameras.value.map((camera) => [camera.id, camera]))
 })
+
+const selectedEvidenceFrames = computed(() => getIntervalEvidenceFrames(evidenceDialogInterval.value))
 
 const displayEmployees = computed(() => {
   return [...employees.value]
@@ -533,6 +551,75 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
   streamDialogCamera.value = camera
   streamDialogVisible.value = true
 }
+
+function normalizeEvidenceUrl(url?: string | null): string {
+  const value = String(url || '').trim()
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value)) return value
+  return value.startsWith('/') ? value : `/${value}`
+}
+
+function getIntervalEvidenceWindows(interval?: IntervalItem | null): any[] {
+  const evidence = interval?.meta?.evidence
+  if (!evidence || typeof evidence !== 'object') {
+    return []
+  }
+
+  if (Array.isArray(evidence.windows)) {
+    return evidence.windows
+  }
+
+  if (Array.isArray(evidence.frames)) {
+    return [evidence]
+  }
+
+  return []
+}
+
+function getIntervalEvidenceFrames(interval?: IntervalItem | null): ActivityEvidenceFrame[] {
+  const frames: ActivityEvidenceFrame[] = []
+
+  getIntervalEvidenceWindows(interval).forEach((window, windowIndex) => {
+    const windowFrames = Array.isArray(window?.frames) ? window.frames : []
+    windowFrames.forEach((frame: any) => {
+      const url = normalizeEvidenceUrl(frame?.url)
+      if (!url) {
+        return
+      }
+
+      frames.push({
+        ...frame,
+        url,
+        capturedAt: frame?.capturedAt || window?.capturedAt,
+        score: Number(frame?.score ?? window?.score ?? window?.smoothScore ?? interval?.confidence ?? 0),
+        rawScore: Number(frame?.rawScore ?? window?.rawScore ?? 0),
+        effectiveScore: Number(frame?.effectiveScore ?? window?.effectiveScore ?? 0),
+        smoothScore: Number(frame?.smoothScore ?? window?.smoothScore ?? frame?.score ?? window?.score ?? 0),
+        cropPolicy: frame?.cropPolicy || window?.cropPolicy,
+        modelVersionId: Number(frame?.modelVersionId ?? window?.modelVersionId ?? 0) || undefined,
+        windowIndex,
+      })
+    })
+  })
+
+  return frames
+}
+
+function hasIntervalEvidence(interval: IntervalItem): boolean {
+  return getIntervalEvidenceFrames(interval).length > 0
+}
+
+function openIntervalEvidence(interval: IntervalItem) {
+  evidenceDialogInterval.value = interval
+  evidenceDialogVisible.value = true
+}
+
+function formatEvidenceScore(value?: number): string {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return t('common.misc.none')
+  }
+  return `${Math.round(value * 100)}%`
+}
 </script>
 
 <template>
@@ -820,7 +907,18 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
                         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
                         <el-table-column :label="t('common.labels.activity')" min-width="220">
                           <template #default="{ row: intervalRow }">
-                            {{ intervalRow.activity?.name || intervalRow.activityId }}
+                            <div class="interval-activity-cell">
+                              <span>{{ intervalRow.activity?.name || intervalRow.activityId }}</span>
+                              <el-button
+                                v-if="hasIntervalEvidence(intervalRow)"
+                                link
+                                type="primary"
+                                class="activity-evidence-link"
+                                @click.stop="openIntervalEvidence(intervalRow)"
+                              >
+                                {{ t('statistics.viewActivityEvidence', { count: getIntervalEvidenceFrames(intervalRow).length }) }}
+                              </el-button>
+                            </div>
                           </template>
                         </el-table-column>
                         <el-table-column :label="t('statistics.startTime')" min-width="180">
@@ -936,6 +1034,63 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
       v-model="streamDialogVisible"
       :camera="streamDialogCamera"
     />
+
+    <el-dialog
+      v-model="evidenceDialogVisible"
+      :title="t('statistics.activityEvidenceTitle')"
+      width="860px"
+      class="activity-evidence-dialog"
+    >
+      <div v-if="evidenceDialogInterval" class="activity-evidence-summary">
+        <div>
+          <strong>{{ evidenceDialogInterval.activity?.name || evidenceDialogInterval.activityId }}</strong>
+          <span>
+            {{ formatDateTime(evidenceDialogInterval.startTime) }}
+            -
+            {{ formatDateTime(evidenceDialogInterval.endTime) }}
+          </span>
+        </div>
+        <el-tag type="success">
+          {{ t('statistics.confidence') }}: {{ formatEvidenceScore(evidenceDialogInterval.confidence) }}
+        </el-tag>
+      </div>
+
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="activity-evidence-alert"
+        :title="t('statistics.activityEvidenceHint')"
+      />
+
+      <div v-if="selectedEvidenceFrames.length > 0" class="activity-evidence-grid">
+        <figure
+          v-for="(frame, index) in selectedEvidenceFrames"
+          :key="`${frame.url}-${index}`"
+          class="activity-evidence-card"
+        >
+          <img
+            :src="frame.url"
+            :alt="t('statistics.activityEvidenceFrameAlt', { index: index + 1 })"
+            class="activity-evidence-image"
+            loading="lazy"
+          >
+          <figcaption class="activity-evidence-meta">
+            <span>{{ t('statistics.activityEvidenceFrame', { index: index + 1 }) }}</span>
+            <span>{{ t('statistics.confidence') }}: {{ formatEvidenceScore(frame.score) }}</span>
+            <span v-if="frame.capturedAt">{{ formatDateTime(frame.capturedAt) }}</span>
+            <span v-if="frame.cropPolicy">{{ t('statistics.cropPolicy') }}: {{ frame.cropPolicy }}</span>
+            <span v-if="frame.modelVersionId">{{ t('statistics.modelVersionShort') }}: {{ frame.modelVersionId }}</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <el-empty
+        v-else
+        :description="t('statistics.noActivityEvidence')"
+        :image-size="72"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -1050,6 +1205,69 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
   white-space: normal;
 }
 
+.interval-activity-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.activity-evidence-link {
+  height: auto;
+  padding: 0;
+  font-size: 12px;
+}
+
+.activity-evidence-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.activity-evidence-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--el-text-color-regular);
+}
+
+.activity-evidence-alert {
+  margin-bottom: 16px;
+}
+
+.activity-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.activity-evidence-card {
+  margin: 0;
+  border: 1px solid var(--el-border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--el-bg-color-overlay);
+}
+
+.activity-evidence-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--el-fill-color-dark);
+}
+
+.activity-evidence-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 .detail-pagination {
   margin-top: 16px;
   display: flex;
@@ -1080,6 +1298,10 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
   .detail-pagination {
     justify-content: flex-start;
     overflow-x: auto;
+  }
+
+  .activity-evidence-summary {
+    flex-direction: column;
   }
 }
 </style>
