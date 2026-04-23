@@ -1,6 +1,6 @@
 export type RecognitionConfig = Record<string, any>
 
-export type MetaValue = number | boolean | 'on_demand' | 'always'
+export type MetaValue = number | boolean | 'on_demand' | 'always' | 'reject' | 'allow'
 
 export interface FieldMeta {
   min?: number
@@ -14,6 +14,11 @@ export const RECOMMENDED_RECOGNITION_CONFIG: RecognitionConfig = {
   quality: {
     minFaceHeight: 24,
     minBlurVar: 45,
+  },
+  preprocessing: {
+    enablePreprocessing: true,
+    claheClipLimit: 2,
+    denoiseStrength: 5,
   },
   insightface: {
     threshold: 0.2,
@@ -68,6 +73,21 @@ export const RECOMMENDED_RECOGNITION_CONFIG: RecognitionConfig = {
     maxIntervalSeconds: 0,
     fps: 8,
     maxFrames: 64,
+    evidence: {
+      frameCount: 5,
+      imageSize: 448,
+      jpegQuality: 78,
+    },
+    vlmVerifier: {
+      enabled: false,
+      minActionScore: 0.55,
+      confirmThreshold: 0.55,
+      uncertainPolicy: 'reject',
+      failOpen: true,
+    },
+    cropContaminationGuardEnabled: true,
+    cropContaminationMinOtherOverlap: 0.35,
+    cropContaminationMinCropOverlap: 0.2,
     debug: false,
   },
 }
@@ -97,6 +117,22 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
     max: 500,
     recommended: 45,
     descriptionKey: 'companies.dialog.hints.minBlur',
+  },
+  enablePreprocessing: {
+    recommended: true,
+    descriptionKey: 'companies.dialog.hints.enablePreprocessing',
+  },
+  claheClipLimit: {
+    min: 0.1,
+    max: 10,
+    recommended: 2,
+    descriptionKey: 'companies.dialog.hints.claheClipLimit',
+  },
+  denoiseStrength: {
+    min: 0,
+    max: 10,
+    recommended: 5,
+    descriptionKey: 'companies.dialog.hints.denoiseStrength',
   },
   similarityThreshold: {
     min: 0,
@@ -285,6 +321,65 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
     max: 512,
     recommended: 64,
     descriptionKey: 'companies.dialog.hints.actionMaxFrames',
+  },
+  actionEvidenceFrameCount: {
+    min: 1,
+    max: 8,
+    recommended: 5,
+    descriptionKey: 'companies.dialog.hints.actionEvidenceFrameCount',
+  },
+  actionEvidenceImageSize: {
+    min: 224,
+    max: 1024,
+    recommended: 448,
+    descriptionKey: 'companies.dialog.hints.actionEvidenceImageSize',
+  },
+  actionEvidenceJpegQuality: {
+    min: 50,
+    max: 95,
+    recommended: 78,
+    descriptionKey: 'companies.dialog.hints.actionEvidenceJpegQuality',
+  },
+  actionVlmEnabled: {
+    recommended: false,
+    descriptionKey: 'companies.dialog.hints.actionVlmEnabled',
+  },
+  actionVlmMinActionScore: {
+    min: 0,
+    max: 1,
+    recommended: 0.55,
+    descriptionKey: 'companies.dialog.hints.actionVlmMinActionScore',
+  },
+  actionVlmConfirmThreshold: {
+    min: 0,
+    max: 1,
+    recommended: 0.55,
+    descriptionKey: 'companies.dialog.hints.actionVlmConfirmThreshold',
+  },
+  actionVlmUncertainPolicy: {
+    recommended: 'reject',
+    options: ['reject', 'allow'],
+    descriptionKey: 'companies.dialog.hints.actionVlmUncertainPolicy',
+  },
+  actionVlmFailOpen: {
+    recommended: true,
+    descriptionKey: 'companies.dialog.hints.actionVlmFailOpen',
+  },
+  actionCropContaminationGuardEnabled: {
+    recommended: true,
+    descriptionKey: 'companies.dialog.hints.actionCropContaminationGuardEnabled',
+  },
+  actionCropContaminationMinOtherOverlap: {
+    min: 0,
+    max: 1,
+    recommended: 0.35,
+    descriptionKey: 'companies.dialog.hints.actionCropContaminationMinOtherOverlap',
+  },
+  actionCropContaminationMinCropOverlap: {
+    min: 0,
+    max: 1,
+    recommended: 0.2,
+    descriptionKey: 'companies.dialog.hints.actionCropContaminationMinCropOverlap',
   },
   actionDebug: {
     recommended: false,

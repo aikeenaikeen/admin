@@ -39,7 +39,15 @@ function formatMetaValue(value: MetaValue): string {
     return t('companies.dialog.personDetectionOnDemand')
   }
 
-  return t('companies.dialog.always')
+  if (value === 'always') {
+    return t('companies.dialog.always')
+  }
+
+  if (value === 'reject' || value === 'allow') {
+    return t(`companies.dialog.meta.${value}`)
+  }
+
+  return String(value)
 }
 
 function hintText(key: string): string {
@@ -119,6 +127,23 @@ function toggleAdvanced() {
           <el-form-item :label="t('companies.dialog.fields.minBlur')">
             <el-input-number v-model="config.quality.minBlurVar" :min="0" :max="500" :step="10" />
             <div class="field-hint">{{ hintText('minBlur') }}</div>
+          </el-form-item>
+        </el-form>
+      </el-collapse-item>
+
+      <el-collapse-item :title="t('companies.dialog.section.preprocessing')" name="preprocessing">
+        <el-form label-width="280px">
+          <el-form-item :label="t('companies.dialog.fields.enablePreprocessing')">
+            <el-switch v-model="config.preprocessing.enablePreprocessing" />
+            <div class="field-hint">{{ hintText('enablePreprocessing') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.claheClipLimit')">
+            <el-input-number v-model="config.preprocessing.claheClipLimit" :min="0.1" :max="10" :step="0.1" />
+            <div class="field-hint">{{ hintText('claheClipLimit') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.denoiseStrength')">
+            <el-input-number v-model="config.preprocessing.denoiseStrength" :min="0" :max="10" :step="1" />
+            <div class="field-hint">{{ hintText('denoiseStrength') }}</div>
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -282,6 +307,63 @@ function toggleAdvanced() {
           <el-form-item :label="t('companies.dialog.fields.actionMaxFrames')">
             <el-input-number v-model="config.actionRecognition.maxFrames" :min="16" :max="512" :step="1" />
             <div class="field-hint">{{ hintText('actionMaxFrames') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionEvidenceFrameCount')">
+            <el-input-number v-model="config.actionRecognition.evidence.frameCount" :min="1" :max="8" :step="1" />
+            <div class="field-hint">{{ hintText('actionEvidenceFrameCount') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionEvidenceImageSize')">
+            <el-input-number v-model="config.actionRecognition.evidence.imageSize" :min="224" :max="1024" :step="32" />
+            <div class="field-hint">{{ hintText('actionEvidenceImageSize') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionEvidenceJpegQuality')">
+            <el-input-number v-model="config.actionRecognition.evidence.jpegQuality" :min="50" :max="95" :step="1" />
+            <div class="field-hint">{{ hintText('actionEvidenceJpegQuality') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionVlmEnabled')">
+            <el-switch v-model="config.actionRecognition.vlmVerifier.enabled" />
+            <div class="field-hint">{{ hintText('actionVlmEnabled') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionVlmMinActionScore')">
+            <el-input-number v-model="config.actionRecognition.vlmVerifier.minActionScore" :min="0" :max="1" :step="0.01" />
+            <div class="field-hint">{{ hintText('actionVlmMinActionScore') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionVlmConfirmThreshold')">
+            <el-input-number v-model="config.actionRecognition.vlmVerifier.confirmThreshold" :min="0" :max="1" :step="0.01" />
+            <div class="field-hint">{{ hintText('actionVlmConfirmThreshold') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionVlmUncertainPolicy')">
+            <el-select v-model="config.actionRecognition.vlmVerifier.uncertainPolicy">
+              <el-option :label="t('companies.dialog.meta.reject')" value="reject" />
+              <el-option :label="t('companies.dialog.meta.allow')" value="allow" />
+            </el-select>
+            <div class="field-hint">{{ hintText('actionVlmUncertainPolicy') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionVlmFailOpen')">
+            <el-switch v-model="config.actionRecognition.vlmVerifier.failOpen" />
+            <div class="field-hint">{{ hintText('actionVlmFailOpen') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionCropContaminationGuardEnabled')">
+            <el-switch v-model="config.actionRecognition.cropContaminationGuardEnabled" />
+            <div class="field-hint">{{ hintText('actionCropContaminationGuardEnabled') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionCropContaminationMinOtherOverlap')">
+            <el-input-number
+              v-model="config.actionRecognition.cropContaminationMinOtherOverlap"
+              :min="0"
+              :max="1"
+              :step="0.01"
+            />
+            <div class="field-hint">{{ hintText('actionCropContaminationMinOtherOverlap') }}</div>
+          </el-form-item>
+          <el-form-item :label="t('companies.dialog.fields.actionCropContaminationMinCropOverlap')">
+            <el-input-number
+              v-model="config.actionRecognition.cropContaminationMinCropOverlap"
+              :min="0"
+              :max="1"
+              :step="0.01"
+            />
+            <div class="field-hint">{{ hintText('actionCropContaminationMinCropOverlap') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionDebug')">
             <el-switch v-model="config.actionRecognition.debug" />

@@ -47,9 +47,27 @@ admin-frontend/
 
 ## 🚀 Быстрый старт
 
-Смотрите инструкции по установке:
-- [macOS](./SETUP_MACOS.md)
-- [Windows](./SETUP_WINDOWS.md)
+1. Создайте `.env` на основе [env.example](./env.example).
+2. Установите зависимости:
+   ```bash
+   npm install
+   ```
+3. Запустите dev-сервер:
+   ```bash
+   npm run dev
+   ```
+4. Для production-сборки используйте:
+   ```bash
+   npm run build
+   npm run preview
+   ```
+
+Если нужен полный локальный запуск через nginx и docker compose, используйте [infra/README.md](../infra/README.md).
+
+## 🔧 Переменные окружения
+
+Актуальный список frontend env описан в [ENV.md](./ENV.md).
+Для локальной настройки используйте [env.example](./env.example) как шаблон.
 
 ## 🔐 Роли пользователей
 
@@ -127,10 +145,4 @@ axios.get(`${API_BASE_URL}/cameras`)
 
 ---
 
-Для детальной настройки смотрите [SETUP_MACOS.md](./SETUP_MACOS.md) или [SETUP_WINDOWS.md](./SETUP_WINDOWS.md)
-# admin
-# admin
-# admin
-# admin
-# admin
-# admin
+Актуальные frontend env и значения по умолчанию описаны в [ENV.md](./ENV.md).

@@ -58,6 +58,20 @@ interface EventItem {
   camera?: CameraDisplayInfo | null
 }
 
+type EmployeeEventsTypeFilter = 'ALL' | 'IN' | 'OUT'
+
+interface AppearanceSummaryPoint {
+  timestamp: string
+  cameraId: number | null
+}
+
+interface EmployeeAppearanceSummary {
+  employeeId: number
+  companyId: number
+  firstAppearance: AppearanceSummaryPoint | null
+  lastAppearance: AppearanceSummaryPoint | null
+}
+
 interface CameraInfo extends CameraDisplayInfo {
   ip: string
   rtspPort: number
@@ -105,8 +119,11 @@ interface EmployeeDetails {
   error: string | null
   activities: AssignedActivity[]
   activitiesLoading: boolean
+  appearanceSummary: EmployeeAppearanceSummary | null
+  appearanceSummaryLoading: boolean
   events: EventItem[]
   eventsLoading: boolean
+  eventsTypeFilter: EmployeeEventsTypeFilter
   eventsPage: number
   eventsPageSize: number
   eventsTotal: number
@@ -289,8 +306,11 @@ function createEmployeeDetailsState(current?: Partial<EmployeeDetails>): Employe
     error: current?.error ?? null,
     activities: current?.activities ?? [],
     activitiesLoading: current?.activitiesLoading ?? false,
+    appearanceSummary: current?.appearanceSummary ?? null,
+    appearanceSummaryLoading: current?.appearanceSummaryLoading ?? false,
     events: current?.events ?? [],
     eventsLoading: current?.eventsLoading ?? false,
+    eventsTypeFilter: current?.eventsTypeFilter ?? 'ALL',
     eventsPage: current?.eventsPage ?? 1,
     eventsPageSize: current?.eventsPageSize ?? DEFAULT_EVENTS_PAGE_SIZE,
     eventsTotal: current?.eventsTotal ?? 0,
@@ -319,12 +339,31 @@ async function fetchEmployeeActivities(employeeId: number) {
   return response.data?.activities || []
 }
 
-async function fetchEmployeeEvents(employeeId: number, page: number, pageSize: number) {
+async function fetchEmployeeAppearanceSummary(employeeId: number) {
+  const { from, to } = buildDateRange()
+
+  const response = await apiClient.get(`/api/employees/${employeeId}/appearance-summary`, {
+    params: {
+      dateFrom: from,
+      dateTo: to,
+    },
+  })
+
+  return (response.data || null) as EmployeeAppearanceSummary | null
+}
+
+async function fetchEmployeeEvents(
+  employeeId: number,
+  page: number,
+  pageSize: number,
+  type: EmployeeEventsTypeFilter
+) {
   const { from, to } = buildDateRange()
 
   const response = await apiClient.get('/api/events', {
     params: {
       employeeId,
+      type: type === 'ALL' ? undefined : type,
       dateFrom: from,
       dateTo: to,
       page,
@@ -373,14 +412,16 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
     loaded: false,
     error: null,
     activitiesLoading: true,
+    appearanceSummaryLoading: true,
     eventsLoading: true,
     intervalsLoading: true,
   })
 
   try {
-    const [activitiesResponse, eventsResponse, intervalsResponse] = await Promise.all([
+    const [activitiesResponse, appearanceSummaryResponse, eventsResponse, intervalsResponse] = await Promise.all([
       fetchEmployeeActivities(employeeId),
-      fetchEmployeeEvents(employeeId, current.eventsPage, current.eventsPageSize),
+      fetchEmployeeAppearanceSummary(employeeId),
+      fetchEmployeeEvents(employeeId, current.eventsPage, current.eventsPageSize, current.eventsTypeFilter),
       fetchEmployeeIntervals(employeeId, current.intervalsPage, current.intervalsPageSize),
     ])
 
@@ -389,9 +430,11 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       loaded: true,
       error: null,
       activitiesLoading: false,
+      appearanceSummaryLoading: false,
       eventsLoading: false,
       intervalsLoading: false,
       activities: activitiesResponse,
+      appearanceSummary: appearanceSummaryResponse,
       events: eventsResponse.items,
       eventsPage: eventsResponse.page,
       eventsPageSize: eventsResponse.pageSize,
@@ -407,10 +450,13 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       loaded: false,
       error: error.response?.data?.error || t('statistics.employeeLoadError'),
       activitiesLoading: false,
+      appearanceSummaryLoading: false,
       eventsLoading: false,
       intervalsLoading: false,
       activities: [],
+      appearanceSummary: null,
       events: [],
+      eventsTypeFilter: current.eventsTypeFilter,
       eventsPage: 1,
       eventsPageSize: DEFAULT_EVENTS_PAGE_SIZE,
       eventsTotal: 0,
@@ -423,6 +469,8 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
 }
 
 async function loadEmployeeEvents(employeeId: number, page: number, pageSize: number) {
+  const current = createEmployeeDetailsState(getEmployeeDetails(employeeId))
+
   updateEmployeeDetails(employeeId, {
     eventsLoading: true,
     eventsPage: page,
@@ -430,7 +478,12 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
   })
 
   try {
-    const response = await fetchEmployeeEvents(employeeId, page, pageSize)
+    const response = await fetchEmployeeEvents(
+      employeeId,
+      page,
+      pageSize,
+      current.eventsTypeFilter
+    )
 
     updateEmployeeDetails(employeeId, {
       eventsLoading: false,
@@ -445,6 +498,18 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
     })
     ElMessage.error(error.response?.data?.error || t('statistics.employeeLoadError'))
   }
+}
+
+async function handleEventsTypeFilterChange(employeeId: number, value: string | number | boolean) {
+  const nextFilter = String(value || 'ALL') as EmployeeEventsTypeFilter
+
+  updateEmployeeDetails(employeeId, {
+    eventsTypeFilter: nextFilter,
+    eventsPage: 1,
+  })
+
+  const details = createEmployeeDetailsState(getEmployeeDetails(employeeId))
+  await loadEmployeeEvents(employeeId, 1, details.eventsPageSize)
 }
 
 async function loadEmployeeIntervals(employeeId: number, page: number, pageSize: number) {
@@ -541,6 +606,14 @@ function getFallbackCamera(cameraId: number): CameraDisplayInfo {
 
 function getIntervalCameras(cameraIds: number[]): CameraDisplayInfo[] {
   return (cameraIds || []).map((cameraId) => camerasById.value.get(cameraId) || getFallbackCamera(cameraId))
+}
+
+function getAppearanceCamera(point?: AppearanceSummaryPoint | null): CameraDisplayInfo | null {
+  if (!point?.cameraId) {
+    return null
+  }
+
+  return camerasById.value.get(point.cameraId) || getFallbackCamera(point.cameraId)
 }
 
 function openCameraStream(camera?: CameraDisplayInfo | null) {
@@ -840,6 +913,82 @@ function formatEvidenceScore(value?: number): string {
                 <el-card shadow="never" style="margin-top: 16px">
                   <el-tabs>
                     <el-tab-pane :label="t('statistics.recentEvents')">
+                      <div class="employee-events-section">
+                        <el-alert
+                          type="info"
+                          :closable="false"
+                          show-icon
+                          class="employee-events-alert"
+                          :title="t('statistics.appearanceSummaryHint')"
+                        />
+
+                        <div
+                          v-loading="getEmployeeDetails(row.id)?.appearanceSummaryLoading"
+                          class="events-summary-grid"
+                        >
+                          <el-card shadow="never" class="appearance-summary-card">
+                            <template #header>
+                              <span>{{ t('statistics.firstAppearance') }}</span>
+                            </template>
+
+                            <div class="appearance-summary-card__value">
+                              {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance?.timestamp || null) }}
+                            </div>
+
+                            <div class="appearance-summary-card__meta">
+                              <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
+                              <el-button
+                                v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)"
+                                link
+                                type="primary"
+                                class="camera-link"
+                                @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance))"
+                              >
+                                {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)) }}
+                              </el-button>
+                              <span v-else>{{ t('common.misc.none') }}</span>
+                            </div>
+                          </el-card>
+
+                          <el-card shadow="never" class="appearance-summary-card">
+                            <template #header>
+                              <span>{{ t('statistics.lastAppearance') }}</span>
+                            </template>
+
+                            <div class="appearance-summary-card__value">
+                              {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance?.timestamp || null) }}
+                            </div>
+
+                            <div class="appearance-summary-card__meta">
+                              <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
+                              <el-button
+                                v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)"
+                                link
+                                type="primary"
+                                class="camera-link"
+                                @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance))"
+                              >
+                                {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)) }}
+                              </el-button>
+                              <span v-else>{{ t('common.misc.none') }}</span>
+                            </div>
+                          </el-card>
+                        </div>
+
+                        <div class="employee-events-toolbar">
+                          <span class="employee-events-toolbar__label">{{ t('statistics.eventTypeFilter') }}</span>
+                          <el-radio-group
+                            :model-value="getEmployeeDetails(row.id)?.eventsTypeFilter || 'ALL'"
+                            size="small"
+                            @change="handleEventsTypeFilterChange(row.id, $event)"
+                          >
+                            <el-radio-button label="ALL">{{ t('common.placeholders.all') }}</el-radio-button>
+                            <el-radio-button label="IN">{{ t('enums.eventType.IN') }}</el-radio-button>
+                            <el-radio-button label="OUT">{{ t('enums.eventType.OUT') }}</el-radio-button>
+                          </el-radio-group>
+                        </div>
+                      </div>
+
                       <el-table
                         v-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
                         v-loading="getEmployeeDetails(row.id)?.eventsLoading"
@@ -1192,6 +1341,55 @@ function formatEvidenceScore(value?: number): string {
   gap: 8px;
 }
 
+.employee-events-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.employee-events-alert {
+  margin-bottom: 0;
+}
+
+.events-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.appearance-summary-card__value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.appearance-summary-card__meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-text-color-regular);
+}
+
+.appearance-summary-card__meta-label {
+  color: var(--el-text-color-secondary);
+}
+
+.employee-events-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.employee-events-toolbar__label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
 .camera-link-list {
   display: flex;
   flex-wrap: wrap;
@@ -1298,6 +1496,10 @@ function formatEvidenceScore(value?: number): string {
   .detail-pagination {
     justify-content: flex-start;
     overflow-x: auto;
+  }
+
+  .employee-events-toolbar {
+    align-items: flex-start;
   }
 
   .activity-evidence-summary {
