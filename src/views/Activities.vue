@@ -259,6 +259,9 @@ const ACTION_RECOGNITION_SPEC_KEYS = [
   'conflictGroup',
   'cropPolicy',
   'personBboxHoldSeconds',
+  'allowedCameraIds',
+  'blockedCameraIds',
+  'cameraOverrides',
   'objectCues',
 ] as const
 
@@ -267,6 +270,9 @@ type ActionRecognitionEditableSettings = {
   actionEndThreshold?: number | null
   actionMinConsecutiveStartWindows?: number | null
   actionConflictWinnerMargin?: number | null
+  actionAllowedCameraIdsText?: string
+  actionBlockedCameraIdsText?: string
+  actionCameraOverridesText?: string
 }
 
 interface PersistedTrainingUiState {
@@ -345,6 +351,9 @@ const form = ref({
   actionMinConsecutiveStartWindows: null as number | null,
   actionConflictWinnerMargin: null as number | null,
   actionConflictGroup: '',
+  actionAllowedCameraIdsText: '',
+  actionBlockedCameraIdsText: '',
+  actionCameraOverridesText: '',
   objectCues: [] as ActivityObjectCueForm[],
 })
 const objectClassCatalog = ref<ObjectClassCatalog | null>(null)
@@ -875,7 +884,7 @@ async function handleSubmit(openTrainingAfterSave: boolean = false) {
     resetForm()
     await loadActivities()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('activities.saveError'))
+    ElMessage.error(error?.response?.data?.error || error?.message || t('activities.saveError'))
   }
 }
 
@@ -965,6 +974,9 @@ function startEdit(activity: Activity) {
     actionMinConsecutiveStartWindows: actionSettings.actionMinConsecutiveStartWindows,
     actionConflictWinnerMargin: actionSettings.actionConflictWinnerMargin,
     actionConflictGroup: actionSettings.actionConflictGroup,
+    actionAllowedCameraIdsText: actionSettings.actionAllowedCameraIdsText,
+    actionBlockedCameraIdsText: actionSettings.actionBlockedCameraIdsText,
+    actionCameraOverridesText: actionSettings.actionCameraOverridesText,
     objectCues: extractObjectCuesFromDetectorSpec(activity.detectorSpec),
   }
   ensureObjectClassesLoaded()
@@ -983,6 +995,9 @@ function resetForm() {
     actionMinConsecutiveStartWindows: null,
     actionConflictWinnerMargin: null,
     actionConflictGroup: '',
+    actionAllowedCameraIdsText: '',
+    actionBlockedCameraIdsText: '',
+    actionCameraOverridesText: '',
     objectCues: [],
   }
 }
@@ -1104,8 +1119,35 @@ function normalizeOptionalPositiveInt(value: unknown, max: number): number | und
   return Math.max(1, Math.min(max, Math.trunc(numeric)))
 }
 
+function normalizeCameraIdList(value: unknown): number[] | undefined {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((item) => (typeof item === 'number' ? item : Number(item)))
+      .filter((item) => Number.isInteger(item) && item > 0)
+      .map((item) => Math.trunc(item))
+    return normalized.length ? Array.from(new Set(normalized)) : undefined
+  }
+
+  if (typeof value !== 'string') return undefined
+  const normalized = value
+    .split(/[,\s]+/)
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0)
+    .map((item) => Math.trunc(item))
+  return normalized.length ? Array.from(new Set(normalized)) : undefined
+}
+
+function formatCameraIdList(value: unknown): string {
+  const normalized = normalizeCameraIdList(value)
+  return normalized ? normalized.join(', ') : ''
+}
+
 function extractActionRecognitionSettings(source: any) {
   const actionRecognition = extractActionRecognitionSection(source)
+  const cameraOverrides =
+    isRecord(actionRecognition.cameraOverrides) && Object.keys(actionRecognition.cameraOverrides).length > 0
+      ? JSON.stringify(actionRecognition.cameraOverrides, null, 2)
+      : ''
 
   return {
     actionStartThreshold: normalizeOptionalUnitNumber(actionRecognition.startThreshold) ?? null,
@@ -1113,6 +1155,9 @@ function extractActionRecognitionSettings(source: any) {
     actionMinConsecutiveStartWindows: normalizeOptionalPositiveInt(actionRecognition.minConsecutiveStartWindows, 20) ?? null,
     actionConflictWinnerMargin: normalizeOptionalUnitNumber(actionRecognition.conflictWinnerMargin) ?? null,
     actionConflictGroup: typeof actionRecognition.conflictGroup === 'string' ? actionRecognition.conflictGroup : '',
+    actionAllowedCameraIdsText: formatCameraIdList(actionRecognition.allowedCameraIds),
+    actionBlockedCameraIdsText: formatCameraIdList(actionRecognition.blockedCameraIds),
+    actionCameraOverridesText: cameraOverrides,
   }
 }
 
@@ -1150,6 +1195,9 @@ function clearActionRecognitionSettings(target: ActionRecognitionEditableSetting
   target.actionEndThreshold = null
   target.actionMinConsecutiveStartWindows = null
   target.actionConflictWinnerMargin = null
+  target.actionAllowedCameraIdsText = ''
+  target.actionBlockedCameraIdsText = ''
+  target.actionCameraOverridesText = ''
 }
 
 function getActionRecognitionRecommendedHint(): string {
@@ -1237,6 +1285,36 @@ function buildActivityPayload() {
     actionRecognition.conflictGroup = conflictGroup
   } else {
     delete actionRecognition.conflictGroup
+  }
+
+  const allowedCameraIds = normalizeCameraIdList(form.value.actionAllowedCameraIdsText)
+  if (allowedCameraIds?.length) {
+    actionRecognition.allowedCameraIds = allowedCameraIds
+  } else {
+    delete actionRecognition.allowedCameraIds
+  }
+
+  const blockedCameraIds = normalizeCameraIdList(form.value.actionBlockedCameraIdsText)
+  if (blockedCameraIds?.length) {
+    actionRecognition.blockedCameraIds = blockedCameraIds
+  } else {
+    delete actionRecognition.blockedCameraIds
+  }
+
+  const cameraOverridesText = form.value.actionCameraOverridesText.trim()
+  if (cameraOverridesText) {
+    let parsedCameraOverrides: unknown
+    try {
+      parsedCameraOverrides = JSON.parse(cameraOverridesText)
+    } catch {
+      throw new Error(t('activities.dialog.actionRecognition.invalidCameraOverridesJson'))
+    }
+    if (!isRecord(parsedCameraOverrides)) {
+      throw new Error(t('activities.dialog.actionRecognition.invalidCameraOverridesJson'))
+    }
+    actionRecognition.cameraOverrides = parsedCameraOverrides
+  } else {
+    delete actionRecognition.cameraOverrides
   }
 
   if (objectCues.length) {
@@ -2224,6 +2302,35 @@ function onActivityAction(action: string, row: Activity) {
               <el-form-item :label="t('activities.dialog.actionRecognition.conflictGroup')" label-width="150px">
                 <el-input v-model="form.actionConflictGroup" :placeholder="t('activities.dialog.actionRecognition.conflictGroupPlaceholder')" />
               </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item :label="t('activities.dialog.actionRecognition.allowedCameraIds')" label-width="150px">
+                <el-input
+                  v-model="form.actionAllowedCameraIdsText"
+                  :placeholder="t('activities.dialog.actionRecognition.cameraIdsPlaceholder')"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item :label="t('activities.dialog.actionRecognition.blockedCameraIds')" label-width="150px">
+                <el-input
+                  v-model="form.actionBlockedCameraIdsText"
+                  :placeholder="t('activities.dialog.actionRecognition.cameraIdsPlaceholder')"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item :label="t('activities.dialog.actionRecognition.cameraOverrides')" label-width="150px">
+                <el-input
+                  v-model="form.actionCameraOverridesText"
+                  type="textarea"
+                  :rows="4"
+                  :placeholder="t('activities.dialog.actionRecognition.cameraOverridesPlaceholder')"
+                />
+              </el-form-item>
+              <div class="action-recognition-settings-subhint">
+                {{ t('activities.dialog.actionRecognition.cameraOverridesHint') }}
+              </div>
             </el-col>
           </el-row>
         </div>
@@ -3428,6 +3535,13 @@ function onActivityAction(action: string, row: Activity) {
 .action-recognition-settings :deep(.el-form-item),
 .company-action-settings :deep(.el-form-item) {
   margin-bottom: 8px;
+}
+
+.action-recognition-settings-subhint {
+  margin-top: -2px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .company-action-settings {
