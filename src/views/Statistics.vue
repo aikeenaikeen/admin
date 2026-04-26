@@ -110,7 +110,11 @@ interface ActivityEvidenceFrame {
   cropPolicy?: string
   modelVersionId?: number
   windowIndex?: number
+  windowRank?: number
   frameOffset?: number
+  requiredFrames?: number
+  frameSource?: string
+  frameSelection?: string
 }
 
 interface EmployeeDetails {
@@ -647,10 +651,27 @@ function getIntervalEvidenceWindows(interval?: IntervalItem | null): any[] {
   return []
 }
 
+function getEvidenceWindowScore(window: any, interval?: IntervalItem | null): number {
+  return Number(window?.score ?? window?.smoothScore ?? interval?.confidence ?? 0)
+}
+
+function getSortedIntervalEvidenceWindows(interval?: IntervalItem | null): any[] {
+  return [...getIntervalEvidenceWindows(interval)].sort((left, right) => {
+    const scoreDiff = getEvidenceWindowScore(right, interval) - getEvidenceWindowScore(left, interval)
+    if (Math.abs(scoreDiff) > Number.EPSILON) {
+      return scoreDiff
+    }
+
+    const leftCapturedAt = String(left?.capturedAt || '')
+    const rightCapturedAt = String(right?.capturedAt || '')
+    return rightCapturedAt.localeCompare(leftCapturedAt)
+  })
+}
+
 function getIntervalEvidenceFrames(interval?: IntervalItem | null): ActivityEvidenceFrame[] {
   const frames: ActivityEvidenceFrame[] = []
 
-  getIntervalEvidenceWindows(interval).forEach((window, windowIndex) => {
+  getSortedIntervalEvidenceWindows(interval).forEach((window, windowIndex) => {
     const windowFrames = Array.isArray(window?.frames) ? window.frames : []
     windowFrames.forEach((frame: any) => {
       const url = normalizeEvidenceUrl(frame?.url)
@@ -668,7 +689,11 @@ function getIntervalEvidenceFrames(interval?: IntervalItem | null): ActivityEvid
         smoothScore: Number(frame?.smoothScore ?? window?.smoothScore ?? frame?.score ?? window?.score ?? 0),
         cropPolicy: frame?.cropPolicy || window?.cropPolicy,
         modelVersionId: Number(frame?.modelVersionId ?? window?.modelVersionId ?? 0) || undefined,
+        requiredFrames: Number(frame?.requiredFrames ?? window?.requiredFrames ?? 0) || undefined,
+        frameSource: frame?.frameSource || window?.frameSource,
+        frameSelection: frame?.frameSelection || window?.frameSelection,
         windowIndex,
+        windowRank: windowIndex + 1,
       })
     })
   })
@@ -1224,8 +1249,13 @@ function formatEvidenceScore(value?: number): string {
           >
           <figcaption class="activity-evidence-meta">
             <span>{{ t('statistics.activityEvidenceFrame', { index: index + 1 }) }}</span>
+            <span v-if="frame.windowRank">{{ t('statistics.activityEvidenceWindow', { index: frame.windowRank }) }}</span>
             <span>{{ t('statistics.confidence') }}: {{ formatEvidenceScore(frame.score) }}</span>
+            <span v-if="typeof frame.frameOffset === 'number' && typeof frame.requiredFrames === 'number'">
+              {{ t('statistics.activityEvidenceFrameOffset', { index: frame.frameOffset + 1, total: frame.requiredFrames }) }}
+            </span>
             <span v-if="frame.capturedAt">{{ formatDateTime(frame.capturedAt) }}</span>
+            <span v-if="frame.frameSource === 'model_input'">{{ t('statistics.activityEvidenceSourceModel') }}</span>
             <span v-if="frame.cropPolicy">{{ t('statistics.cropPolicy') }}: {{ frame.cropPolicy }}</span>
             <span v-if="frame.modelVersionId">{{ t('statistics.modelVersionShort') }}: {{ frame.modelVersionId }}</span>
           </figcaption>
