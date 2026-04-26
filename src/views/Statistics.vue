@@ -183,9 +183,7 @@ const displayEmployees = computed(() => {
 
 onMounted(async () => {
   const today = new Date()
-  const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-
-  dateFrom.value = thirtyDaysAgo.toISOString().split('T')[0]
+  dateFrom.value = today.toISOString().split('T')[0]
   dateTo.value = today.toISOString().split('T')[0]
 
   await loadPage()
