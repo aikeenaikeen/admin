@@ -320,70 +320,6 @@ function toggleAdvanced() {
             <el-input-number v-model="config.actionRecognition.evidence.jpegQuality" :min="50" :max="95" :step="1" />
             <div class="field-hint">{{ hintText('actionEvidenceJpegQuality') }}</div>
           </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateEnabled')">
-            <el-switch v-model="config.actionRecognition.qualityGate.enabled" />
-            <div class="field-hint">{{ hintText('actionQualityGateEnabled') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateMinCropWidth')">
-            <el-input-number v-model="config.actionRecognition.qualityGate.minCropWidth" :min="32" :max="640" :step="8" />
-            <div class="field-hint">{{ hintText('actionQualityGateMinCropWidth') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateMinCropHeight')">
-            <el-input-number v-model="config.actionRecognition.qualityGate.minCropHeight" :min="48" :max="640" :step="8" />
-            <div class="field-hint">{{ hintText('actionQualityGateMinCropHeight') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateMinCropAreaRatio')">
-            <el-input-number v-model="config.actionRecognition.qualityGate.minCropAreaRatio" :min="0" :max="0.5" :step="0.001" />
-            <div class="field-hint">{{ hintText('actionQualityGateMinCropAreaRatio') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateMinSharpness')">
-            <el-input-number v-model="config.actionRecognition.qualityGate.minSharpness" :min="0" :max="500" :step="1" />
-            <div class="field-hint">{{ hintText('actionQualityGateMinSharpness') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionQualityGateMaxEdgeTouchRatio')">
-            <el-input-number v-model="config.actionRecognition.qualityGate.maxEdgeTouchRatio" :min="0" :max="1" :step="0.01" />
-            <div class="field-hint">{{ hintText('actionQualityGateMaxEdgeTouchRatio') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTemporalGateEnabled')">
-            <el-switch v-model="config.actionRecognition.temporalGate.enabled" />
-            <div class="field-hint">{{ hintText('actionTemporalGateEnabled') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTemporalGateWindowFrames')">
-            <el-input-number v-model="config.actionRecognition.temporalGate.windowFrames" :min="1" :max="20" :step="1" />
-            <div class="field-hint">{{ hintText('actionTemporalGateWindowFrames') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTemporalGateMinPositiveFrames')">
-            <el-input-number v-model="config.actionRecognition.temporalGate.minPositiveFrames" :min="1" :max="20" :step="1" />
-            <div class="field-hint">{{ hintText('actionTemporalGateMinPositiveFrames') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTemporalGateRejectCooldownSeconds')">
-            <el-input-number v-model="config.actionRecognition.temporalGate.rejectCooldownSeconds" :min="0" :max="120" :step="0.5" />
-            <div class="field-hint">{{ hintText('actionTemporalGateRejectCooldownSeconds') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardEnabled')">
-            <el-switch v-model="config.actionRecognition.trackGuard.enabled" />
-            <div class="field-hint">{{ hintText('actionTrackGuardEnabled') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardMinTrackAgeSeconds')">
-            <el-input-number v-model="config.actionRecognition.trackGuard.minTrackAgeSeconds" :min="0" :max="30" :step="0.05" />
-            <div class="field-hint">{{ hintText('actionTrackGuardMinTrackAgeSeconds') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardMinTrackConsecutiveUpdates')">
-            <el-input-number v-model="config.actionRecognition.trackGuard.minTrackConsecutiveUpdates" :min="1" :max="30" :step="1" />
-            <div class="field-hint">{{ hintText('actionTrackGuardMinTrackConsecutiveUpdates') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardMaxBBoxJumpRatio')">
-            <el-input-number v-model="config.actionRecognition.trackGuard.maxBBoxJumpRatio" :min="0" :max="5" :step="0.05" />
-            <div class="field-hint">{{ hintText('actionTrackGuardMaxBBoxJumpRatio') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardResetOnTrackSwitch')">
-            <el-switch v-model="config.actionRecognition.trackGuard.resetOnTrackSwitch" />
-            <div class="field-hint">{{ hintText('actionTrackGuardResetOnTrackSwitch') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionTrackGuardResetOnAssignmentChange')">
-            <el-switch v-model="config.actionRecognition.trackGuard.resetOnAssignmentChange" />
-            <div class="field-hint">{{ hintText('actionTrackGuardResetOnAssignmentChange') }}</div>
-          </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionVlmEnabled')">
             <el-switch v-model="config.actionRecognition.vlmVerifier.enabled" />
             <div class="field-hint">{{ hintText('actionVlmEnabled') }}</div>
@@ -428,14 +364,6 @@ function toggleAdvanced() {
               :step="0.01"
             />
             <div class="field-hint">{{ hintText('actionCropContaminationMinCropOverlap') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionDiagnosticsKeepRecentDecisions')">
-            <el-switch v-model="config.actionRecognition.diagnostics.keepRecentDecisions" />
-            <div class="field-hint">{{ hintText('actionDiagnosticsKeepRecentDecisions') }}</div>
-          </el-form-item>
-          <el-form-item :label="t('companies.dialog.fields.actionDiagnosticsRecentDecisionLimit')">
-            <el-input-number v-model="config.actionRecognition.diagnostics.recentDecisionLimit" :min="50" :max="5000" :step="50" />
-            <div class="field-hint">{{ hintText('actionDiagnosticsRecentDecisionLimit') }}</div>
           </el-form-item>
           <el-form-item :label="t('companies.dialog.fields.actionDebug')">
             <el-switch v-model="config.actionRecognition.debug" />
