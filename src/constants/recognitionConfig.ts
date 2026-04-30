@@ -341,7 +341,7 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
     descriptionKey: 'companies.dialog.hints.actionEvidenceJpegQuality',
   },
   actionVlmEnabled: {
-    recommended: false,
+    recommended: true,
     descriptionKey: 'companies.dialog.hints.actionVlmEnabled',
   },
   actionVlmMinActionScore: {

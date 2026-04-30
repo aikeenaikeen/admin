@@ -501,7 +501,7 @@ const en = {
         actionEvidenceFrameCount: 'How many employee crop frames to keep as evidence for UI and VLM verification.',
         actionEvidenceImageSize: 'Resolution of evidence frames. Larger makes details easier to inspect, but increases memory and network usage.',
         actionEvidenceJpegQuality: 'JPEG quality for evidence frames saved to statistics and passed to the VLM.',
-        actionVlmEnabled: 'Company-level default for VLM verification of activity candidates. Activity-level overrides can make it stricter or disable it individually.',
+        actionVlmEnabled: 'Recommended for ambiguous activities and for setups where precision matters more than minimal latency. Activity-level overrides can make it stricter or disable it individually.',
         actionVlmMinActionScore: 'Additional threshold for calling the VLM. The final gate cannot be lower than the activity startThreshold.',
         actionVlmConfirmThreshold: 'Minimum VLM confidence required to mark the activity as visually confirmed.',
         actionVlmUncertainPolicy: 'What to do when the VLM is unsure: reject the candidate or allow it through.',

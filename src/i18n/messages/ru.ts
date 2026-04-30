@@ -501,7 +501,7 @@ const ru = {
         actionEvidenceFrameCount: 'Сколько crop-кадров сотрудника сохранять для evidence и последующей визуальной/VLM-проверки.',
         actionEvidenceImageSize: 'Размер evidence-кадров. Больше — лучше видно детали, но выше нагрузка на память и сеть.',
         actionEvidenceJpegQuality: 'Качество JPEG для evidence-кадров, которые попадают в статистику и VLM.',
-        actionVlmEnabled: 'Company-level дефолт для VLM-проверки кандидатов активности. В activity override можно сделать строже или выключить отдельно.',
+        actionVlmEnabled: 'Рекомендуется включать для спорных активностей и там, где важнее точность, чем минимальная задержка. В activity override можно сделать строже или выключить отдельно.',
         actionVlmMinActionScore: 'Дополнительный порог для VLM. Итоговый порог вызова VLM не может быть ниже startThreshold активности.',
         actionVlmConfirmThreshold: 'Минимальная уверенность ответа VLM, чтобы считать активность подтверждённой.',
         actionVlmUncertainPolicy: 'Что делать, если VLM не уверена: отклонять кандидата или пропускать дальше.',
