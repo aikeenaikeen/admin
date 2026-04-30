@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Calendar, Search, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -141,6 +141,8 @@ interface EmployeeDetails {
 const DEFAULT_EVENTS_PAGE_SIZE = 20
 const DEFAULT_INTERVALS_PAGE_SIZE = 20
 const DETAIL_PAGE_SIZES = [10, 20, 50, 100]
+const LIVE_PRESENCE_POLL_MS = 2000
+const LIVE_EMPLOYEE_DETAILS_POLL_MS = 5000
 
 const statistics = ref<StatisticsResponse | null>(null)
 const employees = ref<Employee[]>([])
@@ -158,6 +160,10 @@ const evidenceDialogInterval = ref<IntervalItem | null>(null)
 const search = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
+let presencePollHandle: ReturnType<typeof setInterval> | null = null
+let activeEmployeeDetailsPollHandle: ReturnType<typeof setInterval> | null = null
+let presenceRefreshInFlight = false
+let activeEmployeeDetailsRefreshInFlight = false
 
 const expandedRowKeys = computed(() => (activeEmployeeId.value ? [activeEmployeeId.value] : []))
 
@@ -191,6 +197,11 @@ onMounted(async () => {
   dateTo.value = today.toISOString().split('T')[0]
 
   await loadPage()
+  startLiveRefresh()
+})
+
+onBeforeUnmount(() => {
+  stopLiveRefresh()
 })
 
 function buildDateRange() {
@@ -214,6 +225,30 @@ function buildDateRange() {
 
 function resetEmployeeDetails() {
   employeeDetails.value = {}
+}
+
+function stopLiveRefresh() {
+  if (presencePollHandle) {
+    clearInterval(presencePollHandle)
+    presencePollHandle = null
+  }
+
+  if (activeEmployeeDetailsPollHandle) {
+    clearInterval(activeEmployeeDetailsPollHandle)
+    activeEmployeeDetailsPollHandle = null
+  }
+}
+
+function startLiveRefresh() {
+  stopLiveRefresh()
+
+  presencePollHandle = setInterval(() => {
+    void refreshPresenceLive()
+  }, LIVE_PRESENCE_POLL_MS)
+
+  activeEmployeeDetailsPollHandle = setInterval(() => {
+    void refreshActiveEmployeeDetailsLive()
+  }, LIVE_EMPLOYEE_DETAILS_POLL_MS)
 }
 
 function buildEmployeeParams() {
@@ -252,6 +287,67 @@ async function loadEmployees() {
     ElMessage.error(t('employees.loadError'))
   } finally {
     employeesLoading.value = false
+  }
+}
+
+async function refreshPresenceLive() {
+  if (loading.value || presenceRefreshInFlight) {
+    return
+  }
+
+  if (typeof document !== 'undefined' && document.hidden) {
+    return
+  }
+
+  presenceRefreshInFlight = true
+  try {
+    const response = await apiClient.get('/api/presence')
+    presence.value = response.data
+  } catch {
+    // Keep background refresh silent to avoid noisy UI.
+  } finally {
+    presenceRefreshInFlight = false
+  }
+}
+
+async function refreshActiveEmployeeDetailsLive() {
+  const employeeId = activeEmployeeId.value
+  if (!employeeId || activeEmployeeDetailsRefreshInFlight) {
+    return
+  }
+
+  const current = getEmployeeDetails(employeeId)
+  if (!current?.loaded || current.loading) {
+    return
+  }
+
+  if (typeof document !== 'undefined' && document.hidden) {
+    return
+  }
+
+  activeEmployeeDetailsRefreshInFlight = true
+  try {
+    const [appearanceSummaryResponse, eventsResponse, intervalsResponse] = await Promise.all([
+      fetchEmployeeAppearanceSummary(employeeId),
+      fetchEmployeeEvents(employeeId, current.eventsPage, current.eventsPageSize, current.eventsTypeFilter),
+      fetchEmployeeIntervals(employeeId, current.intervalsPage, current.intervalsPageSize),
+    ])
+
+    updateEmployeeDetails(employeeId, {
+      appearanceSummary: appearanceSummaryResponse,
+      events: eventsResponse.items,
+      eventsPage: eventsResponse.page,
+      eventsPageSize: eventsResponse.pageSize,
+      eventsTotal: eventsResponse.total,
+      intervals: intervalsResponse.items,
+      intervalsPage: intervalsResponse.page,
+      intervalsPageSize: intervalsResponse.pageSize,
+      intervalsTotal: intervalsResponse.total,
+    })
+  } catch {
+    // Silent background refresh.
+  } finally {
+    activeEmployeeDetailsRefreshInFlight = false
   }
 }
 

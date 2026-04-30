@@ -51,7 +51,7 @@ export const RECOMMENDED_RECOGNITION_CONFIG: RecognitionConfig = {
   presence: {
     observationMode: true,
     observationIntervalSeconds: 2,
-    inThresholdSeconds: 1.5,
+    inThresholdSeconds: 3,
     outThresholdSeconds: 12,
   },
   streaming: {
@@ -237,7 +237,7 @@ export const RECOGNITION_FIELD_META: Readonly<Record<string, FieldMeta>> = {
   inThresholdSeconds: {
     min: 0,
     max: 60,
-    recommended: 1.5,
+    recommended: 3,
     descriptionKey: 'companies.dialog.hints.inThresholdSeconds',
   },
   outThresholdSeconds: {
