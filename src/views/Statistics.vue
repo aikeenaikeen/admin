@@ -156,6 +156,7 @@ interface EmployeeDetails {
   events: EmployeeEventRow[]
   eventsLoading: boolean
   eventsTypeFilter: EmployeeEventsTypeFilter
+  expandedVisibilityPeriodIds: string[]
   eventsPage: number
   eventsPageSize: number
   eventsTotal: number
@@ -364,6 +365,10 @@ async function refreshActiveEmployeeDetailsLive() {
     updateEmployeeDetails(employeeId, {
       appearanceSummary: appearanceSummaryResponse,
       events: eventsResponse.items,
+      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
+        current.expandedVisibilityPeriodIds,
+        eventsResponse.items
+      ),
       eventsPage: eventsResponse.page,
       eventsPageSize: eventsResponse.pageSize,
       eventsTotal: eventsResponse.total,
@@ -437,6 +442,7 @@ function createEmployeeDetailsState(current?: Partial<EmployeeDetails>): Employe
     events: current?.events ?? [],
     eventsLoading: current?.eventsLoading ?? false,
     eventsTypeFilter: current?.eventsTypeFilter ?? 'IN',
+    expandedVisibilityPeriodIds: current?.expandedVisibilityPeriodIds ?? [],
     eventsPage: current?.eventsPage ?? 1,
     eventsPageSize: current?.eventsPageSize ?? DEFAULT_EVENTS_PAGE_SIZE,
     eventsTotal: current?.eventsTotal ?? 0,
@@ -458,6 +464,20 @@ function updateEmployeeDetails(employeeId: number, patch: Partial<EmployeeDetail
       ...patch,
     },
   }
+}
+
+function extractVisibilityPeriodIds(rows: EmployeeEventRow[]): string[] {
+  return rows
+    .filter((row): row is VisibilityPeriodItem => 'startEvent' in row)
+    .map((row) => row.id)
+}
+
+function sanitizeExpandedVisibilityPeriodIds(
+  expandedIds: string[],
+  rows: EmployeeEventRow[]
+): string[] {
+  const validIds = new Set(extractVisibilityPeriodIds(rows))
+  return expandedIds.filter((id) => validIds.has(id))
 }
 
 async function fetchEmployeeActivities(employeeId: number) {
@@ -577,6 +597,10 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       activities: activitiesResponse,
       appearanceSummary: appearanceSummaryResponse,
       events: eventsResponse.items,
+      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
+        current.expandedVisibilityPeriodIds,
+        eventsResponse.items
+      ),
       eventsPage: eventsResponse.page,
       eventsPageSize: eventsResponse.pageSize,
       eventsTotal: eventsResponse.total,
@@ -598,6 +622,7 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       appearanceSummary: null,
       events: [],
       eventsTypeFilter: current.eventsTypeFilter,
+      expandedVisibilityPeriodIds: [],
       eventsPage: 1,
       eventsPageSize: DEFAULT_EVENTS_PAGE_SIZE,
       eventsTotal: 0,
@@ -629,6 +654,10 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
     updateEmployeeDetails(employeeId, {
       eventsLoading: false,
       events: response.items,
+      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
+        current.expandedVisibilityPeriodIds,
+        response.items
+      ),
       eventsPage: response.page,
       eventsPageSize: response.pageSize,
       eventsTotal: response.total,
@@ -643,9 +672,12 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
 
 async function handleEventsTypeFilterChange(employeeId: number, value: string | number | boolean) {
   const nextFilter = String(value || 'ALL') as EmployeeEventsTypeFilter
+  const current = createEmployeeDetailsState(getEmployeeDetails(employeeId))
 
   updateEmployeeDetails(employeeId, {
     eventsTypeFilter: nextFilter,
+    expandedVisibilityPeriodIds:
+      nextFilter === 'ALL' ? current.expandedVisibilityPeriodIds : [],
     eventsPage: 1,
   })
 
@@ -796,6 +828,18 @@ function getRawEventRows(employeeId: number): EventItem[] {
   return (getEmployeeDetails(employeeId)?.events || []).filter(
     (item): item is EventItem => !isVisibilityPeriod(item)
   )
+}
+
+function getExpandedVisibilityPeriodIds(employeeId: number): string[] {
+  return getEmployeeDetails(employeeId)?.expandedVisibilityPeriodIds || []
+}
+
+function handleVisibilityPeriodsExpandChangeFor(employeeId: number) {
+  return (_row: VisibilityPeriodItem, expandedRows: VisibilityPeriodItem[]) => {
+    updateEmployeeDetails(employeeId, {
+      expandedVisibilityPeriodIds: expandedRows.map((row) => row.id),
+    })
+  }
 }
 
 function getFallbackCamera(cameraId: number): CameraDisplayInfo {
@@ -1215,8 +1259,11 @@ function formatEvidenceScore(value?: number): string {
                       <el-table
                         v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
                         v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                        row-key="id"
+                        :expand-row-keys="getExpandedVisibilityPeriodIds(row.id)"
                         :data="getVisibilityPeriodRows(row.id)"
                         style="width: 100%"
+                        @expand-change="handleVisibilityPeriodsExpandChangeFor(row.id)"
                       >
                         <el-table-column type="expand">
                           <template #default="{ row: periodRow }">
