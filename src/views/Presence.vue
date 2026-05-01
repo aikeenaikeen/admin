@@ -3,11 +3,11 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, User } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { io, Socket } from 'socket.io-client'
+import type { Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
-import { resolveBaseUrl } from '@/utils/baseUrl'
 import { formatDateTime } from '@/utils/date'
 import { translateEventType } from '@/utils/uiText'
+import { createRealtimeSocket } from '@/utils/realtime'
 
 const { t } = useI18n()
 
@@ -59,22 +59,14 @@ function debouncedReload() {
 }
 
 function connectSocket() {
-  const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_API_BASE_URL)
-  
-  socket = io(API_BASE_URL, {
-    path: '/ws',
-  })
+  socket = createRealtimeSocket()
 
   socket.on('connect', () => {
-    console.log('Socket connected')
+    debouncedReload()
   })
 
   socket.on('event:created', () => {
     debouncedReload()
-  })
-
-  socket.on('disconnect', () => {
-    console.log('Socket disconnected')
   })
 }
 

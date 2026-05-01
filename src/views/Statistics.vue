@@ -3,11 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Calendar, Search, User, Right } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import type { Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import { formatDateTime } from '@/utils/date'
 import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
 import { translateActivityKind, translateEventType } from '@/utils/uiText'
+import { createRealtimeSocket } from '@/utils/realtime'
 
 const { t } = useI18n()
 
@@ -156,7 +158,6 @@ interface EmployeeDetails {
   events: EmployeeEventRow[]
   eventsLoading: boolean
   eventsTypeFilter: EmployeeEventsTypeFilter
-  expandedVisibilityPeriodIds: string[]
   eventsPage: number
   eventsPageSize: number
   eventsTotal: number
@@ -170,8 +171,7 @@ interface EmployeeDetails {
 const DEFAULT_EVENTS_PAGE_SIZE = 20
 const DEFAULT_INTERVALS_PAGE_SIZE = 20
 const DETAIL_PAGE_SIZES = [10, 20, 50, 100]
-const LIVE_PRESENCE_POLL_MS = 2000
-const LIVE_EMPLOYEE_DETAILS_POLL_MS = 5000
+const REALTIME_REFRESH_DEBOUNCE_MS = 500
 
 const statistics = ref<StatisticsResponse | null>(null)
 const employees = ref<Employee[]>([])
@@ -189,9 +189,14 @@ const evidenceDialogInterval = ref<IntervalItem | null>(null)
 const search = ref('')
 const dateFrom = ref('')
 const dateTo = ref('')
-let presencePollHandle: ReturnType<typeof setInterval> | null = null
-let activeEmployeeDetailsPollHandle: ReturnType<typeof setInterval> | null = null
+let socket: Socket | null = null
+let presenceReloadTimer: ReturnType<typeof setTimeout> | null = null
+let statisticsReloadTimer: ReturnType<typeof setTimeout> | null = null
+let employeesReloadTimer: ReturnType<typeof setTimeout> | null = null
+let activeEmployeeDetailsReloadTimer: ReturnType<typeof setTimeout> | null = null
 let presenceRefreshInFlight = false
+let statisticsRefreshInFlight = false
+let employeesRefreshInFlight = false
 let activeEmployeeDetailsRefreshInFlight = false
 
 const expandedRowKeys = computed(() => (activeEmployeeId.value ? [activeEmployeeId.value] : []))
@@ -206,19 +211,7 @@ const camerasById = computed(() => {
 
 const selectedEvidenceFrames = computed(() => getIntervalEvidenceFrames(evidenceDialogInterval.value))
 
-const displayEmployees = computed(() => {
-  return [...employees.value]
-    .sort((left, right) => {
-      const leftPresent = presenceByEmployeeId.value.get(left.id)?.present ? 1 : 0
-      const rightPresent = presenceByEmployeeId.value.get(right.id)?.present ? 1 : 0
-
-      if (leftPresent !== rightPresent) {
-        return rightPresent - leftPresent
-      }
-
-      return left.name.localeCompare(right.name, 'ru')
-    })
-})
+const displayEmployees = computed(() => employees.value)
 
 onMounted(async () => {
   const today = new Date()
@@ -226,11 +219,11 @@ onMounted(async () => {
   dateTo.value = today.toISOString().split('T')[0]
 
   await loadPage()
-  startLiveRefresh()
+  connectSocket()
 })
 
 onBeforeUnmount(() => {
-  stopLiveRefresh()
+  disconnectSocket()
 })
 
 function buildDateRange() {
@@ -256,28 +249,95 @@ function resetEmployeeDetails() {
   employeeDetails.value = {}
 }
 
-function stopLiveRefresh() {
-  if (presencePollHandle) {
-    clearInterval(presencePollHandle)
-    presencePollHandle = null
+function clearReloadTimer(handle: ReturnType<typeof setTimeout> | null): null {
+  if (handle) {
+    clearTimeout(handle)
   }
 
-  if (activeEmployeeDetailsPollHandle) {
-    clearInterval(activeEmployeeDetailsPollHandle)
-    activeEmployeeDetailsPollHandle = null
+  return null
+}
+
+function disconnectSocket() {
+  presenceReloadTimer = clearReloadTimer(presenceReloadTimer)
+  statisticsReloadTimer = clearReloadTimer(statisticsReloadTimer)
+  employeesReloadTimer = clearReloadTimer(employeesReloadTimer)
+  activeEmployeeDetailsReloadTimer = clearReloadTimer(activeEmployeeDetailsReloadTimer)
+
+  if (socket) {
+    socket.disconnect()
+    socket = null
   }
 }
 
-function startLiveRefresh() {
-  stopLiveRefresh()
-
-  presencePollHandle = setInterval(() => {
+function schedulePresenceRefresh() {
+  presenceReloadTimer = clearReloadTimer(presenceReloadTimer)
+  presenceReloadTimer = setTimeout(() => {
     void refreshPresenceLive()
-  }, LIVE_PRESENCE_POLL_MS)
+  }, REALTIME_REFRESH_DEBOUNCE_MS)
+}
 
-  activeEmployeeDetailsPollHandle = setInterval(() => {
+function scheduleStatisticsRefresh() {
+  statisticsReloadTimer = clearReloadTimer(statisticsReloadTimer)
+  statisticsReloadTimer = setTimeout(() => {
+    void refreshStatisticsLive()
+  }, REALTIME_REFRESH_DEBOUNCE_MS)
+}
+
+function scheduleEmployeesRefresh() {
+  employeesReloadTimer = clearReloadTimer(employeesReloadTimer)
+  employeesReloadTimer = setTimeout(() => {
+    void refreshEmployeesLive()
+  }, REALTIME_REFRESH_DEBOUNCE_MS)
+}
+
+function scheduleActiveEmployeeDetailsRefresh(targetEmployeeId?: number | null) {
+  if (!activeEmployeeId.value) {
+    return
+  }
+
+  if (targetEmployeeId && activeEmployeeId.value !== targetEmployeeId) {
+    return
+  }
+
+  activeEmployeeDetailsReloadTimer = clearReloadTimer(activeEmployeeDetailsReloadTimer)
+  activeEmployeeDetailsReloadTimer = setTimeout(() => {
     void refreshActiveEmployeeDetailsLive()
-  }, LIVE_EMPLOYEE_DETAILS_POLL_MS)
+  }, REALTIME_REFRESH_DEBOUNCE_MS)
+}
+
+function connectSocket() {
+  disconnectSocket()
+  socket = createRealtimeSocket()
+
+  socket.on('connect', () => {
+    schedulePresenceRefresh()
+    scheduleStatisticsRefresh()
+    scheduleEmployeesRefresh()
+    scheduleActiveEmployeeDetailsRefresh(activeEmployeeId.value)
+  })
+
+  socket.on('event:created', (payload?: { employeeId?: number }) => {
+    schedulePresenceRefresh()
+    scheduleStatisticsRefresh()
+    scheduleActiveEmployeeDetailsRefresh(payload?.employeeId ?? null)
+  })
+
+  socket.on('activity-interval:created', (payload?: { employeeId?: number }) => {
+    scheduleActiveEmployeeDetailsRefresh(payload?.employeeId ?? null)
+  })
+
+  socket.on('employee:created', () => {
+    scheduleEmployeesRefresh()
+  })
+
+  socket.on('employee:updated', (payload?: { id?: number }) => {
+    scheduleEmployeesRefresh()
+    scheduleActiveEmployeeDetailsRefresh(payload?.id ?? null)
+  })
+
+  socket.on('employee:deleted', () => {
+    scheduleEmployeesRefresh()
+  })
 }
 
 function buildEmployeeParams() {
@@ -312,7 +372,7 @@ async function loadEmployees() {
     const nextEmployees = await fetchEmployees()
     employees.value = nextEmployees
     syncActiveEmployee(nextEmployees)
-  } catch (error) {
+  } catch {
     ElMessage.error(t('employees.loadError'))
   } finally {
     employeesLoading.value = false
@@ -320,11 +380,9 @@ async function loadEmployees() {
 }
 
 async function refreshPresenceLive() {
-  if (loading.value || presenceRefreshInFlight) {
-    return
-  }
+  presenceReloadTimer = clearReloadTimer(presenceReloadTimer)
 
-  if (typeof document !== 'undefined' && document.hidden) {
+  if (loading.value || presenceRefreshInFlight) {
     return
   }
 
@@ -339,7 +397,53 @@ async function refreshPresenceLive() {
   }
 }
 
+async function refreshStatisticsLive() {
+  statisticsReloadTimer = clearReloadTimer(statisticsReloadTimer)
+
+  if (loading.value || statisticsRefreshInFlight) {
+    return
+  }
+
+  const { from, to } = buildDateRange()
+
+  statisticsRefreshInFlight = true
+  try {
+    const response = await apiClient.get('/api/statistics', {
+      params: {
+        dateFrom: from,
+        dateTo: to,
+      },
+    })
+    statistics.value = response.data
+  } catch {
+    // Keep background refresh silent to avoid noisy UI.
+  } finally {
+    statisticsRefreshInFlight = false
+  }
+}
+
+async function refreshEmployeesLive() {
+  employeesReloadTimer = clearReloadTimer(employeesReloadTimer)
+
+  if (loading.value || employeesRefreshInFlight) {
+    return
+  }
+
+  employeesRefreshInFlight = true
+  try {
+    const nextEmployees = await fetchEmployees()
+    employees.value = nextEmployees
+    syncActiveEmployee(nextEmployees)
+  } catch {
+    // Keep background refresh silent to avoid noisy UI.
+  } finally {
+    employeesRefreshInFlight = false
+  }
+}
+
 async function refreshActiveEmployeeDetailsLive() {
+  activeEmployeeDetailsReloadTimer = clearReloadTimer(activeEmployeeDetailsReloadTimer)
+
   const employeeId = activeEmployeeId.value
   if (!employeeId || activeEmployeeDetailsRefreshInFlight) {
     return
@@ -347,10 +451,6 @@ async function refreshActiveEmployeeDetailsLive() {
 
   const current = getEmployeeDetails(employeeId)
   if (!current?.loaded || current.loading) {
-    return
-  }
-
-  if (typeof document !== 'undefined' && document.hidden) {
     return
   }
 
@@ -365,10 +465,6 @@ async function refreshActiveEmployeeDetailsLive() {
     updateEmployeeDetails(employeeId, {
       appearanceSummary: appearanceSummaryResponse,
       events: eventsResponse.items,
-      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
-        current.expandedVisibilityPeriodIds,
-        eventsResponse.items
-      ),
       eventsPage: eventsResponse.page,
       eventsPageSize: eventsResponse.pageSize,
       eventsTotal: eventsResponse.total,
@@ -442,7 +538,6 @@ function createEmployeeDetailsState(current?: Partial<EmployeeDetails>): Employe
     events: current?.events ?? [],
     eventsLoading: current?.eventsLoading ?? false,
     eventsTypeFilter: current?.eventsTypeFilter ?? 'IN',
-    expandedVisibilityPeriodIds: current?.expandedVisibilityPeriodIds ?? [],
     eventsPage: current?.eventsPage ?? 1,
     eventsPageSize: current?.eventsPageSize ?? DEFAULT_EVENTS_PAGE_SIZE,
     eventsTotal: current?.eventsTotal ?? 0,
@@ -464,20 +559,6 @@ function updateEmployeeDetails(employeeId: number, patch: Partial<EmployeeDetail
       ...patch,
     },
   }
-}
-
-function extractVisibilityPeriodIds(rows: EmployeeEventRow[]): string[] {
-  return rows
-    .filter((row): row is VisibilityPeriodItem => 'startEvent' in row)
-    .map((row) => row.id)
-}
-
-function sanitizeExpandedVisibilityPeriodIds(
-  expandedIds: string[],
-  rows: EmployeeEventRow[]
-): string[] {
-  const validIds = new Set(extractVisibilityPeriodIds(rows))
-  return expandedIds.filter((id) => validIds.has(id))
 }
 
 async function fetchEmployeeActivities(employeeId: number) {
@@ -597,10 +678,6 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       activities: activitiesResponse,
       appearanceSummary: appearanceSummaryResponse,
       events: eventsResponse.items,
-      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
-        current.expandedVisibilityPeriodIds,
-        eventsResponse.items
-      ),
       eventsPage: eventsResponse.page,
       eventsPageSize: eventsResponse.pageSize,
       eventsTotal: eventsResponse.total,
@@ -622,7 +699,6 @@ async function loadEmployeeDetails(employeeId: number, force = false) {
       appearanceSummary: null,
       events: [],
       eventsTypeFilter: current.eventsTypeFilter,
-      expandedVisibilityPeriodIds: [],
       eventsPage: 1,
       eventsPageSize: DEFAULT_EVENTS_PAGE_SIZE,
       eventsTotal: 0,
@@ -654,10 +730,6 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
     updateEmployeeDetails(employeeId, {
       eventsLoading: false,
       events: response.items,
-      expandedVisibilityPeriodIds: sanitizeExpandedVisibilityPeriodIds(
-        current.expandedVisibilityPeriodIds,
-        response.items
-      ),
       eventsPage: response.page,
       eventsPageSize: response.pageSize,
       eventsTotal: response.total,
@@ -672,12 +744,9 @@ async function loadEmployeeEvents(employeeId: number, page: number, pageSize: nu
 
 async function handleEventsTypeFilterChange(employeeId: number, value: string | number | boolean) {
   const nextFilter = String(value || 'ALL') as EmployeeEventsTypeFilter
-  const current = createEmployeeDetailsState(getEmployeeDetails(employeeId))
 
   updateEmployeeDetails(employeeId, {
     eventsTypeFilter: nextFilter,
-    expandedVisibilityPeriodIds:
-      nextFilter === 'ALL' ? current.expandedVisibilityPeriodIds : [],
     eventsPage: 1,
   })
 
@@ -828,18 +897,6 @@ function getRawEventRows(employeeId: number): EventItem[] {
   return (getEmployeeDetails(employeeId)?.events || []).filter(
     (item): item is EventItem => !isVisibilityPeriod(item)
   )
-}
-
-function getExpandedVisibilityPeriodIds(employeeId: number): string[] {
-  return getEmployeeDetails(employeeId)?.expandedVisibilityPeriodIds || []
-}
-
-function handleVisibilityPeriodsExpandChangeFor(employeeId: number) {
-  return (_row: VisibilityPeriodItem, expandedRows: VisibilityPeriodItem[]) => {
-    updateEmployeeDetails(employeeId, {
-      expandedVisibilityPeriodIds: expandedRows.map((row) => row.id),
-    })
-  }
 }
 
 function getFallbackCamera(cameraId: number): CameraDisplayInfo {
@@ -1259,28 +1316,9 @@ function formatEvidenceScore(value?: number): string {
                       <el-table
                         v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
                         v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        row-key="id"
-                        :expand-row-keys="getExpandedVisibilityPeriodIds(row.id)"
                         :data="getVisibilityPeriodRows(row.id)"
                         style="width: 100%"
-                        @expand-change="handleVisibilityPeriodsExpandChangeFor(row.id)"
                       >
-                        <el-table-column type="expand">
-                          <template #default="{ row: periodRow }">
-                            <el-descriptions :column="2" border class="period-details">
-                              <el-descriptions-item :label="translateEventType('IN')">
-                                #{{ periodRow.startEvent.id }} · {{ formatDateTime(periodRow.startTime) }} · {{ periodRow.startEvent.source }}
-                              </el-descriptions-item>
-                              <el-descriptions-item :label="translateEventType('OUT')">
-                                <span v-if="periodRow.endEvent">
-                                  #{{ periodRow.endEvent.id }} · {{ formatDateTime(periodRow.endTime) }} · {{ periodRow.endEvent.source }}
-                                </span>
-                                <span v-else>{{ t('events.inProgress') }}</span>
-                              </el-descriptions-item>
-                            </el-descriptions>
-                          </template>
-                        </el-table-column>
-
                         <el-table-column :label="t('common.labels.period')" min-width="300">
                           <template #default="{ row: periodRow }">
                             <div class="period-line">
