@@ -41,6 +41,7 @@ async function loadStats() {
       params: {
         dateFrom: today.toISOString(),
         dateTo: tomorrow.toISOString(),
+        type: 'IN',
         limit: 1
       },
     })

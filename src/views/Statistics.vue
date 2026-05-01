@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, Calendar, Search, User } from '@element-plus/icons-vue'
+import { Refresh, Calendar, Search, User, Right } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
@@ -52,12 +52,40 @@ interface EventItem {
   employeeId: number
   type: string
   timestamp: string
+  source?: string
   employee: {
     name: string
   }
   camera?: CameraDisplayInfo | null
 }
 
+interface VisibilityPeriodItem {
+  id: string
+  employeeId: number
+  employee: {
+    name: string
+  }
+  startTime: string
+  endTime: string | null
+  durationSeconds: number | null
+  isOpen: boolean
+  startCamera: CameraDisplayInfo | null
+  endCamera: CameraDisplayInfo | null
+  startEvent: {
+    id: number
+    type: 'IN'
+    timestamp: string
+    source: string
+  }
+  endEvent: {
+    id: number
+    type: 'OUT'
+    timestamp: string
+    source: string
+  } | null
+}
+
+type EmployeeEventRow = EventItem | VisibilityPeriodItem
 type EmployeeEventsTypeFilter = 'ALL' | 'IN' | 'OUT'
 
 interface AppearanceSummaryPoint {
@@ -125,7 +153,7 @@ interface EmployeeDetails {
   activitiesLoading: boolean
   appearanceSummary: EmployeeAppearanceSummary | null
   appearanceSummaryLoading: boolean
-  events: EventItem[]
+  events: EmployeeEventRow[]
   eventsLoading: boolean
   eventsTypeFilter: EmployeeEventsTypeFilter
   eventsPage: number
@@ -408,7 +436,7 @@ function createEmployeeDetailsState(current?: Partial<EmployeeDetails>): Employe
     appearanceSummaryLoading: current?.appearanceSummaryLoading ?? false,
     events: current?.events ?? [],
     eventsLoading: current?.eventsLoading ?? false,
-    eventsTypeFilter: current?.eventsTypeFilter ?? 'ALL',
+    eventsTypeFilter: current?.eventsTypeFilter ?? 'IN',
     eventsPage: current?.eventsPage ?? 1,
     eventsPageSize: current?.eventsPageSize ?? DEFAULT_EVENTS_PAGE_SIZE,
     eventsTotal: current?.eventsTotal ?? 0,
@@ -458,14 +486,29 @@ async function fetchEmployeeEvents(
 ) {
   const { from, to } = buildDateRange()
 
+  const params = {
+    employeeId,
+    dateFrom: from,
+    dateTo: to,
+    page,
+    limit: pageSize,
+  }
+
+  if (type === 'ALL') {
+    const response = await apiClient.get('/api/events/visibility-periods', { params })
+
+    return {
+      items: response.data?.periods || [],
+      total: response.data?.pagination?.total || 0,
+      page: response.data?.pagination?.page || page,
+      pageSize: response.data?.pagination?.limit || pageSize,
+    }
+  }
+
   const response = await apiClient.get('/api/events', {
     params: {
-      employeeId,
-      type: type === 'ALL' ? undefined : type,
-      dateFrom: from,
-      dateTo: to,
-      page,
-      limit: pageSize,
+      ...params,
+      type,
     },
   })
 
@@ -690,8 +733,69 @@ function formatDuration(startIso: string, endIso: string): string {
   return t('employeeActivities.durationSeconds', { value: seconds })
 }
 
+function formatClock(time: string | null | undefined): string {
+  if (!time) return t('common.misc.none')
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) return t('common.misc.none')
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatDurationSeconds(seconds: number | null): string {
+  if (seconds === null) {
+    return t('events.inProgress')
+  }
+
+  if (seconds < 60) {
+    return t('events.durationSeconds', { value: seconds })
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  const restSeconds = seconds % 60
+
+  if (minutes < 60) {
+    return restSeconds > 0
+      ? t('events.durationMinutesSeconds', { minutes, seconds: restSeconds })
+      : t('events.durationMinutes', { value: minutes })
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+
+  return restMinutes > 0
+    ? t('events.durationHoursMinutes', { hours, minutes: restMinutes })
+    : t('events.durationHours', { value: hours })
+}
+
 function formatCameraDisplay(camera?: Pick<CameraDisplayInfo, 'name' | 'location'> | null): string {
   return formatCameraLabel(camera) || t('common.misc.none')
+}
+
+function formatVisibilityPeriodCamera(period: VisibilityPeriodItem): string {
+  const start = formatCameraDisplay(period.startCamera)
+  const end = formatCameraDisplay(period.endCamera)
+
+  if (!period.endCamera || start === end) {
+    return start
+  }
+
+  return `${start} -> ${end}`
+}
+
+function isVisibilityPeriod(row: EmployeeEventRow): row is VisibilityPeriodItem {
+  return 'startEvent' in row
+}
+
+function getVisibilityPeriodRows(employeeId: number): VisibilityPeriodItem[] {
+  return (getEmployeeDetails(employeeId)?.events || []).filter(isVisibilityPeriod)
+}
+
+function getRawEventRows(employeeId: number): EventItem[] {
+  return (getEmployeeDetails(employeeId)?.events || []).filter(
+    (item): item is EventItem => !isVisibilityPeriod(item)
+  )
 }
 
 function getFallbackCamera(cameraId: number): CameraDisplayInfo {
@@ -1097,7 +1201,7 @@ function formatEvidenceScore(value?: number): string {
                         <div class="employee-events-toolbar">
                           <span class="employee-events-toolbar__label">{{ t('statistics.eventTypeFilter') }}</span>
                           <el-radio-group
-                            :model-value="getEmployeeDetails(row.id)?.eventsTypeFilter || 'ALL'"
+                            :model-value="getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN'"
                             size="small"
                             @change="handleEventsTypeFilterChange(row.id, $event)"
                           >
@@ -1109,9 +1213,57 @@ function formatEvidenceScore(value?: number): string {
                       </div>
 
                       <el-table
-                        v-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                        v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
                         v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        :data="getEmployeeDetails(row.id)?.events || []"
+                        :data="getVisibilityPeriodRows(row.id)"
+                        style="width: 100%"
+                      >
+                        <el-table-column type="expand">
+                          <template #default="{ row: periodRow }">
+                            <el-descriptions :column="2" border class="period-details">
+                              <el-descriptions-item :label="translateEventType('IN')">
+                                #{{ periodRow.startEvent.id }} · {{ formatDateTime(periodRow.startTime) }} · {{ periodRow.startEvent.source }}
+                              </el-descriptions-item>
+                              <el-descriptions-item :label="translateEventType('OUT')">
+                                <span v-if="periodRow.endEvent">
+                                  #{{ periodRow.endEvent.id }} · {{ formatDateTime(periodRow.endTime) }} · {{ periodRow.endEvent.source }}
+                                </span>
+                                <span v-else>{{ t('events.inProgress') }}</span>
+                              </el-descriptions-item>
+                            </el-descriptions>
+                          </template>
+                        </el-table-column>
+
+                        <el-table-column :label="t('common.labels.period')" min-width="300">
+                          <template #default="{ row: periodRow }">
+                            <div class="period-line">
+                              <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(periodRow.startTime) }}</el-tag>
+                              <el-icon class="period-line__arrow"><Right /></el-icon>
+                              <el-tag :type="periodRow.isOpen ? 'success' : 'warning'" effect="plain">
+                                {{ periodRow.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(periodRow.endTime)}` }}
+                              </el-tag>
+                            </div>
+                            <div class="period-line__date">{{ formatDateTime(periodRow.startTime) }}</div>
+                          </template>
+                        </el-table-column>
+
+                        <el-table-column :label="t('events.duration')" width="140">
+                          <template #default="{ row: periodRow }">
+                            {{ formatDurationSeconds(periodRow.durationSeconds) }}
+                          </template>
+                        </el-table-column>
+
+                        <el-table-column :label="t('events.camera')" min-width="180">
+                          <template #default="{ row: periodRow }">
+                            {{ formatVisibilityPeriodCamera(periodRow) }}
+                          </template>
+                        </el-table-column>
+                      </el-table>
+
+                      <el-table
+                        v-else-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                        :data="getRawEventRows(row.id)"
                         style="width: 100%"
                       >
                         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
@@ -1160,7 +1312,7 @@ function formatEvidenceScore(value?: number): string {
                       <el-empty
                         v-else
                         v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        :description="t('statistics.noEvents')"
+                        :description="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' ? t('events.noVisibilityPeriods') : t('statistics.noEvents')"
                         :image-size="72"
                       />
                     </el-tab-pane>
@@ -1512,6 +1664,27 @@ function formatEvidenceScore(value?: number): string {
 .employee-events-toolbar__label {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+.period-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.period-line__arrow {
+  color: var(--el-text-color-secondary);
+}
+
+.period-line__date {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.period-details {
+  margin: 8px 0;
 }
 
 .camera-link-list {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, Calendar } from '@element-plus/icons-vue'
+import { Refresh, Calendar, Right } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
@@ -9,20 +9,54 @@ import { translateEventType } from '@/utils/uiText'
 
 const { t } = useI18n()
 
+type EventTypeFilter = 'ALL' | 'IN' | 'OUT'
+
+interface CameraInfo {
+  id: number
+  name: string
+  location?: string | null
+}
+
 interface Event {
   id: number
   employeeId: number
   type: string
   timestamp: string
+  source?: string
   employee: {
     name: string
   }
-  camera?: {
+  camera?: CameraInfo | null
+}
+
+interface VisibilityPeriod {
+  id: string
+  employeeId: number
+  employee: {
     name: string
   }
+  startTime: string
+  endTime: string | null
+  durationSeconds: number | null
+  isOpen: boolean
+  startCamera: CameraInfo | null
+  endCamera: CameraInfo | null
+  startEvent: {
+    id: number
+    type: 'IN'
+    timestamp: string
+    source: string
+  }
+  endEvent: {
+    id: number
+    type: 'OUT'
+    timestamp: string
+    source: string
+  } | null
 }
 
 const events = ref<Event[]>([])
+const visibilityPeriods = ref<VisibilityPeriod[]>([])
 const loading = ref(true)
 const currentPage = ref(1)
 const pageSize = ref(50)
@@ -31,40 +65,53 @@ const total = ref(0)
 const filters = ref({
   dateFrom: '',
   dateTo: '',
-  type: '',
+  type: 'IN' as EventTypeFilter,
 })
+
+const showingVisibilityPeriods = computed(() => filters.value.type === 'ALL')
 
 onMounted(async () => {
   await loadEvents()
 })
 
+function buildRequestParams() {
+  const params: Record<string, string | number | undefined> = {
+    page: currentPage.value,
+    limit: pageSize.value,
+  }
+
+  if (filters.value.dateFrom) {
+    const fromDate = new Date(filters.value.dateFrom)
+    fromDate.setHours(0, 0, 0, 0)
+    params.dateFrom = fromDate.toISOString()
+  }
+
+  if (filters.value.dateTo) {
+    const toDate = new Date(filters.value.dateTo)
+    toDate.setHours(23, 59, 59, 999)
+    params.dateTo = toDate.toISOString()
+  }
+
+  return params
+}
+
 async function loadEvents() {
   loading.value = true
   try {
-    const params: any = {
-      page: currentPage.value,
-      limit: pageSize.value,
+    const params = buildRequestParams()
+
+    if (showingVisibilityPeriods.value) {
+      const response = await apiClient.get('/api/events/visibility-periods', { params })
+      visibilityPeriods.value = response.data.periods
+      events.value = []
+      total.value = response.data.pagination.total
+      return
     }
-    
-    // Add filters with proper ISO format
-    if (filters.value.dateFrom) {
-      const fromDate = new Date(filters.value.dateFrom)
-      fromDate.setHours(0, 0, 0, 0)
-      params.dateFrom = fromDate.toISOString()
-    }
-    
-    if (filters.value.dateTo) {
-      const toDate = new Date(filters.value.dateTo)
-      toDate.setHours(23, 59, 59, 999)
-      params.dateTo = toDate.toISOString()
-    }
-    
-    if (filters.value.type) {
-      params.type = filters.value.type
-    }
-    
+
+    params.type = filters.value.type
     const response = await apiClient.get('/api/events', { params })
     events.value = response.data.events
+    visibilityPeriods.value = []
     total.value = response.data.pagination.total
   } catch (error) {
     ElMessage.error(t('events.loadError'))
@@ -73,8 +120,60 @@ async function loadEvents() {
   }
 }
 
-function formatTime(time: string): string {
+function formatTime(time: string | null | undefined): string {
   return formatDateTime(time)
+}
+
+function formatClock(time: string | null | undefined): string {
+  if (!time) return t('common.misc.none')
+  const date = new Date(time)
+  if (Number.isNaN(date.getTime())) return t('common.misc.none')
+  return new Intl.DateTimeFormat(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatCamera(camera?: CameraInfo | null): string {
+  if (!camera) return t('common.misc.none')
+  return camera.location ? `${camera.name} · ${camera.location}` : camera.name
+}
+
+function formatPeriodCamera(period: VisibilityPeriod): string {
+  const start = formatCamera(period.startCamera)
+  const end = formatCamera(period.endCamera)
+
+  if (!period.endCamera || start === end) {
+    return start
+  }
+
+  return `${start} -> ${end}`
+}
+
+function formatDurationSeconds(seconds: number | null): string {
+  if (seconds === null) {
+    return t('events.inProgress')
+  }
+
+  if (seconds < 60) {
+    return t('events.durationSeconds', { value: seconds })
+  }
+
+  const minutes = Math.floor(seconds / 60)
+  const restSeconds = seconds % 60
+
+  if (minutes < 60) {
+    return restSeconds > 0
+      ? t('events.durationMinutesSeconds', { minutes, seconds: restSeconds })
+      : t('events.durationMinutes', { value: minutes })
+  }
+
+  const hours = Math.floor(minutes / 60)
+  const restMinutes = minutes % 60
+
+  return restMinutes > 0
+    ? t('events.durationHoursMinutes', { hours, minutes: restMinutes })
+    : t('events.durationHours', { value: hours })
 }
 
 function handlePageChange(page: number) {
@@ -82,8 +181,13 @@ function handlePageChange(page: number) {
   loadEvents()
 }
 
+function handleFilterChange() {
+  currentPage.value = 1
+  loadEvents()
+}
+
 function resetFilters() {
-  filters.value = { dateFrom: '', dateTo: '', type: '' }
+  filters.value = { dateFrom: '', dateTo: '', type: 'IN' }
   currentPage.value = 1
   loadEvents()
 }
@@ -121,7 +225,7 @@ function resetFilters() {
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
-                @change="loadEvents"
+                @change="handleFilterChange"
               />
             </el-form-item>
           </el-col>
@@ -135,15 +239,15 @@ function resetFilters() {
                 style="width: 100%"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
-                @change="loadEvents"
+                @change="handleFilterChange"
               />
             </el-form-item>
           </el-col>
           
           <el-col :xs="24" :sm="8">
             <el-form-item :label="t('events.type')">
-              <el-select v-model="filters.type" :placeholder="t('common.placeholders.all')" style="width: 100%" @change="loadEvents">
-                <el-option :label="t('common.placeholders.all')" value="" />
+              <el-select v-model="filters.type" :placeholder="t('common.placeholders.all')" style="width: 100%" @change="handleFilterChange">
+                <el-option :label="t('common.placeholders.all')" value="ALL" />
                 <el-option :label="translateEventType('IN')" value="IN" />
                 <el-option :label="translateEventType('OUT')" value="OUT" />
               </el-select>
@@ -158,7 +262,64 @@ function resetFilters() {
     </el-card>
 
     <el-card shadow="never">
-      <el-table :data="events" v-loading="loading" style="width: 100%">
+      <el-table
+        v-if="showingVisibilityPeriods"
+        :data="visibilityPeriods"
+        v-loading="loading"
+        :empty-text="t('events.noVisibilityPeriods')"
+        style="width: 100%"
+      >
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <el-descriptions :column="2" border class="period-details">
+              <el-descriptions-item :label="translateEventType('IN')">
+                #{{ row.startEvent.id }} · {{ formatTime(row.startTime) }} · {{ row.startEvent.source }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="translateEventType('OUT')">
+                <span v-if="row.endEvent">
+                  #{{ row.endEvent.id }} · {{ formatTime(row.endTime) }} · {{ row.endEvent.source }}
+                </span>
+                <span v-else>{{ t('events.inProgress') }}</span>
+              </el-descriptions-item>
+            </el-descriptions>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('common.labels.period')" min-width="300">
+          <template #default="{ row }">
+            <div class="period-line">
+              <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(row.startTime) }}</el-tag>
+              <el-icon class="period-line__arrow"><Right /></el-icon>
+              <el-tag :type="row.isOpen ? 'success' : 'warning'" effect="plain">
+                {{ row.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(row.endTime)}` }}
+              </el-tag>
+            </div>
+            <div class="period-line__date">{{ formatTime(row.startTime) }}</div>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="employee.name" :label="t('events.employee')" min-width="180" />
+
+        <el-table-column :label="t('events.duration')" width="140">
+          <template #default="{ row }">
+            {{ formatDurationSeconds(row.durationSeconds) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('events.camera')" min-width="220">
+          <template #default="{ row }">
+            {{ formatPeriodCamera(row) }}
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-table
+        v-else
+        :data="events"
+        v-loading="loading"
+        :empty-text="t('events.noEvents')"
+        style="width: 100%"
+      >
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
         <el-table-column :label="t('common.labels.time')" width="200">
@@ -179,7 +340,7 @@ function resetFilters() {
         
         <el-table-column :label="t('events.camera')" min-width="150">
           <template #default="{ row }">
-            {{ row.camera?.name || t('common.misc.none') }}
+            {{ formatCamera(row.camera) }}
           </template>
         </el-table-column>
       </el-table>
@@ -213,6 +374,27 @@ function resetFilters() {
   font-size: 24px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.period-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.period-line__arrow {
+  color: var(--el-text-color-secondary);
+}
+
+.period-line__date {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.period-details {
+  margin: 8px 0;
 }
 
 @media (max-width: 768px) {
