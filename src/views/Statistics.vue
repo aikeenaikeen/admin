@@ -55,6 +55,7 @@ interface EventItem {
   type: string
   timestamp: string
   source?: string
+  meta?: Record<string, any> | null
   employee: {
     name: string
   }
@@ -147,6 +148,11 @@ interface ActivityEvidenceFrame {
   frameSelection?: string
 }
 
+interface DetectionEvidenceFrame extends ActivityEvidenceFrame {
+  bbox?: number[]
+  bboxSource?: string
+}
+
 interface EmployeeDetails {
   loading: boolean
   loaded: boolean
@@ -185,6 +191,8 @@ const streamDialogVisible = ref(false)
 const streamDialogCamera = ref<CameraDisplayInfo | null>(null)
 const evidenceDialogVisible = ref(false)
 const evidenceDialogInterval = ref<IntervalItem | null>(null)
+const detectionEvidenceDialogVisible = ref(false)
+const detectionEvidenceDialogEvent = ref<EventItem | null>(null)
 
 const search = ref('')
 const dateFrom = ref('')
@@ -210,6 +218,7 @@ const camerasById = computed(() => {
 })
 
 const selectedEvidenceFrames = computed(() => getIntervalEvidenceFrames(evidenceDialogInterval.value))
+const selectedDetectionEvidenceFrames = computed(() => getEventDetectionEvidenceFrames(detectionEvidenceDialogEvent.value))
 
 const displayEmployees = computed(() => employees.value)
 
@@ -1011,6 +1020,41 @@ function openIntervalEvidence(interval: IntervalItem) {
   evidenceDialogVisible.value = true
 }
 
+function getEventDetectionEvidenceFrames(event?: EventItem | null): DetectionEvidenceFrame[] {
+  const evidence = event?.meta?.evidence
+  if (!evidence || typeof evidence !== 'object' || !Array.isArray(evidence.frames)) {
+    return []
+  }
+
+  return evidence.frames
+    .map((frame: any) => {
+      const url = normalizeEvidenceUrl(frame?.url)
+      if (!url) {
+        return null
+      }
+
+      return {
+        ...frame,
+        url,
+        capturedAt: frame?.capturedAt || evidence?.capturedAt || event?.timestamp,
+        score: Number(frame?.score ?? evidence?.score ?? evidence?.confidence ?? 0),
+        cropPolicy: frame?.cropPolicy || evidence?.cropPolicy,
+        frameSource: frame?.frameSource || evidence?.frameSource,
+        bboxSource: frame?.bboxSource || evidence?.cropPolicy,
+      } as DetectionEvidenceFrame
+    })
+    .filter((frame: DetectionEvidenceFrame | null): frame is DetectionEvidenceFrame => Boolean(frame))
+}
+
+function hasEventDetectionEvidence(event: EventItem): boolean {
+  return getEventDetectionEvidenceFrames(event).length > 0
+}
+
+function openEventDetectionEvidence(event: EventItem) {
+  detectionEvidenceDialogEvent.value = event
+  detectionEvidenceDialogVisible.value = true
+}
+
 function formatEvidenceScore(value?: number): string {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return t('common.misc.none')
@@ -1357,11 +1401,22 @@ function formatEvidenceScore(value?: number): string {
                             {{ formatDateTime(eventRow.timestamp) }}
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('events.type')" width="120">
+                        <el-table-column :label="t('events.type')" width="150">
                           <template #default="{ row: eventRow }">
-                            <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
-                              {{ translateEventType(eventRow.type) }}
-                            </el-tag>
+                            <div class="event-type-cell">
+                              <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
+                                {{ translateEventType(eventRow.type) }}
+                              </el-tag>
+                              <el-button
+                                v-if="hasEventDetectionEvidence(eventRow)"
+                                link
+                                type="primary"
+                                class="activity-evidence-link"
+                                @click.stop="openEventDetectionEvidence(eventRow)"
+                              >
+                                {{ t('statistics.viewDetectionEvidence', { count: getEventDetectionEvidenceFrames(eventRow).length }) }}
+                              </el-button>
+                            </div>
                           </template>
                         </el-table-column>
                         <el-table-column :label="t('events.camera')" min-width="180">
@@ -1539,6 +1594,59 @@ function formatEvidenceScore(value?: number): string {
       v-model="streamDialogVisible"
       :camera="streamDialogCamera"
     />
+
+    <el-dialog
+      v-model="detectionEvidenceDialogVisible"
+      :title="t('statistics.detectionEvidenceTitle')"
+      width="640px"
+      class="activity-evidence-dialog"
+    >
+      <div v-if="detectionEvidenceDialogEvent" class="activity-evidence-summary">
+        <div>
+          <strong>{{ translateEventType(detectionEvidenceDialogEvent.type) }}</strong>
+          <span>{{ formatDateTime(detectionEvidenceDialogEvent.timestamp) }}</span>
+        </div>
+        <el-tag v-if="selectedDetectionEvidenceFrames[0]?.score" type="success">
+          {{ t('statistics.confidence') }}: {{ formatEvidenceScore(selectedDetectionEvidenceFrames[0].score) }}
+        </el-tag>
+      </div>
+
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        class="activity-evidence-alert"
+        :title="t('statistics.detectionEvidenceHint')"
+      />
+
+      <div v-if="selectedDetectionEvidenceFrames.length > 0" class="activity-evidence-grid">
+        <figure
+          v-for="(frame, index) in selectedDetectionEvidenceFrames"
+          :key="`${frame.url}-${index}`"
+          class="activity-evidence-card"
+        >
+          <img
+            :src="frame.url"
+            :alt="t('statistics.detectionEvidenceFrameAlt', { index: index + 1 })"
+            class="activity-evidence-image"
+            loading="lazy"
+          >
+          <figcaption class="activity-evidence-meta">
+            <span>{{ t('statistics.activityEvidenceFrame', { index: index + 1 }) }}</span>
+            <span>{{ t('statistics.confidence') }}: {{ formatEvidenceScore(frame.score) }}</span>
+            <span v-if="frame.capturedAt">{{ formatDateTime(frame.capturedAt) }}</span>
+            <span v-if="frame.frameSource === 'recognition_detection'">{{ t('statistics.detectionEvidenceSourceRecognition') }}</span>
+            <span v-if="frame.bboxSource">{{ t('statistics.cropPolicy') }}: {{ frame.bboxSource }}</span>
+          </figcaption>
+        </figure>
+      </div>
+
+      <el-empty
+        v-else
+        :description="t('statistics.noDetectionEvidence')"
+        :image-size="72"
+      />
+    </el-dialog>
 
     <el-dialog
       v-model="evidenceDialogVisible"
@@ -1749,6 +1857,13 @@ function formatEvidenceScore(value?: number): string {
 .employee-events-toolbar__label {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+.event-type-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .period-line {

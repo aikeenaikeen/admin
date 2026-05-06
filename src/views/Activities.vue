@@ -260,6 +260,8 @@ const ACTION_RECOGNITION_SPEC_KEYS = [
   'cropPolicy',
   'personBboxHoldSeconds',
   'objectCues',
+  'vlmVerifier',
+  'vlm_verifier',
 ] as const
 
 type ActionRecognitionEditableSettings = {
@@ -345,6 +347,7 @@ const form = ref({
   actionMinConsecutiveStartWindows: null as number | null,
   actionConflictWinnerMargin: null as number | null,
   actionConflictGroup: '',
+  actionVlmPrompt: '',
   objectCues: [] as ActivityObjectCueForm[],
 })
 const objectClassCatalog = ref<ObjectClassCatalog | null>(null)
@@ -965,6 +968,7 @@ function startEdit(activity: Activity) {
     actionMinConsecutiveStartWindows: actionSettings.actionMinConsecutiveStartWindows,
     actionConflictWinnerMargin: actionSettings.actionConflictWinnerMargin,
     actionConflictGroup: actionSettings.actionConflictGroup,
+    actionVlmPrompt: actionSettings.actionVlmPrompt,
     objectCues: extractObjectCuesFromDetectorSpec(activity.detectorSpec),
   }
   ensureObjectClassesLoaded()
@@ -983,6 +987,7 @@ function resetForm() {
     actionMinConsecutiveStartWindows: null,
     actionConflictWinnerMargin: null,
     actionConflictGroup: '',
+    actionVlmPrompt: '',
     objectCues: [],
   }
 }
@@ -1113,7 +1118,18 @@ function extractActionRecognitionSettings(source: any) {
     actionMinConsecutiveStartWindows: normalizeOptionalPositiveInt(actionRecognition.minConsecutiveStartWindows, 20) ?? null,
     actionConflictWinnerMargin: normalizeOptionalUnitNumber(actionRecognition.conflictWinnerMargin) ?? null,
     actionConflictGroup: typeof actionRecognition.conflictGroup === 'string' ? actionRecognition.conflictGroup : '',
+    actionVlmPrompt: extractActionVlmPrompt(actionRecognition),
   }
+}
+
+function extractActionVlmPrompt(actionRecognition: Record<string, any>): string {
+  const cfg = isRecord(actionRecognition.vlmVerifier)
+    ? actionRecognition.vlmVerifier
+    : isRecord(actionRecognition.vlm_verifier)
+      ? actionRecognition.vlm_verifier
+      : null
+  const prompt = typeof cfg?.prompt === 'string' ? cfg.prompt : typeof cfg?.question === 'string' ? cfg.question : ''
+  return prompt
 }
 
 function applyActionRecognitionThresholds(
@@ -1243,6 +1259,27 @@ function buildActivityPayload() {
     actionRecognition.objectCues = objectCues
   } else {
     delete actionRecognition.objectCues
+  }
+
+  const prompt = form.value.actionVlmPrompt.trim()
+  const vlmVerifier = isRecord(actionRecognition.vlmVerifier)
+    ? { ...actionRecognition.vlmVerifier }
+    : isRecord(actionRecognition.vlm_verifier)
+      ? { ...actionRecognition.vlm_verifier }
+      : {}
+  delete actionRecognition.vlm_verifier
+  if (prompt) {
+    vlmVerifier.prompt = prompt
+    delete vlmVerifier.question
+    actionRecognition.vlmVerifier = vlmVerifier
+  } else {
+    delete vlmVerifier.prompt
+    delete vlmVerifier.question
+    if (Object.keys(vlmVerifier).length > 0) {
+      actionRecognition.vlmVerifier = vlmVerifier
+    } else {
+      delete actionRecognition.vlmVerifier
+    }
   }
 
   if (Object.keys(actionRecognition).length > 0) {
@@ -2223,6 +2260,21 @@ function onActivityAction(action: string, row: Activity) {
             <el-col :xs="24">
               <el-form-item :label="t('activities.dialog.actionRecognition.conflictGroup')" label-width="150px">
                 <el-input v-model="form.actionConflictGroup" :placeholder="t('activities.dialog.actionRecognition.conflictGroupPlaceholder')" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24">
+              <el-form-item :label="t('activities.dialog.actionRecognition.vlmPrompt')" label-width="150px">
+                <el-input
+                  v-model="form.actionVlmPrompt"
+                  type="textarea"
+                  :rows="4"
+                  maxlength="2000"
+                  show-word-limit
+                  :placeholder="t('activities.dialog.actionRecognition.vlmPromptPlaceholder')"
+                />
+                <div class="form-help-text">
+                  {{ t('activities.dialog.actionRecognition.vlmPromptHelp') }}
+                </div>
               </el-form-item>
             </el-col>
           </el-row>
@@ -3428,6 +3480,13 @@ function onActivityAction(action: string, row: Activity) {
 .action-recognition-settings :deep(.el-form-item),
 .company-action-settings :deep(.el-form-item) {
   margin-bottom: 8px;
+}
+
+.form-help-text {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .company-action-settings {
