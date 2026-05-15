@@ -31,7 +31,16 @@ export const i18n = createI18n({
   fallbackWarn: false,
 })
 
+function syncDocumentLang(locale: AppLocale) {
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.lang = locale
+  }
+}
+
+syncDocumentLang(i18n.global.locale.value as AppLocale)
+
 export function persistLocale(locale: AppLocale) {
   if (typeof window === 'undefined') return
   window.localStorage.setItem(LOCALE_STORAGE_KEY, locale)
+  syncDocumentLang(locale)
 }

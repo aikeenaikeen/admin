@@ -33,6 +33,7 @@ function handleCommand(command: string) {
       :icon="MoreFilled"
       :loading="loading"
       :disabled="props.actions.length === 0"
+      :aria-label="$t('common.labels.actions')"
     />
 
     <template #dropdown>

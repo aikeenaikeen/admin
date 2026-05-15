@@ -120,6 +120,49 @@ body,
   }
 }
 
+/* Keyboard focus: thicker, primary-colored ring on tab-navigation only */
+:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Mouse users keep Element Plus' default subtle focus */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Selection color matches brand */
+::selection {
+  background: var(--el-color-primary-light-7);
+  color: var(--el-text-color-primary);
+}
+
+/* Print: hide chrome, keep content */
+@media print {
+  .el-aside,
+  .el-drawer,
+  .mobile-header,
+  #app-progress-bar,
+  .command-palette-dialog,
+  .el-pagination,
+  .page-header__extra,
+  .toolbar {
+    display: none !important;
+  }
+
+  .main-content,
+  .page-container {
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+}
+
 /* Custom animations */
 @keyframes fadeIn {
   from {
