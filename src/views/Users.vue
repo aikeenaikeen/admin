@@ -139,7 +139,17 @@ async function deleteUser(userId: number) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">{{ t('users.title') }}</h1>
+        <div class="title-row">
+          <h1 class="page-title">{{ t('users.title') }}</h1>
+          <el-tag
+            v-if="!loading && users.length > 0"
+            type="info"
+            effect="plain"
+            class="count-chip"
+          >
+            {{ t('users.countSummary', { n: users.length }) }}
+          </el-tag>
+        </div>
       </template>
       <template #extra>
         <el-button type="primary" :icon="Plus" @click="startCreate">
@@ -249,6 +259,17 @@ async function deleteUser(userId: number) {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.count-chip {
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {

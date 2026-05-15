@@ -267,7 +267,17 @@ function onEmployeeAction(action: string, row: Employee) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">{{ t('employees.title') }}</h1>
+        <div class="title-row">
+          <h1 class="page-title">{{ t('employees.title') }}</h1>
+          <el-tag
+            v-if="!loading && employees.length > 0"
+            type="info"
+            effect="plain"
+            class="count-chip"
+          >
+            {{ t('employees.countSummary', { n: employees.length }) }}
+          </el-tag>
+        </div>
       </template>
       <template #extra>
         <el-button
@@ -412,6 +422,17 @@ function onEmployeeAction(action: string, row: Employee) {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.count-chip {
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {
