@@ -130,6 +130,7 @@ function logout() {
 </script>
 
 <template>
+  <a class="skip-link" href="#main-content">{{ t('layout.skipToContent') }}</a>
   <el-container class="layout-container">
     <!-- Desktop sidebar -->
     <el-aside
@@ -342,7 +343,7 @@ function logout() {
         </div>
       </el-header>
 
-      <el-main class="main-content">
+      <el-main id="main-content" class="main-content" tabindex="-1">
         <router-view v-slot="{ Component, route: r }">
           <transition name="page-fade" mode="out-in">
             <component :is="Component" :key="r.fullPath" />
@@ -356,6 +357,27 @@ function logout() {
 </template>
 
 <style scoped>
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -40px;
+  z-index: 9999;
+  padding: 8px 14px;
+  background: var(--el-color-primary);
+  color: var(--el-color-white);
+  border-radius: 6px;
+  font-size: 13px;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 12px;
+  outline: 2px solid var(--el-color-primary-light-3);
+  outline-offset: 2px;
+}
+
 .layout-container {
   min-height: 100vh;
 }
@@ -493,6 +515,10 @@ function logout() {
   background: var(--el-bg-color-page);
   padding: 0;
   min-height: calc(100vh - 0px);
+}
+
+.main-content:focus {
+  outline: none;
 }
 
 .mobile-header {

@@ -135,6 +135,7 @@ const ru = {
     collapseSidebar: 'Свернуть меню',
     expandSidebar: 'Развернуть меню',
     openMenu: 'Открыть меню',
+    skipToContent: 'Перейти к контенту',
   },
   notFound: {
     title: 'Страница не найдена',

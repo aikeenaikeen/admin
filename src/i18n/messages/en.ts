@@ -135,6 +135,7 @@ const en = {
     collapseSidebar: 'Collapse menu',
     expandSidebar: 'Expand menu',
     openMenu: 'Open menu',
+    skipToContent: 'Skip to main content',
   },
   notFound: {
     title: 'Page not found',
