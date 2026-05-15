@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Connection, Delete, VideoCamera, Monitor, Close, Edit } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -26,6 +26,7 @@ type CameraTableAction = 'video' | 'recognition' | 'test' | 'copy' | 'edit' | 't
 
 const cameras = ref<Camera[]>([])
 const loading = ref(true)
+const activeCount = computed(() => cameras.value.filter((c) => c.isActive).length)
 const showForm = ref(false)
 const isEditing = ref(false)
 const testingCamera = ref<number | null>(null)
@@ -298,7 +299,17 @@ function onCameraAction(action: string, row: Camera) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">{{ t('cameras.title') }}</h1>
+        <div class="title-row">
+          <h1 class="page-title">{{ t('cameras.title') }}</h1>
+          <el-tag
+            v-if="!loading && cameras.length > 0"
+            type="info"
+            effect="plain"
+            class="count-chip"
+          >
+            {{ t('cameras.countSummary', { active: activeCount, total: cameras.length }) }}
+          </el-tag>
+        </div>
       </template>
       <template #extra>
         <el-button
@@ -466,6 +477,17 @@ function onCameraAction(action: string, row: Camera) {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.count-chip {
+  font-variant-numeric: tabular-nums;
 }
 
 .page-title {

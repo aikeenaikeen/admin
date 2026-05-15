@@ -265,6 +265,7 @@ const ru = {
     editTitle: 'Редактировать камеру',
     loadError: 'Не удалось загрузить камеры',
     empty: 'Камеры ещё не добавлены',
+    countSummary: 'Активных {active} из {total}',
     passwordRequired: 'Укажите пароль для камеры',
     created: 'Камера успешно добавлена',
     duplicated: 'Копия камеры создана',

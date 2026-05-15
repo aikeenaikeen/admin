@@ -265,6 +265,7 @@ const en = {
     editTitle: 'Edit camera',
     loadError: 'Failed to load cameras',
     empty: 'No cameras yet',
+    countSummary: '{active} of {total} active',
     passwordRequired: 'Camera password is required',
     created: 'Camera added successfully',
     duplicated: 'Camera copy created',
