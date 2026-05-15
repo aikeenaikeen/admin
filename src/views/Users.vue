@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Close } from '@element-plus/icons-vue'
+import { Plus, Delete, Close, Search } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { translateUserRole } from '@/utils/uiText'
@@ -31,6 +31,16 @@ const users = ref<UserRow[]>([])
 const companies = ref<Company[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
+const query = ref('')
+
+const filteredUsers = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return users.value
+  return users.value.filter((u) => {
+    const company = u.companyId ? companiesById.value.get(u.companyId)?.name ?? '' : ''
+    return `${u.email} ${u.role} ${company}`.toLowerCase().includes(q)
+  })
+})
 
 const form = ref({
   email: '',
@@ -168,7 +178,28 @@ async function deleteUser(userId: number) {
         </el-button>
       </el-empty>
 
-      <el-table v-else :data="users" v-loading="loading" style="width: 100%">
+      <template v-else>
+        <div class="list-toolbar">
+          <el-input
+            v-model="query"
+            :prefix-icon="Search"
+            :placeholder="t('users.searchPlaceholder')"
+            clearable
+            class="list-toolbar__search"
+          />
+        </div>
+
+        <el-empty
+          v-if="!loading && filteredUsers.length === 0"
+          :description="t('users.emptyFiltered')"
+        />
+
+        <el-table
+          v-else
+          :data="filteredUsers"
+          v-loading="loading"
+          style="width: 100%"
+        >
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         <el-table-column prop="email" :label="t('common.labels.email')" min-width="240" />
 
@@ -202,7 +233,8 @@ async function deleteUser(userId: number) {
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </template>
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="t('users.dialogTitle')" width="520px">
@@ -270,6 +302,18 @@ async function deleteUser(userId: number) {
 
 .count-chip {
   font-variant-numeric: tabular-nums;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list-toolbar__search {
+  flex: 1 1 240px;
+  max-width: 360px;
 }
 
 .page-title {

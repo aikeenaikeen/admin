@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Connection, Delete, VideoCamera, Monitor, Close, Edit } from '@element-plus/icons-vue'
+import { Plus, Connection, Delete, VideoCamera, Monitor, Close, Edit, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
@@ -26,7 +26,15 @@ type CameraTableAction = 'video' | 'recognition' | 'test' | 'copy' | 'edit' | 't
 
 const cameras = ref<Camera[]>([])
 const loading = ref(true)
+const query = ref('')
 const activeCount = computed(() => cameras.value.filter((c) => c.isActive).length)
+const filteredCameras = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return cameras.value
+  return cameras.value.filter((c) =>
+    `${c.name} ${c.location ?? ''} ${c.ip}`.toLowerCase().includes(q),
+  )
+})
 const showForm = ref(false)
 const isEditing = ref(false)
 const testingCamera = ref<number | null>(null)
@@ -401,7 +409,28 @@ function onCameraAction(action: string, row: Camera) {
         </el-button>
       </el-empty>
 
-      <el-table v-else :data="cameras" v-loading="loading" style="width: 100%">
+      <template v-else>
+        <div class="list-toolbar">
+          <el-input
+            v-model="query"
+            :prefix-icon="Search"
+            :placeholder="t('cameras.searchPlaceholder')"
+            clearable
+            class="list-toolbar__search"
+          />
+        </div>
+
+        <el-empty
+          v-if="!loading && filteredCameras.length === 0"
+          :description="t('cameras.emptyFiltered')"
+        />
+
+        <el-table
+          v-else
+          :data="filteredCameras"
+          v-loading="loading"
+          style="width: 100%"
+        >
         <el-table-column prop="id" :label="t('common.labels.number')" width="60" />
         <el-table-column prop="name" :label="t('common.labels.name')" min-width="150" />
         <el-table-column prop="location" :label="t('common.labels.location')" min-width="120">
@@ -457,7 +486,8 @@ function onCameraAction(action: string, row: Camera) {
             </div>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </template>
     </el-card>
 
     <CameraStreamDialog
@@ -488,6 +518,18 @@ function onCameraAction(action: string, row: Camera) {
 
 .count-chip {
   font-variant-numeric: tabular-nums;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list-toolbar__search {
+  flex: 1 1 240px;
+  max-width: 360px;
 }
 
 .page-title {
