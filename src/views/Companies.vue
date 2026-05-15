@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Plus, Delete, Close, Setting } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { Plus, Delete, Close, Setting, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
@@ -33,6 +33,14 @@ const companies = ref<Company[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
 const { t } = useI18n()
+const query = ref('')
+
+const activeCount = computed(() => companies.value.filter((c) => c.isActive).length)
+const filteredCompanies = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return companies.value
+  return companies.value.filter((c) => `${c.name} ${c.slug}`.toLowerCase().includes(q))
+})
 
 // Редактирование recognitionConfig
 const editConfigDialogVisible = ref(false)
@@ -224,7 +232,17 @@ function onCompanyAction(action: string, row: Company) {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">{{ t('companies.title') }}</h1>
+        <div class="title-row">
+          <h1 class="page-title">{{ t('companies.title') }}</h1>
+          <el-tag
+            v-if="!loading && companies.length > 0"
+            type="info"
+            effect="plain"
+            class="count-chip"
+          >
+            {{ t('companies.countSummary', { active: activeCount, total: companies.length }) }}
+          </el-tag>
+        </div>
       </template>
       <template #extra>
         <el-button
@@ -247,7 +265,28 @@ function onCompanyAction(action: string, row: Company) {
         </el-button>
       </el-empty>
 
-      <el-table v-else :data="companies" v-loading="loading" style="width: 100%">
+      <template v-else>
+        <div class="list-toolbar">
+          <el-input
+            v-model="query"
+            :prefix-icon="Search"
+            :placeholder="t('companies.searchPlaceholder')"
+            clearable
+            class="list-toolbar__search"
+          />
+        </div>
+
+        <el-empty
+          v-if="!loading && filteredCompanies.length === 0"
+          :description="t('companies.emptyFiltered')"
+        />
+
+        <el-table
+          v-else
+          :data="filteredCompanies"
+          v-loading="loading"
+          style="width: 100%"
+        >
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
         <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
@@ -280,7 +319,8 @@ function onCompanyAction(action: string, row: Company) {
             />
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </template>
     </el-card>
 
     <el-dialog
@@ -368,6 +408,29 @@ function onCompanyAction(action: string, row: Company) {
 
 .page-header {
   margin-bottom: 24px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.count-chip {
+  font-variant-numeric: tabular-nums;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list-toolbar__search {
+  flex: 1 1 240px;
+  max-width: 360px;
 }
 
 .page-title {
