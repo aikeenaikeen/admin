@@ -24,9 +24,17 @@ export const useAuthStore = defineStore('auth', () => {
   const storedUser = localStorage.getItem('user')
 
   if (storedAccessToken && storedRefreshToken && storedUser) {
-    accessToken.value = storedAccessToken
-    refreshToken.value = storedRefreshToken
-    user.value = JSON.parse(storedUser)
+    try {
+      const parsedUser = JSON.parse(storedUser) as User
+      accessToken.value = storedAccessToken
+      refreshToken.value = storedRefreshToken
+      user.value = parsedUser
+    } catch {
+      // Corrupted localStorage — clear and stay signed out
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user')
+    }
   }
 
   async function login(email: string, password: string) {

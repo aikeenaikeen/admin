@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { User, VideoCamera, Calendar, TrendCharts } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const stats = ref({
   totalEmployees: 0,
@@ -14,6 +16,10 @@ const stats = ref({
 })
 
 const loading = ref(true)
+
+function goTo(path: string) {
+  router.push(path)
+}
 
 onMounted(async () => {
   await loadStats()
@@ -59,7 +65,14 @@ async function loadStats() {
     <h1 class="page-title">{{ t('dashboard.title') }}</h1>
 
     <div v-loading="loading" class="stats-grid">
-      <el-card shadow="hover" class="stat-card">
+      <el-card
+        shadow="hover"
+        class="stat-card"
+        role="button"
+        tabindex="0"
+        @click="goTo('/employees')"
+        @keydown.enter.space.prevent="goTo('/employees')"
+      >
         <div class="stat-content">
           <div class="stat-icon primary">
             <el-icon :size="32"><User /></el-icon>
@@ -71,7 +84,14 @@ async function loadStats() {
         </div>
       </el-card>
 
-      <el-card shadow="hover" class="stat-card">
+      <el-card
+        shadow="hover"
+        class="stat-card"
+        role="button"
+        tabindex="0"
+        @click="goTo('/presence')"
+        @keydown.enter.space.prevent="goTo('/presence')"
+      >
         <div class="stat-content">
           <div class="stat-icon success">
             <el-icon :size="32"><User /></el-icon>
@@ -83,7 +103,14 @@ async function loadStats() {
         </div>
       </el-card>
 
-      <el-card shadow="hover" class="stat-card">
+      <el-card
+        shadow="hover"
+        class="stat-card"
+        role="button"
+        tabindex="0"
+        @click="goTo('/statistics')"
+        @keydown.enter.space.prevent="goTo('/statistics')"
+      >
         <div class="stat-content">
           <div class="stat-icon warning">
             <el-icon :size="32"><Calendar /></el-icon>
@@ -95,7 +122,14 @@ async function loadStats() {
         </div>
       </el-card>
 
-      <el-card shadow="hover" class="stat-card">
+      <el-card
+        shadow="hover"
+        class="stat-card"
+        role="button"
+        tabindex="0"
+        @click="goTo('/cameras')"
+        @keydown.enter.space.prevent="goTo('/cameras')"
+      >
         <div class="stat-content">
           <div class="stat-icon info">
             <el-icon :size="32"><VideoCamera /></el-icon>
@@ -173,11 +207,16 @@ async function loadStats() {
 
 .stat-card {
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
+  outline: none;
 }
 
 .stat-card:hover {
   transform: translateY(-4px);
+}
+
+.stat-card:focus-visible {
+  box-shadow: 0 0 0 2px var(--el-color-primary);
 }
 
 .stat-content {

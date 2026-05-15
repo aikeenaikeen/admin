@@ -22,12 +22,31 @@ body {
   min-height: 100vh;
 }
 
-/* Плавные переходы для всех элементов с переменными */
-* {
-  transition: background-color 0.3s ease, 
-              color 0.3s ease, 
-              border-color 0.3s ease,
-              box-shadow 0.3s ease;
+/* Плавные переходы между темами для контейнеров (не вешаем на каждый элемент — это душит hover-стейты в Element Plus) */
+html,
+body,
+.el-container,
+.el-aside,
+.el-main,
+.el-header,
+.el-card,
+.el-menu,
+.el-dialog,
+.el-drawer,
+.el-table,
+.el-table__cell,
+.page-container {
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Уважаем настройки доступности: пользователи с reduce-motion не получают анимации */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Utility classes */

@@ -123,6 +123,9 @@ const en = {
       ru: 'Русский',
       en: 'English',
     },
+    collapseSidebar: 'Collapse menu',
+    expandSidebar: 'Expand menu',
+    openMenu: 'Open menu',
   },
   login: {
     subtitle: 'Face-recognition attendance tracking system',

@@ -123,6 +123,9 @@ const ru = {
       ru: 'Русский',
       en: 'English',
     },
+    collapseSidebar: 'Свернуть меню',
+    expandSidebar: 'Развернуть меню',
+    openMenu: 'Открыть меню',
   },
   login: {
     subtitle: 'Система учета посещаемости с распознаванием лиц',
