@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
@@ -8,6 +9,11 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: false,
+    include: ['src/**/*.spec.ts', 'src/**/*.test.ts'],
   },
   server: {
     port: 8080,
