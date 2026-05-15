@@ -326,7 +326,7 @@ function onEmployeeAction(action: string, row: Employee) {
       <el-checkbox-group v-model="selectedActivityIds">
         <el-row :gutter="12">
           <el-col v-for="ca in companyActivities" :key="ca.activityId" :span="12" style="margin-bottom: 8px;">
-            <el-checkbox :label="ca.activityId">
+            <el-checkbox :value="ca.activityId">
               {{ ca.activity.name }} <span style="color: var(--el-text-color-secondary);">({{ translateActivityKind(ca.activity.kind) }})</span>
             </el-checkbox>
           </el-col>

@@ -130,13 +130,13 @@ function formatTime(time: string | null): string {
         class="search"
       />
       <el-radio-group v-model="statusFilter" size="default">
-        <el-radio-button label="ALL">
+        <el-radio-button :value="'ALL'">
           {{ t('presence.filters.all') }} ({{ totalCount }})
         </el-radio-button>
-        <el-radio-button label="PRESENT">
+        <el-radio-button :value="'PRESENT'">
           {{ t('presence.filters.present') }} ({{ presentCount }})
         </el-radio-button>
-        <el-radio-button label="ABSENT">
+        <el-radio-button :value="'ABSENT'">
           {{ t('presence.filters.absent') }} ({{ totalCount - presentCount }})
         </el-radio-button>
       </el-radio-group>
