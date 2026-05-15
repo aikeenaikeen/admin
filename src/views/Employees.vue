@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Delete, User, Upload, Setting, Close, Edit, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -46,6 +46,7 @@ const filteredEmployees = computed(() => {
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingEmployeeId = ref<number | null>(null)
+const editingEmployeePhotoUrl = ref<string | null>(null)
 
 const form = ref({
   name: '',
@@ -54,6 +55,19 @@ const form = ref({
 })
 
 const fileList = ref<UploadFile[]>([])
+const photoPreviewUrl = ref<string | null>(null)
+
+function setPhotoPreview(file: File | null) {
+  // Revoke the previous object URL — leaving them around leaks memory
+  // across multiple file picks in the same dialog session.
+  if (photoPreviewUrl.value) {
+    URL.revokeObjectURL(photoPreviewUrl.value)
+    photoPreviewUrl.value = null
+  }
+  if (file) {
+    photoPreviewUrl.value = URL.createObjectURL(file)
+  }
+}
 
 // Employee activities dialog
 const activitiesDialogVisible = ref(false)
@@ -63,6 +77,10 @@ const selectedActivityIds = ref<number[]>([])
 
 onMounted(async () => {
   await Promise.all([loadEmployees(), loadCompanyActivities()])
+})
+
+onUnmounted(() => {
+  setPhotoPreview(null)
 })
 
 async function loadEmployees() {
@@ -152,11 +170,13 @@ function handleFileChange(file: UploadFile) {
   }
 
   form.value.photo = file.raw
+  setPhotoPreview(file.raw)
   return false
 }
 
 function handleRemove() {
   form.value.photo = null
+  setPhotoPreview(null)
 }
 
 function startCreate() {
@@ -167,6 +187,7 @@ function startCreate() {
 function startEdit(employee: Employee) {
   isEditing.value = true
   editingEmployeeId.value = employee.id
+  editingEmployeePhotoUrl.value = employee.photoUrl
   dialogVisible.value = true
   form.value = {
     name: employee.name,
@@ -174,6 +195,7 @@ function startEdit(employee: Employee) {
     activityIds: [],
   }
   fileList.value = []
+  setPhotoPreview(null)
 
   // Load current assigned activities
   loadEmployeeActivityIds(employee.id).then((ids) => {
@@ -187,8 +209,10 @@ function resetForm() {
   dialogVisible.value = false
   isEditing.value = false
   editingEmployeeId.value = null
+  editingEmployeePhotoUrl.value = null
   form.value = { name: '', photo: null, activityIds: [] }
   fileList.value = []
+  setPhotoPreview(null)
 }
 
 async function loadEmployeeActivityIds(employeeId: number): Promise<number[]> {
@@ -428,21 +452,34 @@ function onEmployeeAction(action: string, row: Employee) {
         </el-form-item>
 
         <el-form-item :label="t('employees.dialog.photo')">
-          <el-upload
-            v-model:file-list="fileList"
-            :auto-upload="false"
-            :limit="1"
-            accept="image/*"
-            :on-change="handleFileChange"
-            :on-remove="handleRemove"
-          >
-            <el-button :icon="Upload">{{ t('common.actions.selectFile') }}</el-button>
-            <template #tip>
-              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px;">
-                {{ t('employees.dialog.photoHint') }}
-              </div>
-            </template>
-          </el-upload>
+          <div class="photo-field">
+            <el-avatar
+              v-if="photoPreviewUrl || editingEmployeePhotoUrl"
+              :src="photoPreviewUrl || editingEmployeePhotoUrl || undefined"
+              :size="72"
+              shape="square"
+              class="photo-field__preview"
+            >
+              <el-icon :size="32"><User /></el-icon>
+            </el-avatar>
+            <div class="photo-field__upload">
+              <el-upload
+                v-model:file-list="fileList"
+                :auto-upload="false"
+                :limit="1"
+                accept="image/*"
+                :on-change="handleFileChange"
+                :on-remove="handleRemove"
+              >
+                <el-button :icon="Upload">{{ t('common.actions.selectFile') }}</el-button>
+                <template #tip>
+                  <div class="photo-field__hint">
+                    {{ t('employees.dialog.photoHint') }}
+                  </div>
+                </template>
+              </el-upload>
+            </div>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -490,6 +527,29 @@ function onEmployeeAction(action: string, row: Employee) {
 .list-toolbar__search {
   flex: 1 1 240px;
   max-width: 360px;
+}
+
+.photo-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+}
+
+.photo-field__preview {
+  flex-shrink: 0;
+  background: var(--el-fill-color-light);
+}
+
+.photo-field__upload {
+  flex: 1;
+  min-width: 0;
+}
+
+.photo-field__hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 8px;
 }
 
 .page-title {
