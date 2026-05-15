@@ -6,6 +6,7 @@ import { Plus, Delete, Close } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { translateUserRole } from '@/utils/uiText'
+import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
 
 type UserRole = 'SUPERADMIN' | 'COMPANY_ADMIN' | 'USER'
 
@@ -107,8 +108,8 @@ async function handleSubmit() {
     ElMessage.success(t('users.created'))
     dialogVisible.value = false
     await loadUsers()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('users.createError'))
+  } catch (error) {
+    ElMessage.error(extractErrorMessage(error, t('users.createError')))
   }
 }
 
@@ -127,9 +128,9 @@ async function deleteUser(userId: number) {
     await apiClient.delete(`/api/users/${userId}`)
     ElMessage.success(t('users.deleteSuccess'))
     await loadUsers()
-  } catch (error: any) {
-    if (error === 'cancel') return
-    ElMessage.error(error.response?.data?.error || t('users.deleteError'))
+  } catch (error) {
+    if (isCancelledMessageBox(error)) return
+    ElMessage.error(extractErrorMessage(error, t('users.deleteError')))
   }
 }
 </script>
@@ -148,7 +149,16 @@ async function deleteUser(userId: number) {
     </el-page-header>
 
     <el-card shadow="never">
-      <el-table :data="users" v-loading="loading" style="width: 100%">
+      <el-empty
+        v-if="!loading && users.length === 0"
+        :description="t('users.empty')"
+      >
+        <el-button type="primary" :icon="Plus" @click="startCreate">
+          {{ t('users.addButton') }}
+        </el-button>
+      </el-empty>
+
+      <el-table v-else :data="users" v-loading="loading" style="width: 100%">
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         <el-table-column prop="email" :label="t('common.labels.email')" min-width="240" />
 

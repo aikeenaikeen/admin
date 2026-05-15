@@ -201,6 +201,7 @@ const en = {
   employees: {
     title: 'Employees',
     addButton: 'Add employee',
+    empty: 'No employees yet',
     updated: 'Employee updated',
     created: 'Employee added successfully',
     savedButActivitiesFailed: 'Employee saved, but activities could not be assigned',
@@ -405,6 +406,7 @@ const en = {
   companies: {
     title: 'Companies',
     addButton: 'Add company',
+    empty: 'No companies yet',
     loadError: 'Failed to load companies',
     created: 'Company created successfully',
     createError: 'Failed to create company',
@@ -579,6 +581,7 @@ const en = {
   users: {
     title: 'Users',
     addButton: 'Add user',
+    empty: 'No users yet',
     loadError: 'Failed to load users',
     validationEmailPassword: 'Email and password are required',
     validationCompany: 'Select a company',

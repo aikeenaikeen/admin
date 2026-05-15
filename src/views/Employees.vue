@@ -7,6 +7,7 @@ import type { UploadFile } from 'element-plus'
 import apiClient from '@/api/client'
 import { translateActivityKind } from '@/utils/uiText'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
+import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
 
 const { t } = useI18n()
 
@@ -112,15 +113,15 @@ async function handleSubmit() {
         await apiClient.put(`/api/employees/${employeeId}/activities`, {
           activities: (form.value.activityIds || []).map((id) => ({ activityId: id, enabled: true })),
         })
-      } catch (e: any) {
-        ElMessage.error(e.response?.data?.error || t('employees.savedButActivitiesFailed'))
+      } catch (e) {
+        ElMessage.error(extractErrorMessage(e, t('employees.savedButActivitiesFailed')))
       }
     }
 
     resetForm()
     await loadEmployees()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('employees.saveError'))
+  } catch (error) {
+    ElMessage.error(extractErrorMessage(error, t('employees.saveError')))
   }
 }
 
@@ -188,10 +189,9 @@ async function deleteEmployee(id: number) {
     await apiClient.delete(`/api/employees/${id}`)
     ElMessage.success(t('employees.deleteSuccess'))
     await loadEmployees()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(t('employees.deleteError'))
-    }
+  } catch (error) {
+    if (isCancelledMessageBox(error)) return
+    ElMessage.error(extractErrorMessage(error, t('employees.deleteError')))
   }
 }
 
@@ -204,8 +204,8 @@ async function openEmployeeActivities(employee: Employee) {
     const res = await apiClient.get(`/api/employees/${employee.id}/activities`)
     const activities = res.data?.activities || []
     selectedActivityIds.value = activities.filter((a: any) => a.enabled).map((a: any) => a.activityId)
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || t('employees.loadActivitiesError'))
+  } catch (e) {
+    ElMessage.error(extractErrorMessage(e, t('employees.loadActivitiesError')))
   }
 }
 
@@ -217,8 +217,8 @@ async function saveEmployeeActivities() {
     })
     ElMessage.success(t('employees.activitiesSaved'))
     activitiesDialogVisible.value = false
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.error || t('employees.activitiesSaveError'))
+  } catch (e) {
+    ElMessage.error(extractErrorMessage(e, t('employees.activitiesSaveError')))
   }
 }
 
@@ -281,7 +281,16 @@ function onEmployeeAction(action: string, row: Employee) {
     </el-page-header>
 
     <el-card shadow="never">
-      <el-table :data="employees" v-loading="loading" style="width: 100%">
+      <el-empty
+        v-if="!loading && employees.length === 0"
+        :description="t('employees.empty')"
+      >
+        <el-button type="primary" :icon="Plus" @click="startCreate">
+          {{ t('employees.addButton') }}
+        </el-button>
+      </el-empty>
+
+      <el-table v-else :data="employees" v-loading="loading" style="width: 100%">
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
         <el-table-column :label="t('employees.table.photo')" width="100">

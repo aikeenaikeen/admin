@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDate } from '@/utils/date'
+import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
 import RecognitionConfigForm from '@/components/RecognitionConfigForm.vue'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
 import {
@@ -88,7 +89,7 @@ async function handleSubmit() {
     resetCreateForm()
     await loadCompanies()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('companies.createError'))
+    ElMessage.error(extractErrorMessage(error, t('companies.createError')))
   }
 }
 
@@ -117,10 +118,9 @@ async function deleteCompany(id: number) {
     await apiClient.delete(`/api/companies/${id}`)
     ElMessage.success(t('companies.deleted'))
     await loadCompanies()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.response?.data?.error || t('companies.deleteError'))
-    }
+  } catch (error) {
+    if (isCancelledMessageBox(error)) return
+    ElMessage.error(extractErrorMessage(error, t('companies.deleteError')))
   }
 }
 
@@ -151,7 +151,7 @@ async function openEditConfig(company: Company) {
     )
     editConfig.value = cloneRecognitionConfig(response.data.resolvedRecognitionConfig)
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('companies.configLoadError'))
+    ElMessage.error(extractErrorMessage(error, t('companies.configLoadError')))
     editConfigDialogVisible.value = false
     editConfig.value = null
   } finally {
@@ -174,7 +174,7 @@ async function saveConfig() {
     editingCompanyName.value = ''
     editConfig.value = null
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('companies.configSaveError'))
+    ElMessage.error(extractErrorMessage(error, t('companies.configSaveError')))
   } finally {
     configSaving.value = false
   }
@@ -238,7 +238,16 @@ function onCompanyAction(action: string, row: Company) {
     </el-page-header>
 
     <el-card shadow="never">
-      <el-table :data="companies" v-loading="loading" style="width: 100%">
+      <el-empty
+        v-if="!loading && companies.length === 0"
+        :description="t('companies.empty')"
+      >
+        <el-button type="primary" :icon="Plus" @click="openCreateDialog">
+          {{ t('companies.addButton') }}
+        </el-button>
+      </el-empty>
+
+      <el-table v-else :data="companies" v-loading="loading" style="width: 100%">
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
         <el-table-column prop="name" :label="t('common.labels.name')" min-width="200" />
