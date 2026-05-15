@@ -136,6 +136,12 @@ const en = {
     expandSidebar: 'Expand menu',
     openMenu: 'Open menu',
   },
+  notFound: {
+    title: 'Page not found',
+    description: 'The link may be stale, or you may not have access to this page.',
+    back: 'Go back',
+    home: 'Go to dashboard',
+  },
   commandPalette: {
     openHint: 'Quick search',
     placeholder: 'Type a command or page...',
@@ -183,6 +189,13 @@ const en = {
   },
   dashboard: {
     title: 'Dashboard',
+    lastUpdated: {
+      label: 'Updated',
+      justNow: 'just now',
+      secondsAgo: '{n}s ago',
+      minutesAgo: '{n}m ago',
+      hoursAgo: '{n}h ago',
+    },
     stats: {
       totalEmployees: 'Total employees',
       presentEmployees: 'Currently present',

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { User, VideoCamera, Calendar, TrendCharts } from '@element-plus/icons-vue'
+import { User, VideoCamera, Calendar, TrendCharts, Refresh } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
+import AnimatedNumber from '@/components/AnimatedNumber.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -16,13 +17,33 @@ const stats = ref({
 })
 
 const loading = ref(true)
+const lastUpdated = ref<Date | null>(null)
+const ticker = ref(0)
+
+const lastUpdatedLabel = computed(() => {
+  // Re-evaluate every 30s via ticker
+  void ticker.value
+  if (!lastUpdated.value) return ''
+  const diff = Math.round((Date.now() - lastUpdated.value.getTime()) / 1000)
+  if (diff < 5) return t('dashboard.lastUpdated.justNow')
+  if (diff < 60) return t('dashboard.lastUpdated.secondsAgo', { n: diff })
+  if (diff < 3600) return t('dashboard.lastUpdated.minutesAgo', { n: Math.floor(diff / 60) })
+  return t('dashboard.lastUpdated.hoursAgo', { n: Math.floor(diff / 3600) })
+})
 
 function goTo(path: string) {
   router.push(path)
 }
 
+let tickerTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
   await loadStats()
+  tickerTimer = setInterval(() => { ticker.value++ }, 30_000)
+})
+
+onUnmounted(() => {
+  if (tickerTimer) clearInterval(tickerTimer)
 })
 
 async function loadStats() {
@@ -42,7 +63,7 @@ async function loadStats() {
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
-    
+
     const events = await apiClient.get('/api/events', {
       params: {
         dateFrom: today.toISOString(),
@@ -52,6 +73,7 @@ async function loadStats() {
       },
     })
     stats.value.eventsToday = events.data.pagination.total
+    lastUpdated.value = new Date()
   } catch (error) {
     console.error('Failed to load stats:', error)
   } finally {
@@ -62,7 +84,17 @@ async function loadStats() {
 
 <template>
   <div class="page-container">
-    <h1 class="page-title">{{ t('dashboard.title') }}</h1>
+    <div class="page-head">
+      <h1 class="page-title">{{ t('dashboard.title') }}</h1>
+      <div class="page-head__meta">
+        <span v-if="lastUpdated" class="last-updated">
+          {{ t('dashboard.lastUpdated.label') }} {{ lastUpdatedLabel }}
+        </span>
+        <el-button :icon="Refresh" :loading="loading" @click="loadStats" plain>
+          {{ t('common.actions.refresh') }}
+        </el-button>
+      </div>
+    </div>
 
     <div v-loading="loading" class="stats-grid">
       <el-card
@@ -78,7 +110,7 @@ async function loadStats() {
             <el-icon :size="32"><User /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.totalEmployees }}</div>
+            <div class="stat-value"><AnimatedNumber :value="stats.totalEmployees" /></div>
             <div class="stat-label">{{ t('dashboard.stats.totalEmployees') }}</div>
           </div>
         </div>
@@ -97,7 +129,7 @@ async function loadStats() {
             <el-icon :size="32"><User /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value success">{{ stats.presentEmployees }}</div>
+            <div class="stat-value success"><AnimatedNumber :value="stats.presentEmployees" /></div>
             <div class="stat-label">{{ t('dashboard.stats.presentEmployees') }}</div>
           </div>
         </div>
@@ -116,7 +148,7 @@ async function loadStats() {
             <el-icon :size="32"><Calendar /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.eventsToday }}</div>
+            <div class="stat-value"><AnimatedNumber :value="stats.eventsToday" /></div>
             <div class="stat-label">{{ t('dashboard.stats.eventsToday') }}</div>
           </div>
         </div>
@@ -135,7 +167,7 @@ async function loadStats() {
             <el-icon :size="32"><VideoCamera /></el-icon>
           </div>
           <div class="stat-info">
-            <div class="stat-value">{{ stats.activeCameras }}</div>
+            <div class="stat-value"><AnimatedNumber :value="stats.activeCameras" /></div>
             <div class="stat-label">{{ t('dashboard.stats.activeCameras') }}</div>
           </div>
         </div>
@@ -176,8 +208,28 @@ async function loadStats() {
   margin: 0 auto;
 }
 
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-head__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.last-updated {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 .page-title {
-  margin: 0 0 24px 0;
+  margin: 0;
   font-size: 28px;
   font-weight: 600;
   color: var(--el-text-color-primary);

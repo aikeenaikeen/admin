@@ -136,6 +136,12 @@ const ru = {
     expandSidebar: 'Развернуть меню',
     openMenu: 'Открыть меню',
   },
+  notFound: {
+    title: 'Страница не найдена',
+    description: 'Возможно, ссылка устарела, либо у вас нет доступа к этой странице.',
+    back: 'Назад',
+    home: 'На главную',
+  },
   commandPalette: {
     openHint: 'Быстрый поиск',
     placeholder: 'Введите команду или раздел...',
@@ -183,6 +189,13 @@ const ru = {
   },
   dashboard: {
     title: 'Панель управления',
+    lastUpdated: {
+      label: 'Обновлено',
+      justNow: 'только что',
+      secondsAgo: '{n} сек назад',
+      minutesAgo: '{n} мин назад',
+      hoursAgo: '{n} ч назад',
+    },
     stats: {
       totalEmployees: 'Всего сотрудников',
       presentEmployees: 'Присутствуют сейчас',

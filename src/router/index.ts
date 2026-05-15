@@ -69,6 +69,11 @@ const routes: RouteRecordRaw[] = [
         path: '/employee-activities',
         redirect: '/statistics',
       },
+      {
+        path: ':pathMatch(.*)*',
+        name: 'NotFound',
+        component: () => import('@/views/NotFound.vue'),
+      },
     ],
   },
 ]
