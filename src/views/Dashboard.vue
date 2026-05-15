@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { User, VideoCamera, Calendar, TrendCharts, Refresh } from '@element-plus/icons-vue'
+import { User, VideoCamera, Calendar, TrendCharts, Refresh, Location } from '@element-plus/icons-vue'
 import apiClient from '@/api/client'
 import AnimatedNumber from '@/components/AnimatedNumber.vue'
 
@@ -195,12 +195,12 @@ async function loadStats() {
           <span>{{ t('dashboard.quickActions.cameras') }}</span>
         </router-link>
         <router-link to="/presence" class="quick-link">
-          <el-icon :size="40"><TrendCharts /></el-icon>
+          <el-icon :size="40"><Location /></el-icon>
           <span>{{ t('dashboard.quickActions.presence') }}</span>
         </router-link>
-        <router-link to="/events" class="quick-link">
-          <el-icon :size="40"><Calendar /></el-icon>
-          <span>{{ t('dashboard.quickActions.events') }}</span>
+        <router-link to="/statistics" class="quick-link">
+          <el-icon :size="40"><TrendCharts /></el-icon>
+          <span>{{ t('dashboard.quickActions.statistics') }}</span>
         </router-link>
       </div>
     </el-card>

@@ -208,6 +208,7 @@ const en = {
       cameras: 'Manage cameras',
       presence: 'Attendance',
       events: 'Event history',
+      statistics: 'Statistics',
       live: 'Live streams',
     },
   },
