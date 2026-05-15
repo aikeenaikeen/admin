@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { type AppLocale, persistLocale } from '@/i18n'
 import LogoIcon from '@/components/icons/LogoIcon.vue'
+import CommandPalette from '@/components/CommandPalette.vue'
 import { translateUserRole } from '@/utils/uiText'
 import {
   Location,
@@ -20,6 +21,7 @@ import {
   Fold,
   Expand,
   SwitchButton,
+  Search,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -34,6 +36,13 @@ const MOBILE_BREAKPOINT = 768
 const isMobile = ref(false)
 const isCollapsed = ref(false)
 const mobileDrawerOpen = ref(false)
+const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
+const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform)
+const commandPaletteHint = computed(() => (isMac ? '⌘K' : 'Ctrl+K'))
+
+function openCommandPalette() {
+  commandPaletteRef.value?.open()
+}
 
 function readStoredCollapsed(): boolean {
   if (typeof window === 'undefined') return false
@@ -136,6 +145,26 @@ function logout() {
           :title="t('common.brandLogoTitle')"
         />
         <h2 v-show="!isCollapsed">{{ t('common.appName') }}</h2>
+      </div>
+
+      <div class="palette-trigger-wrap" :class="{ 'palette-trigger-wrap--collapsed': isCollapsed }">
+        <el-tooltip
+          :content="`${t('commandPalette.openHint')} (${commandPaletteHint})`"
+          placement="right"
+          :disabled="!isCollapsed"
+        >
+          <button
+            type="button"
+            class="palette-trigger"
+            :class="{ 'palette-trigger--collapsed': isCollapsed }"
+            :aria-label="t('commandPalette.openHint')"
+            @click="openCommandPalette"
+          >
+            <el-icon><Search /></el-icon>
+            <span v-show="!isCollapsed" class="palette-trigger__label">{{ t('commandPalette.openHint') }}</span>
+            <span v-show="!isCollapsed" class="palette-trigger__kbd">{{ commandPaletteHint }}</span>
+          </button>
+        </el-tooltip>
       </div>
 
       <el-menu
@@ -312,6 +341,8 @@ function logout() {
         </router-view>
       </el-main>
     </el-container>
+
+    <CommandPalette ref="commandPaletteRef" />
   </el-container>
 </template>
 
@@ -475,6 +506,59 @@ function logout() {
   gap: 8px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+/* Command palette trigger */
+.palette-trigger-wrap {
+  padding: 10px 12px 4px 12px;
+}
+
+.palette-trigger-wrap--collapsed {
+  padding: 10px 8px 4px 8px;
+}
+
+.palette-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.palette-trigger:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-text-color-primary);
+}
+
+.palette-trigger--collapsed {
+  padding: 8px 0;
+  justify-content: center;
+}
+
+.palette-trigger__label {
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.palette-trigger__kbd {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 /* Page transition */
