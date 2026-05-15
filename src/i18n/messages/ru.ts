@@ -6,6 +6,15 @@ const ru = {
       none: '—',
       notAvailable: 'н/д',
     },
+    errors: {
+      generic: 'Что-то пошло не так. Попробуйте ещё раз.',
+      network: 'Сервер недоступен. Проверьте подключение.',
+    },
+    validation: {
+      required: 'Поле обязательно',
+      email: 'Введите корректный email',
+      minLength: 'Минимум {n} символов',
+    },
     actions: {
       refresh: 'Обновить',
       cancel: 'Отмена',
@@ -209,6 +218,7 @@ const ru = {
     addTitle: 'Добавить камеру',
     editTitle: 'Редактировать камеру',
     loadError: 'Не удалось загрузить камеры',
+    empty: 'Камеры ещё не добавлены',
     passwordRequired: 'Укажите пароль для камеры',
     created: 'Камера успешно добавлена',
     duplicated: 'Копия камеры создана',

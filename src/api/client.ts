@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import router from '@/router'
 import { resolveBaseUrl } from '@/utils/baseUrl'
+import { start as progressStart, done as progressDone } from '@/utils/progress'
 
 const API_BASE_URL = resolveBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
@@ -12,16 +13,24 @@ export const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Request interceptor - add auth token
+type RequestMeta = { silent?: boolean }
+
+function isSilent(config: any): boolean {
+  return (config?.meta as RequestMeta | undefined)?.silent === true
+}
+
+// Request interceptor - add auth token + progress bar
 apiClient.interceptors.request.use(
   (config) => {
     const authStore = useAuthStore()
     if (authStore.accessToken) {
       config.headers.Authorization = `Bearer ${authStore.accessToken}`
     }
+    if (!isSilent(config)) progressStart()
     return config
   },
   (error) => {
+    progressDone()
     return Promise.reject(error)
   }
 )
@@ -30,11 +39,14 @@ apiClient.interceptors.request.use(
 let refreshPromise: Promise<void> | null = null
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (!isSilent(response.config)) progressDone()
+    return response
+  },
   async (error) => {
     const originalRequest = error.config
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true
 
       const authStore = useAuthStore()
@@ -48,15 +60,17 @@ apiClient.interceptors.response.use(
         }
         await refreshPromise
 
-        // Retry original request with new token
+        // Retry original request with new token (progress already counted once for the first attempt)
         return apiClient(originalRequest)
       } catch (refreshError) {
+        if (!isSilent(originalRequest)) progressDone()
         authStore.logout()
         router.push('/login')
         return Promise.reject(refreshError)
       }
     }
 
+    if (!isSilent(originalRequest)) progressDone()
     return Promise.reject(error)
   }
 )

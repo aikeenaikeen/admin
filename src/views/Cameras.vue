@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import apiClient from '@/api/client'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
+import { extractErrorMessage } from '@/utils/error'
 
 const { t } = useI18n()
 
@@ -96,7 +97,7 @@ async function handleSubmit() {
     showForm.value = false
     await loadCameras()
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('cameras.saveError'))
+    ElMessage.error(extractErrorMessage(error, t('cameras.saveError')))
   }
 }
 
@@ -138,7 +139,7 @@ async function duplicateCamera(camera: Camera) {
     startEdit(duplicatedCamera)
     ElMessage.success(t('cameras.duplicated'))
   } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || t('cameras.duplicateError'))
+    ElMessage.error(extractErrorMessage(error, t('cameras.duplicateError')))
   } finally {
     duplicatingCamera.value = null
   }
@@ -380,7 +381,16 @@ function onCameraAction(action: string, row: Camera) {
     </el-card>
 
     <el-card shadow="never">
-      <el-table :data="cameras" v-loading="loading" style="width: 100%">
+      <el-empty
+        v-if="!loading && cameras.length === 0"
+        :description="t('cameras.empty')"
+      >
+        <el-button type="primary" :icon="Plus" @click="startCreate">
+          {{ t('cameras.addButton') }}
+        </el-button>
+      </el-empty>
+
+      <el-table v-else :data="cameras" v-loading="loading" style="width: 100%">
         <el-table-column prop="id" :label="t('common.labels.number')" width="60" />
         <el-table-column prop="name" :label="t('common.labels.name')" min-width="150" />
         <el-table-column prop="location" :label="t('common.labels.location')" min-width="120">

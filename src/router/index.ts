@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { start as progressStart, done as progressDone } from '@/utils/progress'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -78,7 +79,9 @@ const router = createRouter({
 })
 
 // Navigation guard
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to, from, next) => {
+  if (to.path !== from.path) progressStart()
+
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
@@ -102,6 +105,14 @@ router.beforeEach((to, _from, next) => {
   }
 
   next()
+})
+
+router.afterEach(() => {
+  progressDone()
+})
+
+router.onError(() => {
+  progressDone()
 })
 
 export default router

@@ -6,6 +6,15 @@ const en = {
       none: '—',
       notAvailable: 'n/a',
     },
+    errors: {
+      generic: 'Something went wrong. Please try again.',
+      network: 'Server unreachable. Check your connection.',
+    },
+    validation: {
+      required: 'This field is required',
+      email: 'Enter a valid email',
+      minLength: 'At least {n} characters',
+    },
     actions: {
       refresh: 'Refresh',
       cancel: 'Cancel',
@@ -209,6 +218,7 @@ const en = {
     addTitle: 'Add camera',
     editTitle: 'Edit camera',
     loadError: 'Failed to load cameras',
+    empty: 'No cameras yet',
     passwordRequired: 'Camera password is required',
     created: 'Camera added successfully',
     duplicated: 'Camera copy created',
