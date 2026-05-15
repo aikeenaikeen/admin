@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 import { type AppLocale, persistLocale } from '@/i18n'
+import { fuzzyMatch } from '@/utils/fuzzy'
 import {
   TrendCharts,
   User,
@@ -184,22 +185,11 @@ const commands = computed<Command[]>(() => {
   return cmds.filter((c) => !c.hidden)
 })
 
-function matches(cmd: Command, q: string): boolean {
-  if (!q) return true
-  const haystack = `${cmd.label} ${cmd.keywords || ''} ${cmd.group}`.toLowerCase()
-  // Fuzzy-ish: each char of query must appear in order in haystack
-  let i = 0
-  for (const ch of q.toLowerCase()) {
-    const idx = haystack.indexOf(ch, i)
-    if (idx === -1) return false
-    i = idx + 1
-  }
-  return true
-}
-
 const filtered = computed(() => {
   const q = query.value.trim()
-  return commands.value.filter((c) => matches(c, q))
+  return commands.value.filter((c) =>
+    fuzzyMatch(`${c.label} ${c.keywords || ''} ${c.group}`, q),
+  )
 })
 
 const grouped = computed(() => {
