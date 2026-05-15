@@ -132,10 +132,26 @@ async function handleSubmit() {
   }
 }
 
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024 // 5 MB
+
 function handleFileChange(file: UploadFile) {
-  if (file.raw) {
-    form.value.photo = file.raw
+  if (!file.raw) return false
+
+  if (!file.raw.type.startsWith('image/')) {
+    ElMessage.error(t('employees.dialog.photoNotImage'))
+    fileList.value = []
+    form.value.photo = null
+    return false
   }
+
+  if (file.raw.size > MAX_PHOTO_BYTES) {
+    ElMessage.error(t('employees.dialog.photoTooLarge', { mb: 5 }))
+    fileList.value = []
+    form.value.photo = null
+    return false
+  }
+
+  form.value.photo = file.raw
   return false
 }
 

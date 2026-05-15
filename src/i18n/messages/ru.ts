@@ -252,7 +252,9 @@ const ru = {
       activitiesPlaceholder: 'Выберите активности',
       activitiesHint: 'Показываются только активности, разрешённые компании и с выбранной моделью.',
       photo: 'Фото',
-      photoHint: 'JPG, PNG до 10 МБ',
+      photoHint: 'JPG, PNG до 5 МБ',
+      photoTooLarge: 'Файл больше {mb} МБ — выберите файл поменьше',
+      photoNotImage: 'Поддерживаются только изображения',
     },
     activitiesDialog: {
       title: 'Активности сотрудника',

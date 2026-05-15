@@ -93,9 +93,15 @@ async function loadStats() {
     <div class="page-head">
       <h1 class="page-title">{{ t('dashboard.title') }}</h1>
       <div class="page-head__meta">
-        <span v-if="lastUpdated" class="last-updated">
-          {{ t('dashboard.lastUpdated.label') }} {{ lastUpdatedLabel }}
-        </span>
+        <el-tooltip
+          v-if="lastUpdated"
+          :content="lastUpdated.toLocaleString()"
+          placement="bottom"
+        >
+          <span class="last-updated">
+            {{ t('dashboard.lastUpdated.label') }} {{ lastUpdatedLabel }}
+          </span>
+        </el-tooltip>
         <el-button :icon="Refresh" :loading="loading" @click="loadStats" plain>
           {{ t('common.actions.refresh') }}
         </el-button>

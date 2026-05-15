@@ -252,7 +252,9 @@ const en = {
       activitiesPlaceholder: 'Select activities',
       activitiesHint: 'Only activities enabled for the company and having a selected model are shown.',
       photo: 'Photo',
-      photoHint: 'JPG, PNG up to 10 MB',
+      photoHint: 'JPG, PNG up to 5 MB',
+      photoTooLarge: 'File is larger than {mb} MB — pick a smaller one',
+      photoNotImage: 'Only image files are supported',
     },
     activitiesDialog: {
       title: 'Employee activities',
