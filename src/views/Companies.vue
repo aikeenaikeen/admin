@@ -57,6 +57,7 @@ const form = ref({
 
 const showAdvanced = ref(false)
 const showAdvancedEdit = ref(false)
+const slugManuallyEdited = ref(false)
 
 const editConfig = ref<RecognitionConfig | null>(null)
 
@@ -70,6 +71,7 @@ function resetCreateForm() {
     slug: '',
     recognitionConfig: cloneRecognitionConfig(RECOMMENDED_RECOGNITION_CONFIG),
   }
+  slugManuallyEdited.value = false
 }
 
 onMounted(async () => {
@@ -132,11 +134,22 @@ async function deleteCompany(id: number) {
   }
 }
 
-function generateSlug() {
-  form.value.slug = form.value.name
+function slugFromName(name: string): string {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9а-я]+/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+function onNameInput() {
+  if (slugManuallyEdited.value) return
+  form.value.slug = slugFromName(form.value.name)
+}
+
+function onSlugInput() {
+  // Treat any user change as opting out of auto-generation, including
+  // clearing the field — the auto-fill is a convenience, not a leash.
+  slugManuallyEdited.value = true
 }
 
 function openCreateDialog() {
@@ -333,7 +346,7 @@ function onCompanyAction(action: string, row: Company) {
           <el-input
             v-model="form.name"
             :placeholder="t('companies.dialog.namePlaceholder')"
-            @input="generateSlug"
+            @input="onNameInput"
           />
         </el-form-item>
 
@@ -341,6 +354,7 @@ function onCompanyAction(action: string, row: Company) {
           <el-input
             v-model="form.slug"
             :placeholder="t('companies.dialog.slugPlaceholder')"
+            @input="onSlugInput"
           >
             <template #prepend>/</template>
           </el-input>
