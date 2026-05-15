@@ -324,13 +324,22 @@ function logout() {
           <LogoIcon :size="28" :title="t('common.brandLogoTitle')" />
           <span>{{ t('common.appName') }}</span>
         </div>
-        <el-button
-          :icon="themeStore.isDark ? Sunny : Moon"
-          circle
-          plain
-          :aria-label="t('layout.theme')"
-          @click="toggleTheme"
-        />
+        <div class="mobile-header__actions">
+          <el-button
+            :icon="Search"
+            circle
+            plain
+            :aria-label="t('commandPalette.openHint')"
+            @click="openCommandPalette"
+          />
+          <el-button
+            :icon="themeStore.isDark ? Sunny : Moon"
+            circle
+            plain
+            :aria-label="t('layout.theme')"
+            @click="toggleTheme"
+          />
+        </div>
       </el-header>
 
       <el-main class="main-content">
@@ -506,6 +515,11 @@ function logout() {
   gap: 8px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.mobile-header__actions {
+  display: flex;
+  gap: 8px;
 }
 
 /* Command palette trigger */
