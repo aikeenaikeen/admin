@@ -179,6 +179,7 @@ const en = {
     submitting: 'Signing in...',
     success: 'Successfully signed in',
     error: 'Sign-in failed',
+    capsLockOn: 'Caps Lock is on',
     demoTitle: 'Test accounts:',
     demoSuperadmin: "Superadmin: superadmin{'@'}system.com",
     demoCompanyAdmin: "Company admin: admin{'@'}demo.com",

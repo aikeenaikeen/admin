@@ -179,6 +179,7 @@ const ru = {
     submitting: 'Вход...',
     success: 'Вход выполнен успешно',
     error: 'Ошибка входа',
+    capsLockOn: 'Включён Caps Lock',
     demoTitle: 'Тестовые аккаунты:',
     demoSuperadmin: "Суперадминистратор: superadmin{'@'}system.com",
     demoCompanyAdmin: "Администратор компании: admin{'@'}demo.com",

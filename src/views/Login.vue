@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { User, Lock } from '@element-plus/icons-vue'
+import { User, Lock, Warning } from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import LogoIcon from '@/components/icons/LogoIcon.vue'
 import { extractErrorMessage } from '@/utils/error'
@@ -19,6 +19,15 @@ const loginForm = ref({
 })
 
 const loading = ref(false)
+const capsLockOn = ref(false)
+
+function updateCapsLock(event: KeyboardEvent) {
+  // getModifierState is supported in all major browsers we target;
+  // returns true when the Caps Lock indicator is on.
+  if (typeof event.getModifierState === 'function') {
+    capsLockOn.value = event.getModifierState('CapsLock')
+  }
+}
 
 const rules: FormRules = {
   email: [
@@ -90,7 +99,14 @@ async function handleLogin() {
             autocomplete="current-password"
             :placeholder="t('login.placeholders.password')"
             show-password
+            @keydown="updateCapsLock"
+            @keyup="updateCapsLock"
+            @blur="capsLockOn = false"
           />
+          <div v-if="capsLockOn" class="caps-warning" role="alert">
+            <el-icon><Warning /></el-icon>
+            <span>{{ t('login.capsLockOn') }}</span>
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -185,6 +201,15 @@ async function handleLogin() {
   color: var(--el-text-color-secondary);
   text-align: center;
   line-height: 1.6;
+}
+
+.caps-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-color-warning);
 }
 
 @media (max-width: 480px) {
