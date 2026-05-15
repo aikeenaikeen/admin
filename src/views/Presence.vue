@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, User } from '@element-plus/icons-vue'
+import { Refresh, User, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
 import { translateEventType } from '@/utils/uiText'
 import { createRealtimeSocket } from '@/utils/realtime'
+import { extractErrorMessage } from '@/utils/error'
 
 const { t } = useI18n()
 
@@ -20,10 +21,29 @@ interface PresenceStatus {
   lastEventTime: string | null
 }
 
+type StatusFilter = 'ALL' | 'PRESENT' | 'ABSENT'
+
 const presence = ref<PresenceStatus[]>([])
 const loading = ref(true)
+const query = ref('')
+const statusFilter = ref<StatusFilter>('ALL')
+const socketConnected = ref(false)
+
 let socket: Socket | null = null
 let reloadTimer: ReturnType<typeof setTimeout> | null = null
+
+const filtered = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  return presence.value.filter((p) => {
+    if (statusFilter.value === 'PRESENT' && !p.present) return false
+    if (statusFilter.value === 'ABSENT' && p.present) return false
+    if (!q) return true
+    return p.name.toLowerCase().includes(q)
+  })
+})
+
+const presentCount = computed(() => presence.value.filter((p) => p.present).length)
+const totalCount = computed(() => presence.value.length)
 
 onMounted(async () => {
   await loadPresence()
@@ -31,12 +51,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (socket) {
-    socket.disconnect()
-  }
-  if (reloadTimer) {
-    clearTimeout(reloadTimer)
-  }
+  if (socket) socket.disconnect()
+  if (reloadTimer) clearTimeout(reloadTimer)
 })
 
 async function loadPresence() {
@@ -45,7 +61,7 @@ async function loadPresence() {
     const response = await apiClient.get('/api/presence')
     presence.value = response.data
   } catch (error) {
-    ElMessage.error(t('presence.loadError'))
+    ElMessage.error(extractErrorMessage(error, t('presence.loadError')))
   } finally {
     loading.value = false
   }
@@ -62,7 +78,16 @@ function connectSocket() {
   socket = createRealtimeSocket()
 
   socket.on('connect', () => {
+    socketConnected.value = true
     debouncedReload()
+  })
+
+  socket.on('disconnect', () => {
+    socketConnected.value = false
+  })
+
+  socket.on('connect_error', () => {
+    socketConnected.value = false
   })
 
   socket.on('event:created', () => {
@@ -79,7 +104,15 @@ function formatTime(time: string | null): string {
   <div class="page-container">
     <el-page-header class="page-header">
       <template #content>
-        <h1 class="page-title">{{ t('presence.title') }}</h1>
+        <div class="title-row">
+          <h1 class="page-title">{{ t('presence.title') }}</h1>
+          <el-tooltip
+            :content="socketConnected ? t('presence.liveOn') : t('presence.liveOff')"
+            placement="bottom"
+          >
+            <span class="live-dot" :class="{ 'live-dot--on': socketConnected }" aria-hidden="true" />
+          </el-tooltip>
+        </div>
       </template>
       <template #extra>
         <el-button :icon="Refresh" @click="loadPresence" :loading="loading">
@@ -88,9 +121,30 @@ function formatTime(time: string | null): string {
       </template>
     </el-page-header>
 
+    <div class="toolbar">
+      <el-input
+        v-model="query"
+        :prefix-icon="Search"
+        :placeholder="t('presence.searchPlaceholder')"
+        clearable
+        class="search"
+      />
+      <el-radio-group v-model="statusFilter" size="default">
+        <el-radio-button label="ALL">
+          {{ t('presence.filters.all') }} ({{ totalCount }})
+        </el-radio-button>
+        <el-radio-button label="PRESENT">
+          {{ t('presence.filters.present') }} ({{ presentCount }})
+        </el-radio-button>
+        <el-radio-button label="ABSENT">
+          {{ t('presence.filters.absent') }} ({{ totalCount - presentCount }})
+        </el-radio-button>
+      </el-radio-group>
+    </div>
+
     <div v-loading="loading" class="presence-grid">
       <el-card
-        v-for="emp in presence"
+        v-for="emp in filtered"
         :key="emp.id"
         shadow="hover"
         :class="['presence-card', emp.present ? 'present' : 'absent']"
@@ -102,7 +156,7 @@ function formatTime(time: string | null): string {
 
           <div class="employee-info">
             <h3 class="employee-name">{{ emp.name }}</h3>
-            
+
             <el-tag :type="emp.present ? 'success' : 'info'" size="large" style="margin-top: 12px;">
               {{ emp.present ? t('presence.present') : t('presence.absent') }}
             </el-tag>
@@ -115,7 +169,10 @@ function formatTime(time: string | null): string {
       </el-card>
     </div>
 
-    <el-empty v-if="!loading && presence.length === 0" :description="t('presence.empty')" />
+    <el-empty
+      v-if="!loading && filtered.length === 0"
+      :description="presence.length === 0 ? t('presence.empty') : t('presence.emptyFiltered')"
+    />
   </div>
 </template>
 
@@ -127,7 +184,13 @@ function formatTime(time: string | null): string {
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .page-title {
@@ -135,6 +198,46 @@ function formatTime(time: string | null): string {
   font-size: 24px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--el-color-info);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.live-dot--on {
+  background: var(--el-color-success);
+  box-shadow: 0 0 0 0 var(--el-color-success-light-5);
+  animation: live-pulse 1.6s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(103, 194, 58, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(103, 194, 58, 0);
+  }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.search {
+  flex: 1 1 220px;
+  max-width: 360px;
 }
 
 .presence-grid {
@@ -148,7 +251,7 @@ function formatTime(time: string | null): string {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 16px;
   }
-  
+
   .page-container {
     padding: 16px;
   }
@@ -161,7 +264,7 @@ function formatTime(time: string | null): string {
 }
 
 .presence-card {
-  transition: all 0.3s;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .presence-card.present {

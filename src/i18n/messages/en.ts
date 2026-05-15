@@ -331,6 +331,15 @@ const en = {
     absent: '⭕ Absent',
     lastEvent: 'Last: {type} at {time}',
     empty: 'No employees',
+    emptyFiltered: 'No one matches the current filter',
+    searchPlaceholder: 'Search by name...',
+    liveOn: 'Real-time updates connected',
+    liveOff: 'Real-time disconnected — data refreshes on next load',
+    filters: {
+      all: 'All',
+      present: 'Present',
+      absent: 'Absent',
+    },
   },
   events: {
     title: 'Events',
