@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, Delete, User, Upload, Setting, Close, Edit } from '@element-plus/icons-vue'
+import { Plus, Delete, User, Upload, Setting, Close, Edit, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import apiClient from '@/api/client'
@@ -36,6 +36,13 @@ type EmployeeTableAction = 'activities' | 'edit' | 'delete'
 
 const employees = ref<Employee[]>([])
 const loading = ref(true)
+const query = ref('')
+
+const filteredEmployees = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!q) return employees.value
+  return employees.value.filter((e) => e.name.toLowerCase().includes(q))
+})
 const dialogVisible = ref(false)
 const isEditing = ref(false)
 const editingEmployeeId = ref<number | null>(null)
@@ -300,7 +307,28 @@ function onEmployeeAction(action: string, row: Employee) {
         </el-button>
       </el-empty>
 
-      <el-table v-else :data="employees" v-loading="loading" style="width: 100%">
+      <template v-else>
+        <div class="list-toolbar">
+          <el-input
+            v-model="query"
+            :prefix-icon="Search"
+            :placeholder="t('employees.searchPlaceholder')"
+            clearable
+            class="list-toolbar__search"
+          />
+        </div>
+
+        <el-empty
+          v-if="!loading && filteredEmployees.length === 0"
+          :description="t('employees.emptyFiltered')"
+        />
+
+        <el-table
+          v-else
+          :data="filteredEmployees"
+          v-loading="loading"
+          style="width: 100%"
+        >
         <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
         
         <el-table-column :label="t('employees.table.photo')" width="100">
@@ -321,7 +349,8 @@ function onEmployeeAction(action: string, row: Employee) {
             />
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
+      </template>
     </el-card>
 
     <el-dialog
@@ -433,6 +462,18 @@ function onEmployeeAction(action: string, row: Employee) {
 
 .count-chip {
   font-variant-numeric: tabular-nums;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.list-toolbar__search {
+  flex: 1 1 240px;
+  max-width: 360px;
 }
 
 .page-title {
