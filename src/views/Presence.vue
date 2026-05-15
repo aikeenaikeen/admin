@@ -161,9 +161,15 @@ function formatTime(time: string | null): string {
               {{ emp.present ? t('presence.present') : t('presence.absent') }}
             </el-tag>
 
-            <div v-if="emp.lastEventTime" class="last-event">
-              {{ t('presence.lastEvent', { type: translateEventType(emp.lastEventType), time: formatTime(emp.lastEventTime) }) }}
-            </div>
+            <el-tooltip
+              v-if="emp.lastEventTime"
+              :content="new Date(emp.lastEventTime).toLocaleString()"
+              placement="bottom"
+            >
+              <div class="last-event">
+                {{ t('presence.lastEvent', { type: translateEventType(emp.lastEventType), time: formatTime(emp.lastEventTime) }) }}
+              </div>
+            </el-tooltip>
           </div>
         </div>
       </el-card>

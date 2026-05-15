@@ -48,37 +48,43 @@ onUnmounted(() => {
 
 async function loadStats() {
   loading.value = true
-  try {
-    const [employees, presence, cameras] = await Promise.all([
-      apiClient.get('/api/employees'),
-      apiClient.get('/api/presence'),
-      apiClient.get('/api/cameras'),
-    ])
 
-    stats.value.totalEmployees = employees.data.length
-    stats.value.presentEmployees = presence.data.filter((p: any) => p.present).length
-    stats.value.activeCameras = cameras.data.filter((c: any) => c.isActive).length
+  // Each tile failing independently — one broken endpoint shouldn't
+  // hide all the other numbers.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const tomorrow = new Date(today)
-    tomorrow.setDate(tomorrow.getDate() + 1)
-
-    const events = await apiClient.get('/api/events', {
+  const [employeesRes, presenceRes, camerasRes, eventsRes] = await Promise.allSettled([
+    apiClient.get('/api/employees'),
+    apiClient.get('/api/presence'),
+    apiClient.get('/api/cameras'),
+    apiClient.get('/api/events', {
       params: {
         dateFrom: today.toISOString(),
         dateTo: tomorrow.toISOString(),
         type: 'IN',
-        limit: 1
+        limit: 1,
       },
-    })
-    stats.value.eventsToday = events.data.pagination.total
-    lastUpdated.value = new Date()
-  } catch (error) {
-    console.error('Failed to load stats:', error)
-  } finally {
-    loading.value = false
+    }),
+  ])
+
+  if (employeesRes.status === 'fulfilled') {
+    stats.value.totalEmployees = employeesRes.value.data.length
   }
+  if (presenceRes.status === 'fulfilled') {
+    stats.value.presentEmployees = presenceRes.value.data.filter((p: any) => p.present).length
+  }
+  if (camerasRes.status === 'fulfilled') {
+    stats.value.activeCameras = camerasRes.value.data.filter((c: any) => c.isActive).length
+  }
+  if (eventsRes.status === 'fulfilled') {
+    stats.value.eventsToday = eventsRes.value.data.pagination.total
+  }
+
+  lastUpdated.value = new Date()
+  loading.value = false
 }
 </script>
 
