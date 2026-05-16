@@ -48,6 +48,7 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       originalRequest._retry = true
+      if (!isSilent(originalRequest)) progressDone()
 
       const authStore = useAuthStore()
 
@@ -60,10 +61,9 @@ apiClient.interceptors.response.use(
         }
         await refreshPromise
 
-        // Retry original request with new token (progress already counted once for the first attempt)
+        // Retry original request with new token; the failed attempt was already balanced above.
         return apiClient(originalRequest)
       } catch (refreshError) {
-        if (!isSilent(originalRequest)) progressDone()
         authStore.logout()
         router.push('/login')
         return Promise.reject(refreshError)
@@ -76,6 +76,3 @@ apiClient.interceptors.response.use(
 )
 
 export default apiClient
-
-
-

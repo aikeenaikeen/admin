@@ -206,6 +206,10 @@ watch(filtered, () => { activeIndex.value = 0 })
 
 function runActive() {
   const cmd = filtered.value[activeIndex.value]
+  runCommand(cmd)
+}
+
+function runCommand(cmd: Command | undefined) {
   if (!cmd) return
   close()
   try {
@@ -294,7 +298,7 @@ defineExpose({ open, close, toggle })
               :class="{ active: indexFor(cmd) === activeIndex }"
               :data-idx="indexFor(cmd)"
               @mouseenter="activeIndex = indexFor(cmd)"
-              @click="runActive"
+              @click="runCommand(cmd)"
             >
               <el-icon class="result-icon"><component :is="cmd.icon" /></el-icon>
               <span class="result-label">{{ cmd.label }}</span>
