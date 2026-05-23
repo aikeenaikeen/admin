@@ -72,6 +72,14 @@ interface TrainingAsset {
   mime: string
   sizeBytes: number
   durationSec?: number | null
+  meta?: {
+    source?: string
+    sourceActivityIntervalId?: number
+    sourceEmployeeName?: string
+    sourceStartTime?: string
+    sourceEndTime?: string
+    sourceConfidence?: number
+  } | null
   annotations?: TrainingAnnotation[]
 }
 
@@ -1339,6 +1347,32 @@ function isImageAsset(asset: TrainingAsset | null | undefined): boolean {
   return Boolean(asset?.mime?.startsWith('image/'))
 }
 
+function isActivityIntervalTrainingAsset(asset: TrainingAsset | null | undefined): boolean {
+  return asset?.meta?.source === 'activity_interval'
+}
+
+function getTrainingAssetSourceLabel(asset: TrainingAsset): string {
+  return isActivityIntervalTrainingAsset(asset)
+    ? t('activities.dialog.assetSourceActivityInterval')
+    : t('activities.dialog.assetSourceUpload')
+}
+
+function getTrainingAssetSourceTitle(asset: TrainingAsset): string {
+  if (!isActivityIntervalTrainingAsset(asset)) {
+    return t('activities.dialog.assetSourceUpload')
+  }
+
+  const parts = [
+    asset.meta?.sourceActivityIntervalId
+      ? t('activities.dialog.assetSourceInterval', { id: asset.meta.sourceActivityIntervalId })
+      : null,
+    asset.meta?.sourceEmployeeName || null,
+    asset.meta?.sourceStartTime ? formatDateTime(asset.meta.sourceStartTime) : null,
+  ].filter(Boolean)
+
+  return parts.join(' · ') || t('activities.dialog.assetSourceActivityInterval')
+}
+
 function formatSeconds(value: number | null | undefined): string {
   if (!Number.isFinite(value)) return '—'
   const total = Number(value)
@@ -2488,6 +2522,16 @@ function onActivityAction(action: string, row: Activity) {
                   <el-link :href="row.uri" target="_blank">{{ row.uri }}</el-link>
                 </template>
               </el-table-column>
+              <el-table-column :label="t('activities.dialog.source')" width="130">
+                <template #default="{ row }">
+                  <el-tag
+                    :type="isActivityIntervalTrainingAsset(row) ? 'warning' : 'info'"
+                    :title="getTrainingAssetSourceTitle(row)"
+                  >
+                    {{ getTrainingAssetSourceLabel(row) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column prop="mime" :label="t('activities.dialog.mimeType')" width="160" />
               <el-table-column :label="t('activities.dialog.duration')" width="110">
                 <template #default="{ row }">{{ formatSeconds(row.durationSec) }}</template>
@@ -2688,6 +2732,16 @@ function onActivityAction(action: string, row: Activity) {
                   <el-table-column :label="t('activities.dialog.link')" min-width="220">
                     <template #default="{ row }">
                       <el-link :href="row.uri" target="_blank">{{ row.uri }}</el-link>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('activities.dialog.source')" width="130">
+                    <template #default="{ row }">
+                      <el-tag
+                        :type="isActivityIntervalTrainingAsset(row) ? 'warning' : 'info'"
+                        :title="getTrainingAssetSourceTitle(row)"
+                      >
+                        {{ getTrainingAssetSourceLabel(row) }}
+                      </el-tag>
                     </template>
                   </el-table-column>
                   <el-table-column :label="t('activities.dialog.annotations')" width="100">

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, Calendar, Search, User, Right } from '@element-plus/icons-vue'
+import { Refresh, Calendar, Search, User, Right, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Socket } from 'socket.io-client'
 import apiClient from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import { formatDateTime } from '@/utils/date'
 import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
@@ -12,6 +13,7 @@ import { translateActivityKind, translateEventType } from '@/utils/uiText'
 import { createRealtimeSocket } from '@/utils/realtime'
 
 const { t } = useI18n()
+const authStore = useAuthStore()
 
 interface StatisticsResponse {
   summary: {
@@ -193,6 +195,7 @@ const evidenceDialogVisible = ref(false)
 const evidenceDialogInterval = ref<IntervalItem | null>(null)
 const detectionEvidenceDialogVisible = ref(false)
 const detectionEvidenceDialogEvent = ref<EventItem | null>(null)
+const addingIntervalToTrainingId = ref<number | null>(null)
 
 const search = ref('')
 const dateFrom = ref('')
@@ -219,6 +222,7 @@ const camerasById = computed(() => {
 
 const selectedEvidenceFrames = computed(() => getIntervalEvidenceFrames(evidenceDialogInterval.value))
 const selectedDetectionEvidenceFrames = computed(() => getEventDetectionEvidenceFrames(detectionEvidenceDialogEvent.value))
+const canAddActivityEvidenceToTraining = computed(() => authStore.isSuperAdmin)
 
 const displayEmployees = computed(() => employees.value)
 
@@ -1020,6 +1024,27 @@ function openIntervalEvidence(interval: IntervalItem) {
   evidenceDialogVisible.value = true
 }
 
+async function addIntervalToTraining(interval: IntervalItem) {
+  if (!hasIntervalEvidence(interval)) {
+    ElMessage.error(t('statistics.activityEvidenceAddNoFrames'))
+    return
+  }
+
+  try {
+    addingIntervalToTrainingId.value = interval.id
+    await apiClient.post(`/api/activity-intervals/${interval.id}/training-assets`)
+    ElMessage.success(
+      t('statistics.activityEvidenceAddedToTraining', {
+        activity: interval.activity?.name || interval.activityId,
+      })
+    )
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || t('statistics.activityEvidenceAddError'))
+  } finally {
+    addingIntervalToTrainingId.value = null
+  }
+}
+
 function getEventDetectionEvidenceFrames(event?: EventItem | null): DetectionEvidenceFrame[] {
   const evidence = event?.meta?.evidence
   if (!evidence || typeof evidence !== 'object' || !Array.isArray(evidence.frames)) {
@@ -1708,6 +1733,22 @@ function formatEvidenceScore(value?: number): string {
         :description="t('statistics.noActivityEvidence')"
         :image-size="72"
       />
+
+      <template #footer>
+        <el-button @click="evidenceDialogVisible = false">
+          {{ t('common.actions.close') }}
+        </el-button>
+        <el-button
+          v-if="canAddActivityEvidenceToTraining"
+          type="primary"
+          :icon="Plus"
+          :disabled="!evidenceDialogInterval || selectedEvidenceFrames.length === 0"
+          :loading="addingIntervalToTrainingId === evidenceDialogInterval?.id"
+          @click="evidenceDialogInterval && addIntervalToTraining(evidenceDialogInterval)"
+        >
+          {{ t('statistics.addActivityEvidenceToTraining') }}
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
