@@ -150,9 +150,23 @@ interface ActivityEvidenceFrame {
   frameSelection?: string
 }
 
+interface DetectionEvidenceBboxNormalized {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+}
+
 interface DetectionEvidenceFrame extends ActivityEvidenceFrame {
   bbox?: number[]
+  bboxInFrame?: number[]
+  bboxNormalized?: DetectionEvidenceBboxNormalized
   bboxSource?: string
+  frameKind?: string
+  width?: number
+  height?: number
+  originalWidth?: number
+  originalHeight?: number
 }
 
 interface EmployeeDetails {
@@ -1066,9 +1080,48 @@ function getEventDetectionEvidenceFrames(event?: EventItem | null): DetectionEvi
         cropPolicy: frame?.cropPolicy || evidence?.cropPolicy,
         frameSource: frame?.frameSource || evidence?.frameSource,
         bboxSource: frame?.bboxSource || evidence?.cropPolicy,
+        frameKind: typeof frame?.frameKind === 'string' ? frame.frameKind : undefined,
       } as DetectionEvidenceFrame
     })
     .filter((frame: DetectionEvidenceFrame | null): frame is DetectionEvidenceFrame => Boolean(frame))
+}
+
+function clampEvidenceUnit(value: number): number {
+  return Math.min(1, Math.max(0, value))
+}
+
+function getDetectionBboxStyle(frame: DetectionEvidenceFrame): Record<string, string> | null {
+  if (frame.frameKind !== 'full_frame') {
+    return null
+  }
+
+  const bbox = frame.bboxNormalized
+  const x = Number(bbox?.x)
+  const y = Number(bbox?.y)
+  const width = Number(bbox?.width)
+  const height = Number(bbox?.height)
+
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return null
+  }
+
+  const left = clampEvidenceUnit(x)
+  const top = clampEvidenceUnit(y)
+  const right = clampEvidenceUnit(x + width)
+  const bottom = clampEvidenceUnit(y + height)
+  const boxWidth = right - left
+  const boxHeight = bottom - top
+
+  if (boxWidth <= 0 || boxHeight <= 0) {
+    return null
+  }
+
+  return {
+    left: `${left * 100}%`,
+    top: `${top * 100}%`,
+    width: `${boxWidth * 100}%`,
+    height: `${boxHeight * 100}%`,
+  }
 }
 
 function hasEventDetectionEvidence(event: EventItem): boolean {
@@ -1650,12 +1703,19 @@ function formatEvidenceScore(value?: number): string {
           :key="`${frame.url}-${index}`"
           class="activity-evidence-card"
         >
-          <img
-            :src="frame.url"
-            :alt="t('statistics.detectionEvidenceFrameAlt', { index: index + 1 })"
-            class="activity-evidence-image"
-            loading="lazy"
-          >
+          <div class="detection-evidence-frame">
+            <img
+              :src="frame.url"
+              :alt="t('statistics.detectionEvidenceFrameAlt', { index: index + 1 })"
+              class="activity-evidence-image detection-evidence-image"
+              loading="lazy"
+            >
+            <span
+              v-if="getDetectionBboxStyle(frame)"
+              class="detection-evidence-bbox"
+              :style="getDetectionBboxStyle(frame)"
+            />
+          </div>
           <figcaption class="activity-evidence-meta">
             <span>{{ t('statistics.activityEvidenceFrame', { index: index + 1 }) }}</span>
             <span>{{ t('statistics.confidence') }}: {{ formatEvidenceScore(frame.score) }}</span>
@@ -1993,6 +2053,29 @@ function formatEvidenceScore(value?: number): string {
   aspect-ratio: 1;
   object-fit: cover;
   background: var(--el-fill-color-dark);
+}
+
+.detection-evidence-frame {
+  position: relative;
+  width: 100%;
+  background: var(--el-fill-color-dark);
+}
+
+.detection-evidence-image {
+  height: auto;
+  aspect-ratio: auto;
+  object-fit: contain;
+}
+
+.detection-evidence-bbox {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid var(--el-color-success);
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.82),
+    0 0 10px rgba(0, 0, 0, 0.38);
+  pointer-events: none;
 }
 
 .activity-evidence-meta {

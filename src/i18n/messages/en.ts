@@ -420,7 +420,7 @@ const en = {
     activityEvidenceAddError: 'Failed to add clip to training',
     activityEvidenceAddNoFrames: 'No saved frames available for a clip',
     detectionEvidenceTitle: 'Employee detection frame',
-    detectionEvidenceHint: 'This shows the employee crop saved from the observation that produced the Detected event.',
+    detectionEvidenceHint: 'This shows the full camera frame captured at recognition time. The box marks the employee that produced the Detected event.',
     detectionEvidenceFrameAlt: 'Employee detection frame #{index}',
     detectionEvidenceSourceRecognition: 'Recognition frame',
     noDetectionEvidence: 'No saved frame for this detection',

@@ -420,7 +420,7 @@ const ru = {
     activityEvidenceAddError: 'Не удалось добавить клип в обучение',
     activityEvidenceAddNoFrames: 'Нет сохранённых кадров для клипа',
     detectionEvidenceTitle: 'Кадр обнаружения сотрудника',
-    detectionEvidenceHint: 'Здесь показывается crop-кадр сотрудника, сохранённый при наблюдении, из которого backend сформировал событие "Обнаружен".',
+    detectionEvidenceHint: 'Здесь показывается полный кадр с камеры в момент распознавания. Рамка отмечает сотрудника, по которому backend сформировал событие "Обнаружен".',
     detectionEvidenceFrameAlt: 'Кадр обнаружения сотрудника #{index}',
     detectionEvidenceSourceRecognition: 'Кадр из recognition',
     noDetectionEvidence: 'Для этого обнаружения нет сохранённого кадра',
