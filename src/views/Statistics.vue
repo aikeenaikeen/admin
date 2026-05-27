@@ -237,6 +237,7 @@ const camerasById = computed(() => {
 const selectedEvidenceFrames = computed(() => getIntervalEvidenceFrames(evidenceDialogInterval.value))
 const selectedDetectionEvidenceFrames = computed(() => getEventDetectionEvidenceFrames(detectionEvidenceDialogEvent.value))
 const canAddActivityEvidenceToTraining = computed(() => authStore.isSuperAdmin)
+const employeesDefaultSort = { prop: 'lastEventTime', order: 'descending' as const }
 
 const displayEmployees = computed(() => employees.value)
 
@@ -1090,7 +1091,7 @@ function clampEvidenceUnit(value: number): number {
   return Math.min(1, Math.max(0, value))
 }
 
-function getDetectionBboxStyle(frame: DetectionEvidenceFrame): Record<string, string> | null {
+function getFiniteDetectionBbox(frame: DetectionEvidenceFrame): Required<DetectionEvidenceBboxNormalized> | null {
   if (frame.frameKind !== 'full_frame') {
     return null
   }
@@ -1105,10 +1106,19 @@ function getDetectionBboxStyle(frame: DetectionEvidenceFrame): Record<string, st
     return null
   }
 
-  const left = clampEvidenceUnit(x)
-  const top = clampEvidenceUnit(y)
-  const right = clampEvidenceUnit(x + width)
-  const bottom = clampEvidenceUnit(y + height)
+  return { x, y, width, height }
+}
+
+function getDetectionBboxStyle(frame: DetectionEvidenceFrame): Record<string, string> | null {
+  const bbox = getFiniteDetectionBbox(frame)
+  if (!bbox) {
+    return null
+  }
+
+  const left = clampEvidenceUnit(bbox.x)
+  const top = clampEvidenceUnit(bbox.y)
+  const right = clampEvidenceUnit(bbox.x + bbox.width)
+  const bottom = clampEvidenceUnit(bbox.y + bbox.height)
   const boxWidth = right - left
   const boxHeight = bottom - top
 
@@ -1122,6 +1132,106 @@ function getDetectionBboxStyle(frame: DetectionEvidenceFrame): Record<string, st
     width: `${boxWidth * 100}%`,
     height: `${boxHeight * 100}%`,
   }
+}
+
+function getDetectionZoomStyle(frame: DetectionEvidenceFrame): Record<string, string> | null {
+  const bbox = getFiniteDetectionBbox(frame)
+  if (!bbox) {
+    return null
+  }
+
+  const centerX = clampEvidenceUnit(bbox.x + bbox.width / 2)
+  const centerY = clampEvidenceUnit(bbox.y + bbox.height / 2)
+  const cropWidth = clampEvidenceUnit(Math.max(0.18, Math.min(0.72, bbox.width * 2.8)))
+  const cropHeight = clampEvidenceUnit(Math.max(0.18, Math.min(0.72, bbox.height * 2.8)))
+  const cropLeft = clampEvidenceUnit(Math.min(Math.max(centerX - cropWidth / 2, 0), 1 - cropWidth))
+  const cropTop = clampEvidenceUnit(Math.min(Math.max(centerY - cropHeight / 2, 0), 1 - cropHeight))
+  const backgroundX = cropWidth >= 1 ? 50 : (cropLeft / (1 - cropWidth)) * 100
+  const backgroundY = cropHeight >= 1 ? 50 : (cropTop / (1 - cropHeight)) * 100
+
+  return {
+    backgroundImage: `url("${frame.url}")`,
+    backgroundSize: `${100 / cropWidth}% ${100 / cropHeight}%`,
+    backgroundPosition: `${backgroundX}% ${backgroundY}%`,
+  }
+}
+
+function parseSortTime(value?: string | null): number {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN
+  return Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY
+}
+
+function compareNumberValues(left: number, right: number): number {
+  const safeLeft = Number.isFinite(left) ? left : Number.NEGATIVE_INFINITY
+  const safeRight = Number.isFinite(right) ? right : Number.NEGATIVE_INFINITY
+  return safeLeft === safeRight ? 0 : safeLeft > safeRight ? 1 : -1
+}
+
+function compareTextValues(left?: string | null, right?: string | null): number {
+  return String(left || '').localeCompare(String(right || ''), undefined, { sensitivity: 'base' })
+}
+
+function compareEmployeeName(left: Employee, right: Employee): number {
+  return compareTextValues(left.name, right.name)
+}
+
+function compareEmployeePresence(left: Employee, right: Employee): number {
+  return compareNumberValues(
+    getEmployeePresence(left.id)?.present ? 1 : 0,
+    getEmployeePresence(right.id)?.present ? 1 : 0
+  )
+}
+
+function compareEmployeeLastEventType(left: Employee, right: Employee): number {
+  return compareTextValues(
+    translateEventType(getEmployeePresence(left.id)?.lastEventType || ''),
+    translateEventType(getEmployeePresence(right.id)?.lastEventType || '')
+  )
+}
+
+function compareEmployeeLastEventTime(left: Employee, right: Employee): number {
+  return compareNumberValues(
+    parseSortTime(getEmployeePresence(left.id)?.lastEventTime),
+    parseSortTime(getEmployeePresence(right.id)?.lastEventTime)
+  )
+}
+
+function compareVisibilityPeriodStart(left: VisibilityPeriodItem, right: VisibilityPeriodItem): number {
+  return compareNumberValues(parseSortTime(left.startTime), parseSortTime(right.startTime))
+}
+
+function compareVisibilityPeriodDuration(left: VisibilityPeriodItem, right: VisibilityPeriodItem): number {
+  return compareNumberValues(left.durationSeconds ?? -1, right.durationSeconds ?? -1)
+}
+
+function compareEventTime(left: EventItem, right: EventItem): number {
+  return compareNumberValues(parseSortTime(left.timestamp), parseSortTime(right.timestamp))
+}
+
+function compareEventType(left: EventItem, right: EventItem): number {
+  return compareTextValues(translateEventType(left.type), translateEventType(right.type))
+}
+
+function compareIntervalActivity(left: IntervalItem, right: IntervalItem): number {
+  return compareTextValues(left.activity?.name || String(left.activityId), right.activity?.name || String(right.activityId))
+}
+
+function compareIntervalStart(left: IntervalItem, right: IntervalItem): number {
+  return compareNumberValues(parseSortTime(left.startTime), parseSortTime(right.startTime))
+}
+
+function compareIntervalEnd(left: IntervalItem, right: IntervalItem): number {
+  return compareNumberValues(parseSortTime(left.endTime), parseSortTime(right.endTime))
+}
+
+function compareIntervalDuration(left: IntervalItem, right: IntervalItem): number {
+  const leftDuration = parseSortTime(left.endTime) - parseSortTime(left.startTime)
+  const rightDuration = parseSortTime(right.endTime) - parseSortTime(right.startTime)
+  return compareNumberValues(leftDuration, rightDuration)
+}
+
+function compareIntervalConfidence(left: IntervalItem, right: IntervalItem): number {
+  return compareNumberValues(Number(left.confidence ?? 0), Number(right.confidence ?? 0))
 }
 
 function hasEventDetectionEvidence(event: EventItem): boolean {
@@ -1244,6 +1354,7 @@ function formatEvidenceScore(value?: number): string {
           v-if="displayEmployees.length > 0"
           v-loading="employeesLoading"
           :data="displayEmployees"
+          :default-sort="employeesDefaultSort"
           row-key="id"
           :expand-row-keys="expandedRowKeys"
           @row-click="handleRowClick"
@@ -1441,7 +1552,12 @@ function formatEvidenceScore(value?: number): string {
                         :data="getVisibilityPeriodRows(row.id)"
                         style="width: 100%"
                       >
-                        <el-table-column :label="t('common.labels.period')" min-width="300">
+                        <el-table-column
+                          :label="t('common.labels.period')"
+                          min-width="300"
+                          sortable
+                          :sort-method="compareVisibilityPeriodStart"
+                        >
                           <template #default="{ row: periodRow }">
                             <div class="period-line">
                               <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(periodRow.startTime) }}</el-tag>
@@ -1454,7 +1570,12 @@ function formatEvidenceScore(value?: number): string {
                           </template>
                         </el-table-column>
 
-                        <el-table-column :label="t('events.duration')" width="140">
+                        <el-table-column
+                          :label="t('events.duration')"
+                          width="140"
+                          sortable
+                          :sort-method="compareVisibilityPeriodDuration"
+                        >
                           <template #default="{ row: periodRow }">
                             {{ formatDurationSeconds(periodRow.durationSeconds) }}
                           </template>
@@ -1473,13 +1594,23 @@ function formatEvidenceScore(value?: number): string {
                         :data="getRawEventRows(row.id)"
                         style="width: 100%"
                       >
-                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
-                        <el-table-column :label="t('common.labels.time')" min-width="220">
+                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
+                        <el-table-column
+                          :label="t('common.labels.time')"
+                          min-width="220"
+                          sortable
+                          :sort-method="compareEventTime"
+                        >
                           <template #default="{ row: eventRow }">
                             {{ formatDateTime(eventRow.timestamp) }}
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('events.type')" width="150">
+                        <el-table-column
+                          :label="t('events.type')"
+                          width="150"
+                          sortable
+                          :sort-method="compareEventType"
+                        >
                           <template #default="{ row: eventRow }">
                             <div class="event-type-cell">
                               <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
@@ -1542,8 +1673,13 @@ function formatEvidenceScore(value?: number): string {
                         :data="getEmployeeDetails(row.id)?.intervals || []"
                         style="width: 100%"
                       >
-                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" />
-                        <el-table-column :label="t('common.labels.activity')" min-width="220">
+                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
+                        <el-table-column
+                          :label="t('common.labels.activity')"
+                          min-width="220"
+                          sortable
+                          :sort-method="compareIntervalActivity"
+                        >
                           <template #default="{ row: intervalRow }">
                             <div class="interval-activity-cell">
                               <span>{{ intervalRow.activity?.name || intervalRow.activityId }}</span>
@@ -1559,22 +1695,42 @@ function formatEvidenceScore(value?: number): string {
                             </div>
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('statistics.startTime')" min-width="180">
+                        <el-table-column
+                          :label="t('statistics.startTime')"
+                          min-width="180"
+                          sortable
+                          :sort-method="compareIntervalStart"
+                        >
                           <template #default="{ row: intervalRow }">
                             {{ formatDateTime(intervalRow.startTime) }}
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('statistics.endTime')" min-width="180">
+                        <el-table-column
+                          :label="t('statistics.endTime')"
+                          min-width="180"
+                          sortable
+                          :sort-method="compareIntervalEnd"
+                        >
                           <template #default="{ row: intervalRow }">
                             {{ formatDateTime(intervalRow.endTime) }}
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('statistics.duration')" width="110">
+                        <el-table-column
+                          :label="t('statistics.duration')"
+                          width="110"
+                          sortable
+                          :sort-method="compareIntervalDuration"
+                        >
                           <template #default="{ row: intervalRow }">
                             {{ formatDuration(intervalRow.startTime, intervalRow.endTime) }}
                           </template>
                         </el-table-column>
-                        <el-table-column :label="t('statistics.confidence')" width="110">
+                        <el-table-column
+                          :label="t('statistics.confidence')"
+                          width="110"
+                          sortable
+                          :sort-method="compareIntervalConfidence"
+                        >
                           <template #default="{ row: intervalRow }">
                             {{ intervalRow.confidence?.toFixed?.(2) ?? intervalRow.confidence }}
                           </template>
@@ -1634,9 +1790,21 @@ function formatEvidenceScore(value?: number): string {
             </template>
           </el-table-column>
 
-          <el-table-column prop="name" :label="t('common.labels.employee')" min-width="220" />
+          <el-table-column
+            prop="name"
+            :label="t('common.labels.employee')"
+            min-width="220"
+            sortable
+            :sort-method="compareEmployeeName"
+          />
 
-          <el-table-column :label="t('common.labels.status')" width="160">
+          <el-table-column
+            prop="present"
+            :label="t('common.labels.status')"
+            width="160"
+            sortable
+            :sort-method="compareEmployeePresence"
+          >
             <template #default="{ row }">
               <el-tag :type="getEmployeePresence(row.id)?.present ? 'success' : 'info'">
                 {{ getEmployeePresence(row.id)?.present ? t('statistics.present') : t('statistics.absent') }}
@@ -1644,7 +1812,13 @@ function formatEvidenceScore(value?: number): string {
             </template>
           </el-table-column>
 
-          <el-table-column :label="t('statistics.lastEvent')" width="170">
+          <el-table-column
+            prop="lastEventType"
+            :label="t('statistics.lastEvent')"
+            width="170"
+            sortable
+            :sort-method="compareEmployeeLastEventType"
+          >
             <template #default="{ row }">
               <span v-if="getEmployeePresence(row.id)?.lastEventType">
                 {{ translateEventType(getEmployeePresence(row.id)?.lastEventType || '') }}
@@ -1653,7 +1827,13 @@ function formatEvidenceScore(value?: number): string {
             </template>
           </el-table-column>
 
-          <el-table-column :label="t('statistics.lastEventTime')" min-width="220">
+          <el-table-column
+            prop="lastEventTime"
+            :label="t('statistics.lastEventTime')"
+            min-width="220"
+            sortable
+            :sort-method="compareEmployeeLastEventTime"
+          >
             <template #default="{ row }">
               {{ formatDateTime(getEmployeePresence(row.id)?.lastEventTime || null) }}
             </template>
@@ -1676,7 +1856,7 @@ function formatEvidenceScore(value?: number): string {
     <el-dialog
       v-model="detectionEvidenceDialogVisible"
       :title="t('statistics.detectionEvidenceTitle')"
-      width="640px"
+      width="920px"
       class="activity-evidence-dialog"
     >
       <div v-if="detectionEvidenceDialogEvent" class="activity-evidence-summary">
@@ -1703,17 +1883,26 @@ function formatEvidenceScore(value?: number): string {
           :key="`${frame.url}-${index}`"
           class="activity-evidence-card"
         >
-          <div class="detection-evidence-frame">
-            <img
-              :src="frame.url"
-              :alt="t('statistics.detectionEvidenceFrameAlt', { index: index + 1 })"
-              class="activity-evidence-image detection-evidence-image"
-              loading="lazy"
-            >
-            <span
-              v-if="getDetectionBboxStyle(frame)"
-              class="detection-evidence-bbox"
-              :style="getDetectionBboxStyle(frame)"
+          <div class="detection-evidence-views">
+            <div class="detection-evidence-frame">
+              <img
+                :src="frame.url"
+                :alt="t('statistics.detectionEvidenceFrameAlt', { index: index + 1 })"
+                class="activity-evidence-image detection-evidence-image"
+                loading="lazy"
+              >
+              <span
+                v-if="getDetectionBboxStyle(frame)"
+                class="detection-evidence-bbox"
+                :style="getDetectionBboxStyle(frame)"
+              />
+            </div>
+            <div
+              v-if="getDetectionZoomStyle(frame)"
+              class="detection-evidence-zoom"
+              :style="getDetectionZoomStyle(frame)"
+              role="img"
+              :aria-label="t('statistics.detectionEvidenceZoomAlt', { index: index + 1 })"
             />
           </div>
           <figcaption class="activity-evidence-meta">
@@ -2061,10 +2250,33 @@ function formatEvidenceScore(value?: number): string {
   background: var(--el-fill-color-dark);
 }
 
+.detection-evidence-views {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px;
+  background: var(--el-fill-color-light);
+}
+
 .detection-evidence-image {
   height: auto;
   aspect-ratio: auto;
   object-fit: contain;
+}
+
+.detection-evidence-frame,
+.detection-evidence-zoom {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.detection-evidence-zoom {
+  width: 100%;
+  min-height: 180px;
+  aspect-ratio: 1;
+  background-color: var(--el-fill-color-dark);
+  background-repeat: no-repeat;
 }
 
 .detection-evidence-bbox {
@@ -2125,6 +2337,10 @@ function formatEvidenceScore(value?: number): string {
 
   .activity-evidence-summary {
     flex-direction: column;
+  }
+
+  .detection-evidence-views {
+    grid-template-columns: 1fr;
   }
 }
 </style>
