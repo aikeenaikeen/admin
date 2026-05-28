@@ -1353,6 +1353,7 @@ function formatEvidenceScore(value?: number): string {
         <el-table
           v-if="displayEmployees.length > 0"
           v-loading="employeesLoading"
+          class="employee-stats-table"
           :data="displayEmployees"
           :default-sort="employeesDefaultSort"
           row-key="id"
@@ -1815,7 +1816,7 @@ function formatEvidenceScore(value?: number): string {
           <el-table-column
             prop="lastEventType"
             :label="t('statistics.lastEvent')"
-            width="170"
+            min-width="220"
             sortable
             :sort-method="compareEmployeeLastEventType"
           >
@@ -1830,7 +1831,7 @@ function formatEvidenceScore(value?: number): string {
           <el-table-column
             prop="lastEventTime"
             :label="t('statistics.lastEventTime')"
-            min-width="220"
+            min-width="280"
             sortable
             :sort-method="compareEmployeeLastEventTime"
           >
@@ -2068,6 +2069,17 @@ function formatEvidenceScore(value?: number): string {
 
 :deep(.el-table__body tr:hover > td) {
   background-color: var(--el-fill-color-light);
+}
+
+:deep(.employee-stats-table .el-table__header .cell) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+:deep(.employee-stats-table .el-table__header .caret-wrapper) {
+  flex: 0 0 auto;
 }
 
 .employee-summary {
