@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Delete, User, Upload, Setting, Close, Edit, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -84,22 +84,39 @@ const galleryPhotos = ref<EmployeePhoto[]>([])
 const galleryPending = ref<File[]>([])
 const galleryFileList = ref<UploadFile[]>([])
 const galleryBusy = ref(false)
+let gallerySession = 0
+let galleryLoadId = 0
+let galleryMutationId = 0
 
 function resetGallery() {
+  gallerySession += 1
   galleryPhotos.value = []
   galleryPending.value = []
   galleryFileList.value = []
   galleryBusy.value = false
 }
 
+watch(dialogVisible, (visible) => {
+  if (!visible) {
+    resetGallery()
+  }
+}, { flush: 'sync' })
+
+function isCurrentGallerySession(session: number, employeeId: number) {
+  return session === gallerySession && dialogVisible.value && editingEmployeeId.value === employeeId
+}
+
 async function loadEmployeePhotos(employeeId: number) {
+  const session = gallerySession
+  const loadId = ++galleryLoadId
   try {
     const res = await apiClient.get(`/api/employees/${employeeId}/photos`)
-    // Пока грузили, диалог могли переключить на другого сотрудника.
-    if (editingEmployeeId.value !== employeeId) return
+    if (!isCurrentGallerySession(session, employeeId) || loadId !== galleryLoadId) return
     galleryPhotos.value = res.data || []
   } catch (error) {
-    ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryLoadError')))
+    if (isCurrentGallerySession(session, employeeId) && loadId === galleryLoadId) {
+      ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryLoadError')))
+    }
   }
 }
 
@@ -132,6 +149,7 @@ function syncGalleryPending() {
 }
 
 async function uploadGalleryPhotos() {
+  if (galleryBusy.value || !dialogVisible.value) return
   const employeeId = editingEmployeeId.value
   if (!employeeId) {
     ElMessage.warning(t('employees.dialog.gallerySaveFirst'))
@@ -144,6 +162,9 @@ async function uploadGalleryPhotos() {
     return
   }
 
+  const session = gallerySession
+  const mutationId = ++galleryMutationId
+  const isCurrent = () => isCurrentGallerySession(session, employeeId) && mutationId === galleryMutationId
   galleryBusy.value = true
   try {
     const formData = new FormData()
@@ -155,22 +176,32 @@ async function uploadGalleryPhotos() {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
 
+    if (!isCurrent()) return
     const added: EmployeePhoto[] = res.data || []
     ElMessage.success(t('employees.dialog.galleryUploaded', { count: added.length }))
     galleryFileList.value = []
     galleryPending.value = []
     await loadEmployeePhotos(employeeId)
   } catch (error) {
-    ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryUploadError')))
+    if (isCurrent()) {
+      ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryUploadError')))
+    }
   } finally {
-    galleryBusy.value = false
+    if (isCurrent()) {
+      galleryBusy.value = false
+    }
   }
 }
 
 async function deleteGalleryPhoto(photo: EmployeePhoto) {
+  if (galleryBusy.value || !dialogVisible.value) return
   const employeeId = editingEmployeeId.value
   if (!employeeId) return
 
+  const session = gallerySession
+  const mutationId = ++galleryMutationId
+  const isCurrent = () => isCurrentGallerySession(session, employeeId) && mutationId === galleryMutationId
+  galleryBusy.value = true
   try {
     await ElMessageBox.confirm(
       t('employees.dialog.galleryDeleteConfirm'),
@@ -182,12 +213,21 @@ async function deleteGalleryPhoto(photo: EmployeePhoto) {
       }
     )
 
+    if (!isCurrent()) return
     await apiClient.delete(`/api/employees/${employeeId}/photos/${photo.id}`)
+    if (!isCurrent()) return
+    // Ответ старой загрузки списка не должен вернуть удалённое фото в галерею.
+    galleryLoadId += 1
     galleryPhotos.value = galleryPhotos.value.filter((p) => p.id !== photo.id)
     ElMessage.success(t('employees.dialog.galleryDeleted'))
   } catch (error) {
-    if (isCancelledMessageBox(error)) return
-    ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryDeleteError')))
+    if (isCurrent() && !isCancelledMessageBox(error)) {
+      ElMessage.error(extractErrorMessage(error, t('employees.dialog.galleryDeleteError')))
+    }
+  } finally {
+    if (isCurrent()) {
+      galleryBusy.value = false
+    }
   }
 }
 
@@ -203,6 +243,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   setPhotoPreview(null)
+  resetGallery()
 })
 
 async function loadEmployees() {
@@ -638,6 +679,7 @@ function onEmployeeAction(action: string, row: Employee) {
             <el-upload
               v-model:file-list="galleryFileList"
               :auto-upload="false"
+              :disabled="galleryBusy"
               multiple
               accept="image/*"
               :limit="MAX_EXTRA_PHOTOS"
