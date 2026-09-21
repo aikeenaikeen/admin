@@ -211,6 +211,7 @@ const en = {
       presence: 'Attendance',
       events: 'Event history',
       statistics: 'Statistics',
+      labeling: 'Labeling',
       live: 'Live streams',
     },
   },

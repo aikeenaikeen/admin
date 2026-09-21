@@ -22,6 +22,7 @@ import {
   Expand,
   SwitchButton,
   Search,
+  EditPen,
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -96,6 +97,7 @@ const menuItems = computed(() => {
     { index: '/cameras', title: t('layout.menu.cameras'), icon: VideoCamera },
     { index: '/presence', title: t('layout.menu.presence'), icon: Location },
     { index: '/statistics', title: t('layout.menu.statistics'), icon: TrendCharts },
+    { index: '/labeling', title: t('layout.menu.labeling'), icon: EditPen },
   ]
 
   if (authStore.isSuperAdmin) {
