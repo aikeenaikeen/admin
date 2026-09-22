@@ -57,7 +57,14 @@ it('does not advance or duplicate a pending save; failure leaves the same clip',
   expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: 'negative', activityId: 42 })
   expect(apiClient.get).toHaveBeenCalledWith('/api/captures/2/activities', expect.anything())
 })
-it('requires a target activity for random clips', async () => {
+it('requires an explicit target when random clips have multiple activities', async () => {
+  const base = vi.mocked(apiClient.get).getMockImplementation()!
+  vi.mocked(apiClient.get).mockImplementation((url, config) => {
+    if (url.endsWith('/activities')) {
+      return Promise.resolve({ data: [{ id: 42, name: 'Cleaning' }, { id: 43, name: 'Phone' }] })
+    }
+    return base(url, config)
+  })
   rows = [clip(1, null)]
   await start()
   expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeDefined()
@@ -115,4 +122,20 @@ it('keyboard shortcuts ignore inputs and repeated keydown events', async () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', repeat: true }))
   expect(apiClient.post).not.toHaveBeenCalled()
   input.remove()
+})
+
+it('selects the only available activity for a random clip and sends that id', async () => {
+  rows = [clip(1, null)]
+  await start()
+  expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeUndefined()
+  await wrapper.get('[data-test="positive"]').trigger('click')
+  expect(apiClient.post).toHaveBeenCalledWith('/api/captures/1/label', { label: 'positive', activityId: 42 })
+})
+it('keeps labeling disabled when the company has no activities', async () => {
+  const base = vi.mocked(apiClient.get).getMockImplementation()!
+  vi.mocked(apiClient.get).mockImplementation((url, config) => url.endsWith('/activities')
+    ? Promise.resolve({ data: [] }) : base(url, config))
+  rows = [clip(1, null)]
+  await start()
+  expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeDefined()
 })
