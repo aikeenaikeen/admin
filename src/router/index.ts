@@ -46,6 +46,7 @@ const routes: RouteRecordRaw[] = [
         path: '/labeling',
         name: 'Labeling',
         component: () => import('@/views/Labeling.vue'),
+        meta: { requiresCompanyAdmin: true },
       },
       {
         path: '/statistics',

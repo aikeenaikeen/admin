@@ -1,135 +1,155 @@
 <script setup lang="ts">
-/**
- * Разметка клипов с боевого потока.
- *
- * Оценивать по одному кадру нельзя: по стоп-кадру не отличить телефон в руке от
- * руки у лица. Поэтому клип проигрывается по кругу, как и было снято.
- *
- * Скорость важнее красоты: при четырёх сотнях клипов в день разница между
- * мышкой и тремя клавишами — это разница между двадцатью минутами и часом.
- */
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import apiClient from '@/api/client'
-import { formatDateTime } from '@/utils/date'
+import apiClient from '../api/client'
+import { formatDateTime } from '../utils/date'
 
 type Label = 'positive' | 'negative' | 'unclear'
-
 interface CaptureClip {
   id: number
-  path: string
+  companySlug: string
   cameraId: number
   employeeId: number
   activityId: number | null
-  reason: 'vlm_verdict' | 'random' | string
+  labeledActivityId?: number | null
+  reason: string
   capturedAt: string
   frameCount: number
-  vlmDecision: string | null
-  vlmConfidence: number | null
-  vlmReason: string | null
-  modelScore: number | null
   label: Label | null
+  meta?: { nominalFps?: number }
 }
-
-const clips = ref<CaptureClip[]>([])
-const index = ref(0)
+interface Activity { id: number; name: string }
+const { t } = useI18n()
+const clips = ref<Array<CaptureClip>>([])
 const frame = ref(0)
-const loading = ref(false)
+const isLoading = ref(false)
+const hasLoadError = ref(false)
+const isSaving = ref(false)
+const isMediaLoading = ref(false)
+const hasMediaError = ref(false)
+const frameUrls = ref<Array<string>>([])
+const activities = ref<Array<Activity>>([])
+const activityId = ref<number | null>(null)
 const stats = ref<{ counts: Record<string, number>; total: number } | null>(null)
 const reasonFilter = ref<'all' | 'vlm_verdict' | 'random'>('all')
-/** Последние решения: при такой скорости промах неизбежен. */
-const history = ref<Array<{ clip: CaptureClip; label: Label }>>([])
-
-const current = computed(() => clips.value[index.value] ?? null)
-const remaining = computed(() => stats.value?.counts?.unlabeled ?? 0)
-
+const history = ref<Array<CaptureClip>>([])
+const current = computed(() => clips.value[0] ?? null)
+const remaining = computed(() => stats.value?.counts.unlabeled ?? 0)
+const canLabel = computed(() => Boolean(current.value && activityId.value && !isSaving.value
+  && !isLoading.value && !isMediaLoading.value && !hasMediaError.value))
+let requestId = 0
 let timer: number | undefined
-
-function frameUrl(clip: CaptureClip, n: number) {
-  return `/api/captures/${clip.id}/frames/${n}`
-}
-
-/** Соседние клипы подгружаются заранее, иначе на каждом переходе видна пауза. */
-const preloadUrls = computed(() => {
-  const next = clips.value.slice(index.value + 1, index.value + 3)
-  return next.flatMap((clip) =>
-    Array.from({ length: clip.frameCount }, (_, n) => frameUrl(clip, n))
-  )
-})
+let isDisposed = false
 
 async function loadStats() {
   try {
     const { data } = await apiClient.get('/api/captures/stats')
-    stats.value = data
-  } catch {
-    // счётчик не критичен, молчим
-  }
+    if (!isDisposed) { stats.value = data }
+  } catch { /* Сбой счётчика не блокирует разметку. */ }
 }
 
 async function loadClips() {
-  loading.value = true
+  const request = ++requestId
+  isLoading.value = true
+  hasLoadError.value = false
   try {
-    const { data } = await apiClient.get('/api/captures', {
-      params: {
-        label: 'unlabeled',
-        limit: 50,
-        ...(reasonFilter.value === 'all' ? {} : { reason: reasonFilter.value }),
-      },
-    })
-    clips.value = data.data ?? []
-    index.value = 0
-    frame.value = 0
-  } catch (error) {
-    ElMessage.error('Не удалось загрузить клипы')
+    const { data } = await apiClient.get('/api/captures', { params: {
+      label: 'unlabeled', limit: 50,
+      ...(reasonFilter.value === 'all' ? {} : { reason: reasonFilter.value }),
+    } })
+    if (request === requestId && !isDisposed) { clips.value = data.data ?? [] }
+  } catch {
+    if (request === requestId && !isDisposed) { hasLoadError.value = true }
   } finally {
-    loading.value = false
+    if (request === requestId && !isDisposed) { isLoading.value = false }
   }
 }
+
+/** Кадры требуют Bearer-токен, поэтому загружаются через общий API-клиент. */
+watch(current, async (clip, _old, onCleanup) => {
+  const controller = new AbortController()
+  const urls: Array<string> = []
+  let isStale = false
+  onCleanup(() => {
+    isStale = true
+    controller.abort()
+    urls.forEach((url) => URL.revokeObjectURL(url))
+    if (timer !== undefined) { window.clearInterval(timer) }
+  })
+  frame.value = 0
+  frameUrls.value = []
+  activities.value = []
+  activityId.value = null
+  isMediaLoading.value = Boolean(clip)
+  hasMediaError.value = false
+  if (!clip) { return }
+  try {
+    const response = await apiClient.get<Array<Activity>>(`/api/captures/${clip.id}/activities`, { signal: controller.signal })
+    if (isStale) { return }
+    activities.value = response.data
+    const candidate = clip.labeledActivityId ?? clip.activityId
+    activityId.value = activities.value.some((activity) => activity.id === candidate) ? candidate : null
+    // Ограничиваем параллелизм, не отправляем сотни запросов при смене клипа.
+    for (let start = 0; start < clip.frameCount; start += 4) {
+      await Promise.all(Array.from({ length: Math.min(4, clip.frameCount - start) }, async (_, offset) => {
+        const index = start + offset
+        const { data } = await apiClient.get<Blob>(`/api/captures/${clip.id}/frames/${index}`, {
+          responseType: 'blob', signal: controller.signal,
+        })
+        if (!isStale) { urls[index] = URL.createObjectURL(data) }
+      }))
+      if (isStale) { return }
+    }
+    frameUrls.value = [...urls]
+    const fps = Number(clip.meta?.nominalFps)
+    timer = window.setInterval(() => { frame.value = (frame.value + 1) % urls.length },
+      1000 / (Number.isFinite(fps) && fps > 0 ? Math.min(fps, 60) : 8))
+  } catch {
+    if (!isStale) {
+      controller.abort()
+      hasMediaError.value = true
+    }
+  } finally {
+    if (!isStale) { isMediaLoading.value = false }
+  }
+})
 
 async function setLabel(label: Label) {
   const clip = current.value
-  if (!clip) return
-  // Переходим сразу, не дожидаясь ответа: иначе каждое нажатие упирается в сеть,
-  // а на канале в два мегабита это заметно.
-  history.value.unshift({ clip, label })
-  history.value = history.value.slice(0, 10)
-  advance()
+  if (!clip || !canLabel.value) { return }
+  isSaving.value = true
+  const selectedActivity = activityId.value
   try {
-    await apiClient.post(`/api/captures/${clip.id}/label`, { label })
-    if (stats.value) {
-      stats.value.counts.unlabeled = Math.max(0, (stats.value.counts.unlabeled ?? 1) - 1)
-      stats.value.counts[label] = (stats.value.counts[label] ?? 0) + 1
-    }
+    await apiClient.post(`/api/captures/${clip.id}/label`, { label, activityId: selectedActivity })
+    if (isDisposed) { return }
+    history.value.unshift({ ...clip, labeledActivityId: selectedActivity })
+    history.value = history.value.slice(0, 10)
+    clips.value.shift()
+    if (!clips.value.length) { await loadClips() }
+    void loadStats()
   } catch {
-    ElMessage.error(`Метка для клипа ${clip.id} не сохранилась`)
-  }
-}
-
-function advance() {
-  frame.value = 0
-  if (index.value + 1 < clips.value.length) {
-    index.value += 1
-    if (clips.value.length - index.value <= 5) void loadClips()
-  } else {
-    void loadClips()
-  }
+    ElMessage.error(t('labeling.saveFailed'))
+  } finally { isSaving.value = false }
 }
 
 async function undoLast() {
-  const last = history.value.shift()
-  if (!last) return
-  clips.value.splice(index.value, 0, last.clip)
-  frame.value = 0
-  ElMessage.info(`Клип ${last.clip.id} вернули, метка «${last.label}» снята`)
+  const previous = history.value[0]
+  if (!previous || isSaving.value || isLoading.value) { return }
+  isSaving.value = true
   try {
-    await apiClient.post(`/api/captures/${last.clip.id}/label`, { label: null })
-  } catch {
-    // Снятие метки поддерживается не везде; клип всё равно показан заново.
-  }
+    await apiClient.post(`/api/captures/${previous.id}/label`, { label: null })
+    if (isDisposed) { return }
+    history.value.shift()
+    clips.value = [previous, ...clips.value.filter((clip) => clip.id !== previous.id)]
+    void loadStats()
+  } catch { ElMessage.error(t('labeling.undoFailed')) }
+  finally { isSaving.value = false }
 }
 
 function onKey(event: KeyboardEvent) {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return
+  if (event.repeat || (event.target instanceof HTMLElement
+    && event.target.closest('input,textarea,select,button,[contenteditable="true"],[role="combobox"]'))) { return }
   const map: Record<string, Label> = { '1': 'positive', '2': 'negative', '3': 'unclear' }
   if (map[event.key]) {
     event.preventDefault()
@@ -139,119 +159,74 @@ function onKey(event: KeyboardEvent) {
     void undoLast()
   }
 }
-
-watch(reasonFilter, () => void loadClips())
-
-onMounted(() => {
-  void loadClips()
-  void loadStats()
-  window.addEventListener('keydown', onKey)
-  timer = window.setInterval(() => {
-    const clip = current.value
-    if (clip && clip.frameCount > 0) frame.value = (frame.value + 1) % clip.frameCount
-  }, 250)
-})
-
+watch(reasonFilter, () => { clips.value = []; void loadClips() })
+onMounted(() => { void loadClips(); void loadStats(); window.addEventListener('keydown', onKey) })
 onBeforeUnmount(() => {
+  isDisposed = true
+  requestId += 1
   window.removeEventListener('keydown', onKey)
-  if (timer) window.clearInterval(timer)
+  if (timer !== undefined) { window.clearInterval(timer) }
 })
 </script>
 
 <template>
   <div class="labeling">
     <div class="labeling__header">
-      <div>
-        <h2>Разметка клипов</h2>
-        <p class="labeling__hint">
-          Клавиши: <b>1</b> — пользуется телефоном, <b>2</b> — не пользуется,
-          <b>3</b> — по кадрам не понять, <b>Backspace</b> — вернуть предыдущий.
-        </p>
-      </div>
+      <div><h2>{{ t('labeling.title') }}</h2><p>{{ t('labeling.shortcuts') }}</p></div>
       <div class="labeling__counters">
-        <el-tag type="warning" size="large">Осталось: {{ remaining }}</el-tag>
-        <el-tag type="success" size="large">Размечено: {{ (stats?.total ?? 0) - remaining }}</el-tag>
-        <el-radio-group v-model="reasonFilter" size="small">
-          <el-radio-button label="all">Все</el-radio-button>
-          <el-radio-button label="vlm_verdict">Вердикты</el-radio-button>
-          <el-radio-button label="random">Случайные</el-radio-button>
+        <el-tag>{{ t('labeling.remaining') }}: {{ remaining }}</el-tag>
+        <el-tag type="success">{{ t('labeling.completed') }}: {{ (stats?.total ?? 0) - remaining }}</el-tag>
+        <el-radio-group v-model="reasonFilter" :disabled="isSaving || isLoading">
+          <el-radio-button value="all">{{ t('labeling.all') }}</el-radio-button>
+          <el-radio-button value="vlm_verdict">{{ t('labeling.verdicts') }}</el-radio-button>
+          <el-radio-button value="random">{{ t('labeling.random') }}</el-radio-button>
         </el-radio-group>
       </div>
     </div>
-
-    <el-empty v-if="!loading && !current" description="Неразмеченных клипов нет" />
-
+    <el-alert v-if="hasLoadError" :title="t('labeling.loadFailed')" type="error" :closable="false" />
+    <el-button v-if="hasLoadError" @click="loadClips">{{ t('labeling.retry') }}</el-button>
+    <p v-if="isLoading">{{ t('labeling.loading') }}</p>
+    <el-empty v-else-if="!current && !hasLoadError" :description="t('labeling.empty')" />
     <div v-else-if="current" class="labeling__body">
       <div class="labeling__player">
-        <img
-          v-for="n in current.frameCount"
-          v-show="n - 1 === frame"
-          :key="n"
-          :src="frameUrl(current, n - 1)"
-          class="labeling__frame"
-          alt=""
-        />
-        <div class="labeling__progress">{{ frame + 1 }} / {{ current.frameCount }}</div>
+        <p v-if="isMediaLoading">{{ t('labeling.loading') }}</p>
+        <el-alert v-else-if="hasMediaError" :title="t('labeling.mediaFailed')" type="error" :closable="false" />
+        <img v-for="(url, n) in frameUrls" v-show="n === frame" :key="url" :src="url"
+          class="labeling__frame" :alt="t('labeling.frame', { number: n + 1 })" @error="hasMediaError = true" />
+        <div v-if="frameUrls.length" class="labeling__progress">{{ frame + 1 }} / {{ frameUrls.length }}</div>
       </div>
-
       <div class="labeling__side">
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="Сотрудник">{{ current.employeeId }}</el-descriptions-item>
-          <el-descriptions-item label="Камера">{{ current.cameraId }}</el-descriptions-item>
-          <el-descriptions-item label="Снято">{{ formatDateTime(current.capturedAt) }}</el-descriptions-item>
-          <el-descriptions-item label="Источник">
-            <el-tag :type="current.reason === 'random' ? 'info' : 'warning'" size="small">
-              {{ current.reason === 'random' ? 'случайное окно' : 'вердикт модели' }}
-            </el-tag>
-          </el-descriptions-item>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item :label="t('labeling.company')">{{ current.companySlug }}</el-descriptions-item>
+          <el-descriptions-item :label="t('labeling.employee')">{{ current.employeeId }}</el-descriptions-item>
+          <el-descriptions-item :label="t('labeling.camera')">{{ current.cameraId }}</el-descriptions-item>
+          <el-descriptions-item :label="t('labeling.captured')">{{ formatDateTime(current.capturedAt) }}</el-descriptions-item>
         </el-descriptions>
-
-        <!-- Подсказка показывается только там, где она есть: у случайных окон
-             её нет намеренно, они и нужны, чтобы ловить пропуски. -->
-        <el-alert
-          v-if="current.vlmReason"
-          :title="`Модель: ${current.vlmDecision ?? '—'}`"
-          type="info"
-          :closable="false"
-          class="labeling__verdict"
-        >
-          <p>{{ current.vlmReason }}</p>
-        </el-alert>
-
+        <label>{{ t('labeling.activity') }}</label>
+        <el-select v-model="activityId" :placeholder="t('labeling.selectActivity')" :disabled="isSaving || isMediaLoading">
+          <el-option v-for="activity in activities" :key="activity.id" :value="activity.id" :label="activity.name" />
+        </el-select>
+        <p v-if="!isMediaLoading && !activities.length">{{ t('labeling.noActivities') }}</p>
         <div class="labeling__buttons">
-          <el-button type="success" size="large" @click="setLabel('positive')">
-            1 · Пользуется
-          </el-button>
-          <el-button type="danger" size="large" @click="setLabel('negative')">
-            2 · Не пользуется
-          </el-button>
-          <el-button size="large" @click="setLabel('unclear')">
-            3 · Не понять
-          </el-button>
+          <el-button data-test="positive" type="success" :disabled="!canLabel" @click="setLabel('positive')">1 · {{ t('labeling.positive') }}</el-button>
+          <el-button data-test="negative" type="danger" :disabled="!canLabel" @click="setLabel('negative')">2 · {{ t('labeling.negative') }}</el-button>
+          <el-button data-test="unclear" :disabled="!canLabel" @click="setLabel('unclear')">3 · {{ t('labeling.unclear') }}</el-button>
         </div>
-        <el-button link :disabled="!history.length" @click="undoLast">
-          ← Вернуть предыдущий
-        </el-button>
+        <el-button v-if="hasMediaError" :disabled="isSaving" @click="loadClips">{{ t('labeling.retry') }}</el-button>
       </div>
     </div>
-
-    <div class="labeling__preload">
-      <img v-for="url in preloadUrls" :key="url" :src="url" alt="" />
-    </div>
+    <el-button data-test="undo" :disabled="!history.length || isSaving || isLoading" @click="undoLast">{{ t('labeling.undo') }}</el-button>
   </div>
 </template>
 
 <style scoped>
 .labeling { padding: 16px; }
 .labeling__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-.labeling__hint { color: var(--el-text-color-secondary); font-size: 13px; margin: 4px 0 0; }
 .labeling__counters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.labeling__body { display: flex; gap: 20px; margin-top: 16px; flex-wrap: wrap; }
-.labeling__player { position: relative; width: 448px; max-width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
-.labeling__frame { width: 100%; display: block; image-rendering: auto; }
-.labeling__progress { position: absolute; right: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.labeling__body { display: flex; gap: 20px; margin: 16px 0; flex-wrap: wrap; }
+.labeling__player { position: relative; width: 448px; max-width: 100%; background: #000; color: white; border-radius: 8px; overflow: hidden; }
+.labeling__frame { width: 100%; display: block; }
+.labeling__progress { position: absolute; right: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; }
 .labeling__side { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
-.labeling__verdict :deep(p) { margin: 4px 0 0; line-height: 1.4; }
 .labeling__buttons { display: flex; gap: 8px; flex-wrap: wrap; }
-.labeling__preload { position: absolute; width: 0; height: 0; overflow: hidden; }
 </style>
