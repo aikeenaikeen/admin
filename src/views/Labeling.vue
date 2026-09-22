@@ -89,7 +89,12 @@ watch(current, async (clip, _old, onCleanup) => {
     if (isStale) { return }
     activities.value = response.data
     const candidate = clip.labeledActivityId ?? clip.activityId
-    activityId.value = activities.value.some((activity) => activity.id === candidate) ? candidate : null
+    activityId.value = activities.value.some((activity) => activity.id === candidate)
+      ? candidate
+      // У случайного окна активности нет: оно берётся независимо от того, что
+      // заподозрила модель. Когда выбор всё равно один, заставлять человека
+      // открывать список на каждом клипе — чистая потеря времени.
+      : (activities.value.length === 1 ? activities.value[0].id : null)
     // Ограничиваем параллелизм, не отправляем сотни запросов при смене клипа.
     for (let start = 0; start < clip.frameCount; start += 4) {
       await Promise.all(Array.from({ length: Math.min(4, clip.frameCount - start) }, async (_, offset) => {
