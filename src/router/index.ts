@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
         redirect: '/statistics',
       },
       {
+        path: '/labeling',
+        name: 'Labeling',
+        component: () => import('@/views/Labeling.vue'),
+        meta: { requiresCompanyAdmin: true },
+      },
+      {
         path: '/statistics',
         name: 'Statistics',
         component: () => import('@/views/Statistics.vue'),
