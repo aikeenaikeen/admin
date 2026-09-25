@@ -10,6 +10,9 @@ import { extractErrorMessage } from '@/utils/error'
 
 const { t } = useI18n()
 
+const CAMERA_ROTATIONS = [0, 90, 180, 270] as const
+type CameraRotation = (typeof CAMERA_ROTATIONS)[number]
+
 interface Camera {
   id: number
   name: string
@@ -20,6 +23,7 @@ interface Camera {
   rtspPath: string
   isActive: boolean
   recognitionEnabled: boolean
+  rotation: CameraRotation
 }
 
 type CameraTableAction = 'video' | 'recognition' | 'test' | 'copy' | 'edit' | 'toggle' | 'delete'
@@ -52,9 +56,17 @@ const form = ref({
   password: '',
   rtspPath: '',
   recognitionEnabled: true,
+  rotation: 0 as CameraRotation,
 })
 
 const editingCameraId = ref<number | null>(null)
+
+const rotationOptions = computed(() =>
+  CAMERA_ROTATIONS.map((degrees) => ({
+    value: degrees,
+    label: degrees === 0 ? t('cameras.form.rotationNone') : t('cameras.form.rotationDegrees', { degrees }),
+  })),
+)
 
 onMounted(async () => {
   await loadCameras()
@@ -82,6 +94,7 @@ async function handleSubmit() {
       username: form.value.username,
       rtspPath: form.value.rtspPath,
       recognitionEnabled: form.value.recognitionEnabled,
+      rotation: form.value.rotation,
     }
 
     if (!editingCameraId.value) {
@@ -178,6 +191,7 @@ function startEdit(camera: Camera) {
     password: '',
     rtspPath: camera.rtspPath,
     recognitionEnabled: camera.recognitionEnabled,
+    rotation: camera.rotation ?? 0,
   }
 }
 
@@ -191,6 +205,7 @@ function resetFormFields() {
     password: '',
     rtspPath: '',
     recognitionEnabled: true,
+    rotation: 0,
   }
   isEditing.value = false
   editingCameraId.value = null
@@ -392,6 +407,22 @@ function onCameraAction(action: string, row: Camera) {
           </el-col>
         </el-row>
 
+        <el-row :gutter="16">
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="t('cameras.form.rotation')">
+              <el-select v-model="form.rotation" data-test="camera-rotation" style="width: 100%">
+                <el-option
+                  v-for="option in rotationOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+              <div class="form-hint">{{ t('cameras.form.rotationHint') }}</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+
         <el-form-item>
           <el-button type="primary" @click="handleSubmit">{{ isEditing ? t('common.actions.save') : t('common.actions.create') }}</el-button>
           <el-button type="danger" plain :icon="Close" @click="cancelForm">{{ t('common.actions.cancel') }}</el-button>
@@ -541,6 +572,13 @@ function onCameraAction(action: string, row: Camera) {
 
 .form-card {
   margin-bottom: 24px;
+}
+
+.form-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-text-color-secondary);
 }
 
 .camera-actions {
