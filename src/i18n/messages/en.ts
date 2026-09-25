@@ -1,7 +1,7 @@
 const en = {
   labeling: {
     "title": "Label captured clips",
-    "shortcuts": "Select an activity. 1 — present, 2 — absent, 3 — unclear, Backspace — undo.",
+    "shortcuts": "Select an activity. 1 — present, 2 — absent, 3 — unclear, 4 — wrong person, Backspace — undo last action label.",
     "remaining": "Remaining",
     "completed": "Labeled",
     "all": "All",
@@ -25,7 +25,10 @@ const en = {
     "unclear": "Unclear",
     "undo": "Undo last label",
     "saveFailed": "Label was not saved. The clip is still displayed; please retry.",
-    "undoFailed": "Could not undo the label. Please retry."
+    "undoFailed": "Could not undo the label. Please retry.",
+    "wrongPerson": "Wrong person",
+    "wrongPersonHint": "This is not the employee shown: face recognition was wrong. Label the action as usual.",
+    "wrongPersonFailed": "Wrong-person mark was not saved. Please retry."
 },
   common: {
     appName: 'Aikeen',
