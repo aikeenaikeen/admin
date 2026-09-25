@@ -139,3 +139,57 @@ it('keeps labeling disabled when the company has no activities', async () => {
   await start()
   expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeDefined()
 })
+
+it('wrong-person button and key 4 toggle the flag via API without an action label', async () => {
+  await start()
+  const button = () => wrapper.get('[data-test="wrong-person"]')
+  expect(button().attributes('aria-pressed')).toBe('false')
+  await button().trigger('click')
+  await flushPromises()
+  expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/wrong-person', { wrongPerson: true })
+  expect(button().attributes('aria-pressed')).toBe('true')
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
+  await flushPromises()
+  expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/wrong-person', { wrongPerson: false })
+  expect(button().attributes('aria-pressed')).toBe('false')
+  expect(apiClient.post).not.toHaveBeenCalledWith('/api/captures/1/label', expect.anything())
+})
+it('wrong-person flag is independent of the action label; Backspace undoes only the label', async () => {
+  await start()
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
+  await flushPromises()
+  await wrapper.get('[data-test="positive"]').trigger('click')
+  await flushPromises()
+  expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: 'positive', activityId: 42 })
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+  await flushPromises()
+  expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: null })
+  expect(apiClient.post).toHaveBeenCalledTimes(3)
+  // The restored clip still shows the saved flag; it can be cleared explicitly.
+  expect(wrapper.get('[data-test="wrong-person"]').attributes('aria-pressed')).toBe('true')
+})
+it('failed wrong-person save keeps the previous state and blocks labels while pending', async () => {
+  await start()
+  const pending = deferred<{ data: object }>()
+  vi.mocked(apiClient.post).mockReturnValueOnce(pending.promise)
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }))
+  expect(apiClient.post).toHaveBeenCalledTimes(1)
+  pending.reject(new Error('offline'))
+  await flushPromises()
+  expect(ElMessage.error).toHaveBeenCalledWith('labeling.wrongPersonFailed')
+  expect(wrapper.get('[data-test="wrong-person"]').attributes('aria-pressed')).toBe('false')
+})
+it('wrong-person toggle is disabled until frames load and never shows the VLM verdict', async () => {
+  rows = [{ ...clip(1), vlmDecision: 'yes', vlmReason: 'secret reasoning' } as ReturnType<typeof clip>]
+  const base = vi.mocked(apiClient.get).getMockImplementation()!
+  vi.mocked(apiClient.get).mockImplementation((url, config) => {
+    if (url.endsWith('/frames/1')) { return Promise.reject(new Error('missing frame')) }
+    return base(url, config)
+  })
+  await start()
+  expect(wrapper.get('[data-test="wrong-person"]').attributes('disabled')).toBeDefined()
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
+  expect(apiClient.post).not.toHaveBeenCalled()
+  expect(wrapper.text()).not.toContain('secret reasoning')
+})
