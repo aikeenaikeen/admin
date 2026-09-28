@@ -17,6 +17,7 @@ interface CaptureClip {
   capturedAt: string
   frameCount: number
   label: Label | null
+  wrongPerson?: boolean
   meta?: { nominalFps?: number }
 }
 interface Activity { id: number; name: string }
@@ -37,6 +38,9 @@ const history = ref<Array<CaptureClip>>([])
 const current = computed(() => clips.value[0] ?? null)
 const remaining = computed(() => stats.value?.counts.unlabeled ?? 0)
 const canLabel = computed(() => Boolean(current.value && activityId.value && !isSaving.value
+  && !isLoading.value && !isMediaLoading.value && !hasMediaError.value))
+/** Судить о человеке можно только по кадрам; активность для этого не нужна. */
+const canMarkWrongPerson = computed(() => Boolean(current.value && !isSaving.value
   && !isLoading.value && !isMediaLoading.value && !hasMediaError.value))
 let requestId = 0
 let timer: number | undefined
@@ -138,6 +142,25 @@ async function setLabel(label: Label) {
   } finally { isSaving.value = false }
 }
 
+/**
+ * Узнавание лиц приписало клип не тому сотруднику. Флаг не зависит от метки
+ * действия и сохраняется сразу; повторное нажатие снимает его.
+ */
+async function toggleWrongPerson() {
+  const clip = current.value
+  if (!clip || !canMarkWrongPerson.value) { return }
+  isSaving.value = true
+  const next = !clip.wrongPerson
+  try {
+    await apiClient.post(`/api/captures/${clip.id}/wrong-person`, { wrongPerson: next })
+    if (isDisposed) { return }
+    clip.wrongPerson = next
+  } catch {
+    ElMessage.error(t('labeling.wrongPersonFailed'))
+  } finally { isSaving.value = false }
+}
+
+/** Откатывает только последнюю метку действия; флаг «не тот человек» не трогает. */
 async function undoLast() {
   const previous = history.value[0]
   if (!previous || isSaving.value || isLoading.value) { return }
@@ -159,6 +182,9 @@ function onKey(event: KeyboardEvent) {
   if (map[event.key]) {
     event.preventDefault()
     void setLabel(map[event.key])
+  } else if (event.key === '4') {
+    event.preventDefault()
+    void toggleWrongPerson()
   } else if (event.key === 'Backspace') {
     event.preventDefault()
     void undoLast()
@@ -203,7 +229,16 @@ onBeforeUnmount(() => {
       <div class="labeling__side">
         <el-descriptions :column="1" border>
           <el-descriptions-item :label="t('labeling.company')">{{ current.companySlug }}</el-descriptions-item>
-          <el-descriptions-item :label="t('labeling.employee')">{{ current.employeeId }}</el-descriptions-item>
+          <el-descriptions-item :label="t('labeling.employee')">
+            <div class="labeling__employee">
+              <span :class="{ 'labeling__employee-id--wrong': current.wrongPerson }">{{ current.employeeId }}</span>
+              <el-button data-test="wrong-person" size="small" type="warning" :plain="!current.wrongPerson"
+                :aria-pressed="Boolean(current.wrongPerson)" :title="t('labeling.wrongPersonHint')"
+                :disabled="!canMarkWrongPerson" @click="toggleWrongPerson">
+                4 · {{ t('labeling.wrongPerson') }}
+              </el-button>
+            </div>
+          </el-descriptions-item>
           <el-descriptions-item :label="t('labeling.camera')">{{ current.cameraId }}</el-descriptions-item>
           <el-descriptions-item :label="t('labeling.captured')">{{ formatDateTime(current.capturedAt) }}</el-descriptions-item>
         </el-descriptions>
@@ -234,4 +269,6 @@ onBeforeUnmount(() => {
 .labeling__progress { position: absolute; right: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; }
 .labeling__side { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
 .labeling__buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.labeling__employee { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.labeling__employee-id--wrong { text-decoration: line-through; color: var(--el-color-warning); }
 </style>
