@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Monitor } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -21,9 +21,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// Прозрачный GIF 1x1. Подставляется в <img> перед его удалением: смена src
+// заставляет браузер оборвать MJPEG-соединение. Если просто убрать элемент
+// из DOM, отсоединённая картинка может продолжать тянуть поток.
+const BLANK_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
+
 const loading = ref(false)
 const streamUrl = ref('')
 const requestToken = ref(0)
+const streamImage = ref<HTMLImageElement | null>(null)
 
 const dialogVisible = computed({
   get: () => props.modelValue,
@@ -61,6 +67,8 @@ function getRecognitionStreamUrl(cameraId: number): string {
 }
 
 async function loadStream(cameraId: number) {
+  // Смена камеры или режима: сначала закрываем текущий поток, потом открываем новый.
+  stopStream()
   const currentToken = ++requestToken.value
   loading.value = true
 
@@ -88,11 +96,21 @@ async function loadStream(cameraId: number) {
   }
 }
 
+function stopStream() {
+  const image = streamImage.value
+  if (image && image.getAttribute('src') !== BLANK_IMAGE_SRC) {
+    image.src = BLANK_IMAGE_SRC
+  }
+  streamUrl.value = ''
+}
+
 function resetStream() {
   requestToken.value += 1
   loading.value = false
-  streamUrl.value = ''
+  stopStream()
 }
+
+onBeforeUnmount(resetStream)
 
 function handleClose() {
   resetStream()
@@ -118,6 +136,7 @@ function handleClose() {
     <div v-loading="loading" class="stream-container">
       <img
         v-if="streamUrl"
+        ref="streamImage"
         :src="streamUrl"
         :alt="t('cameras.imageAlt')"
         class="stream-image"
