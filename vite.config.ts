@@ -45,6 +45,12 @@ export default defineConfig({
         target: process.env.VITE_API_BASE_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
+      // MJPEG camera streams (backend returns relative /streams/... when
+      // CAMERA_GATEWAY_PUBLIC_URL is empty).
+      '/streams': {
+        target: process.env.CAMERA_GATEWAY_URL || 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
 })
