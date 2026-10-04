@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { useIsMobile } from '@/composables/useIsMobile'
 import {
   RECOGNITION_FIELD_META,
   type MetaValue,
@@ -21,6 +22,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+// Подписи в 280px не помещаются на телефоне — там они над полем.
+const isMobile = useIsMobile()
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)))
@@ -119,7 +122,7 @@ function toggleAdvanced() {
   <div v-show="showAdvanced">
     <el-collapse>
       <el-collapse-item :title="t('companies.dialog.section.quality')" name="quality">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.minFaceHeight')">
             <el-input-number v-model="config.quality.minFaceHeight" :min="10" :max="200" />
             <div class="field-hint">{{ hintText('minFaceHeight') }}</div>
@@ -132,7 +135,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.preprocessing')" name="preprocessing">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.enablePreprocessing')">
             <el-switch v-model="config.preprocessing.enablePreprocessing" />
             <div class="field-hint">{{ hintText('enablePreprocessing') }}</div>
@@ -149,7 +152,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.recognition')" name="insightface">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.similarityThreshold')">
             <el-input-number v-model="config.insightface.threshold" :min="0" :max="1" :step="0.05" />
             <div class="field-hint">{{ hintText('similarityThreshold') }}</div>
@@ -170,7 +173,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.faceTracking')" name="faceTracking">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.minEmbeddings')">
             <el-input-number v-model="config.faceTracking.minEmbeddings" :min="1" :max="10" />
             <div class="field-hint">{{ hintText('minEmbeddings') }}</div>
@@ -187,7 +190,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.personTracking')" name="personTracking">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.personDetectorConfidence')">
             <el-input-number v-model="config.personTracking.detConf" :min="0" :max="1" :step="0.05" />
             <div class="field-hint">{{ hintText('personDetectorConfidence') }}</div>
@@ -228,7 +231,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.presence')" name="presence">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.observationIntervalSeconds')">
             <el-input-number v-model="config.presence.observationIntervalSeconds" :min="0.2" :max="10" :step="0.5" />
             <div class="field-hint">{{ hintText('observationIntervalSeconds') }}</div>
@@ -245,7 +248,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.optimization')" name="optimization">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.personDetIntervalFrames')">
             <el-input-number v-model="config.optimization.personDetIntervalFrames" :min="1" :max="120" />
             <div class="field-hint">{{ hintText('personDetIntervalFrames') }}</div>
@@ -258,7 +261,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.streaming')" name="streaming">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.streamFps')">
             <el-input-number v-model="config.streaming.streamFps" :min="1" :max="30" />
             <div class="field-hint">{{ hintText('streamFps') }}</div>
@@ -271,7 +274,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.actionRecognition')" name="actionRecognition">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.actionStartThreshold')">
             <el-input-number v-model="config.actionRecognition.startThreshold" :min="0" :max="1" :step="0.01" />
             <div class="field-hint">{{ hintText('actionStartThreshold') }}</div>
@@ -373,7 +376,7 @@ function toggleAdvanced() {
       </el-collapse-item>
 
       <el-collapse-item :title="t('companies.dialog.section.visualization')" name="visualization">
-        <el-form label-width="280px">
+        <el-form label-width="280px" :label-position="isMobile ? 'top' : 'right'">
           <el-form-item :label="t('companies.dialog.fields.drawFaceBoxes')">
             <el-switch v-model="config.visualization.drawFaceBoxes" />
             <div class="field-hint">{{ hintText('drawFaceBoxes') }}</div>

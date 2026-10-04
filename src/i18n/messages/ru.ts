@@ -365,6 +365,7 @@ const ru = {
     deleteError: 'Не удалось удалить камеру',
     streamUrlError: 'Не удалось получить адрес потока',
     streamTitleFallback: 'Камера',
+    recognitionSwitch: 'Режим распознавания',
     recognitionMode: 'Режим распознавания',
     recognitionHint: 'Зелёные рамки обозначают распознанные лица',
     rtspOk: 'RTSP: доступен (задержка {latency} мс)',
@@ -1043,6 +1044,7 @@ const ru = {
     durationSeconds: '{value} с',
   },
   roiEditor: {
+    mobileHint: 'Редактирование зон — с компьютера: на телефоне точно расставить точки не получится.',
     streamAddressError: 'Не удалось получить адрес потока камеры',
     streamError: 'Ошибка при получении потока камеры',
     polygonMinPoints: 'Полигон должен содержать минимум 3 точки',

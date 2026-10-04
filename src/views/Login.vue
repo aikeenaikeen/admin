@@ -137,6 +137,8 @@ async function handleLogin() {
 <style scoped>
 .login-page {
   min-height: 100vh;
+  /* На телефоне 100vh включает зону под адресной строкой — центрируем по видимой высоте. */
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -210,6 +212,13 @@ async function handleLogin() {
   margin-top: 6px;
   font-size: 12px;
   color: var(--el-color-warning);
+}
+
+@media (max-width: 768px) {
+  /* iOS увеличивает страницу при фокусе на поле со шрифтом меньше 16px. */
+  .login-card :deep(.el-input__inner) {
+    font-size: 16px;
+  }
 }
 
 @media (max-width: 480px) {

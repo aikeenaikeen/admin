@@ -7,6 +7,7 @@ import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { translateUserRole } from '@/utils/uiText'
 import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 type UserRole = 'SUPERADMIN' | 'COMPANY_ADMIN' | 'USER'
 
@@ -26,6 +27,7 @@ interface Company {
 
 const authStore = useAuthStore()
 const { t } = useI18n()
+const isMobile = useIsMobile()
 
 const users = ref<UserRow[]>([])
 const companies = ref<Company[]>([])
@@ -237,8 +239,8 @@ async function deleteUser(userId: number) {
       </template>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="t('users.dialogTitle')" width="520px">
-      <el-form :model="form" label-width="120px">
+    <el-dialog v-model="dialogVisible" :title="t('users.dialogTitle')" width="520px" :fullscreen="isMobile">
+      <el-form :model="form" label-width="120px" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item :label="t('common.labels.email')" required>
           <el-input v-model="form.email" :placeholder="t('users.emailPlaceholder')" />
         </el-form-item>
@@ -326,6 +328,10 @@ async function deleteUser(userId: number) {
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
+  }
+
+  .list-toolbar__search {
+    max-width: none;
   }
 }
 </style>

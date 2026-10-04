@@ -5,20 +5,27 @@ import { Monitor } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
   camera: CameraDisplayInfo | null
   recognition?: boolean
+  // Разрешить переключать режим распознавания прямо в окне (сейчас — только на телефоне,
+  // где кнопки «Видео»/«ИИ» в карточке камеры неудобно перебирать).
+  modeSwitchable?: boolean
 }>(), {
   recognition: false,
+  modeSwitchable: false,
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
+  (e: 'update:recognition', value: boolean): void
 }>()
 
 const { t } = useI18n()
+const isMobile = useIsMobile()
 
 // Прозрачный GIF 1x1. Подставляется в <img> перед его удалением: смена src
 // заставляет браузер оборвать MJPEG-соединение. Если просто убрать элемент
@@ -34,6 +41,12 @@ const dialogVisible = computed({
   get: () => props.modelValue,
   set: (value: boolean) => emit('update:modelValue', value),
 })
+
+const showModeSwitch = computed(() => isMobile.value && props.modeSwitchable)
+
+function onRecognitionSwitch(value: string | number | boolean) {
+  emit('update:recognition', Boolean(value))
+}
 
 const dialogTitle = computed(() => {
   if (!props.camera) {
@@ -125,9 +138,20 @@ function handleClose() {
     :title="dialogTitle"
     width="90%"
     center
+    :fullscreen="isMobile"
+    :class="{ 'camera-stream-dialog--mobile': isMobile }"
     @close="handleClose"
   >
-    <div v-if="recognition" class="recognition-indicator">
+    <div v-if="showModeSwitch" class="recognition-switch">
+      <el-switch
+        :model-value="recognition"
+        :active-text="t('cameras.recognitionSwitch')"
+        data-test="recognition-switch"
+        @update:model-value="onRecognitionSwitch"
+      />
+    </div>
+
+    <div v-else-if="recognition" class="recognition-indicator">
       <el-tag type="success" size="large">
         <el-icon><Monitor /></el-icon>
         {{ t('cameras.recognitionMode') }}
@@ -180,5 +204,24 @@ function handleClose() {
 
 .recognition-hint {
   margin-top: 16px;
+}
+
+.recognition-switch {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+/* Телефон: окно на весь экран, картинка по ширине экрана. */
+.camera-stream-dialog--mobile .stream-container {
+  min-height: 200px;
+  border-radius: 0;
+}
+
+.camera-stream-dialog--mobile .stream-image {
+  width: 100%;
+  max-height: none;
+  height: auto;
+  border-radius: 0;
 }
 </style>
