@@ -11,7 +11,7 @@ const ru = {
       "from": "Снято с",
       "to": "Снято по",
       "vlmDecision": "Решение Квена",
-      "decisions": { "confirmed": "Подтвердил", "rejected": "Отклонил", "uncertain": "Не уверен" },
+      "decisions": { "confirmed": "Подтвердил", "rejected": "Отклонил", "uncertain": "Не уверен", "error": "Ошибка" },
       "score": "Оценка модели",
       "scoreFrom": "от",
       "scoreTo": "до",

@@ -212,6 +212,13 @@ it('opens the slice from the address bar and sends local-day bounds to the API',
     vlmDecision: 'confirmed', employeeId: 8, cameraId: 64, minScore: 0.5, maxScore: 0.9,
     from: dayjs('2026-09-29').startOf('day').toISOString(), to: dayjs('2026-09-30').endOf('day').toISOString() })
 })
+it('offers the Qwen error decision and sends it as is', async () => {
+  await start({ vlmDecision: 'error' })
+  expect(lastListParams()).toMatchObject({ vlmDecision: 'error' })
+  const options = wrapper.get('[data-test="filter-vlm"]').getComponent(ElSelect).findAllComponents({ name: 'ElOption' })
+  expect(options.map((option) => option.props('value'))).toEqual(['confirmed', 'rejected', 'uncertain', 'error'])
+  expect(options[3].props('label')).toBe('labeling.filters.decisions.error')
+})
 it('ignores junk in the address and keeps the old default request', async () => {
   await start({ reason: 'everything', employeeId: 'abc', from: 'yesterday', vlmDecision: 'maybe', order: 'sideways' })
   expect(lastListParams()).toEqual({ label: 'unlabeled', limit: 50, order: 'asc' })

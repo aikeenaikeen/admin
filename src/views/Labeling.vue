@@ -9,7 +9,7 @@ import { formatDateTime } from '../utils/date'
 
 type Label = 'positive' | 'negative' | 'unclear'
 type Reason = 'all' | 'vlm_verdict' | 'random'
-type VlmDecision = 'confirmed' | 'rejected' | 'uncertain'
+type VlmDecision = 'confirmed' | 'rejected' | 'uncertain' | 'error'
 type Order = 'asc' | 'desc'
 /** Срез клипов. Источник истины — адресная строка: нужный срез открывается ссылкой. */
 interface Filters {
@@ -40,7 +40,8 @@ interface CaptureClip {
 }
 type HistoryEntry = CaptureClip & { filterKey: string }
 interface Activity { id: number; name: string }
-const VLM_DECISIONS: ReadonlyArray<VlmDecision> = ['confirmed', 'rejected', 'uncertain']
+/** error — Квен не ответил или ответ не разобрался; распознавание пишет это решение как есть. */
+const VLM_DECISIONS: ReadonlyArray<VlmDecision> = ['confirmed', 'rejected', 'uncertain', 'error']
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function queryText(query: LocationQuery, key: string): string | null {

@@ -11,7 +11,7 @@ const en = {
       "from": "Captured from",
       "to": "Captured to",
       "vlmDecision": "VLM decision",
-      "decisions": { "confirmed": "Confirmed", "rejected": "Rejected", "uncertain": "Uncertain" },
+      "decisions": { "confirmed": "Confirmed", "rejected": "Rejected", "uncertain": "Uncertain", "error": "Error" },
       "score": "Model score",
       "scoreFrom": "from",
       "scoreTo": "to",
