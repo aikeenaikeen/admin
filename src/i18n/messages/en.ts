@@ -45,6 +45,16 @@ const en = {
     "undo": "Undo last label",
     "saveFailed": "Label was not saved. The clip is still displayed; please retry.",
     "undoFailed": "Could not undo the label. Please retry.",
+    "mobile": {
+      "filters": "Filters",
+      "filtersTitle": "Clip filters",
+      "done": "Done",
+      "yes": "Yes",
+      "no": "No",
+      "unclear": "Unclear",
+      "undo": "Undo",
+      "swipeHint": "Swipe right for “yes”, left for “no”"
+    },
     "wrongPerson": "Wrong person",
     "wrongPersonHint": "This is not the employee shown: face recognition was wrong. Label the action as usual.",
     "wrongPersonFailed": "Wrong-person mark was not saved. Please retry."

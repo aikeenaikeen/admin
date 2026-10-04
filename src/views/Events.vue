@@ -6,8 +6,10 @@ import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
 import { translateEventType } from '@/utils/uiText'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { t } = useI18n()
+const isMobile = useIsMobile()
 
 type EventTypeFilter = 'ALL' | 'IN' | 'OUT'
 
@@ -214,7 +216,7 @@ function resetFilters() {
         </div>
       </template>
       
-      <el-form :model="filters" label-width="100px">
+      <el-form :model="filters" :label-width="isMobile ? 'auto' : '100px'" :label-position="isMobile ? 'top' : 'right'">
         <el-row :gutter="16">
           <el-col :xs="24" :sm="8">
             <el-form-item :label="t('events.fromDate')">
@@ -256,14 +258,48 @@ function resetFilters() {
         </el-row>
         
         <el-form-item>
-          <el-button @click="resetFilters">{{ t('events.resetFilters') }}</el-button>
+          <el-button :class="{ 'events-reset--mobile': isMobile }" @click="resetFilters">{{ t('events.resetFilters') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <el-card shadow="never">
+    <el-card shadow="never" :body-style="isMobile ? { padding: '12px' } : undefined">
+      <!-- Телефон: вместо таблиц — карточки с ключевыми полями -->
+      <div v-if="isMobile" v-loading="loading" class="event-cards" data-test="event-cards">
+        <template v-if="showingVisibilityPeriods">
+          <div v-for="row in visibilityPeriods" :key="row.id" class="event-card" data-test="event-card">
+            <div class="event-card__top">
+              <span class="event-card__name">{{ row.employee.name }}</span>
+              <span class="event-card__meta">{{ formatDurationSeconds(row.durationSeconds) }}</span>
+            </div>
+            <div class="period-line">
+              <el-tag type="success" size="small">{{ translateEventType('IN') }} {{ formatClock(row.startTime) }}</el-tag>
+              <el-icon class="period-line__arrow"><Right /></el-icon>
+              <el-tag :type="row.isOpen ? 'success' : 'warning'" effect="plain" size="small">
+                {{ row.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(row.endTime)}` }}
+              </el-tag>
+            </div>
+            <div class="event-card__meta">{{ formatTime(row.startTime) }} · {{ formatPeriodCamera(row) }}</div>
+          </div>
+          <el-empty v-if="!loading && !visibilityPeriods.length" :description="t('events.noVisibilityPeriods')" :image-size="80" />
+        </template>
+        <template v-else>
+          <div v-for="row in events" :key="row.id" class="event-card" data-test="event-card">
+            <div class="event-card__top">
+              <span class="event-card__name">{{ row.employee.name }}</span>
+              <el-tag :type="row.type === 'IN' ? 'success' : 'warning'" size="small">
+                {{ translateEventType(row.type) }}
+              </el-tag>
+            </div>
+            <div class="event-card__meta">{{ formatTime(row.timestamp) }}</div>
+            <div class="event-card__meta">{{ formatCamera(row.camera) }} · #{{ row.id }}</div>
+          </div>
+          <el-empty v-if="!loading && !events.length" :description="t('events.noEvents')" :image-size="80" />
+        </template>
+      </div>
+
       <el-table
-        v-if="showingVisibilityPeriods"
+        v-else-if="showingVisibilityPeriods"
         :data="visibilityPeriods"
         v-loading="loading"
         :empty-text="t('events.noVisibilityPeriods')"
@@ -345,12 +381,14 @@ function resetFilters() {
         </el-table-column>
       </el-table>
 
-      <div style="margin-top: 16px; display: flex; justify-content: flex-end;">
+      <div class="events-pagination" :class="{ 'events-pagination--mobile': isMobile }">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
           :total="total"
-          layout="total, prev, pager, next"
+          :size="isMobile ? 'small' : 'default'"
+          :pager-count="isMobile ? 5 : 7"
+          :layout="isMobile ? 'prev, pager, next' : 'total, prev, pager, next'"
           @current-change="handlePageChange"
         />
       </div>
@@ -397,9 +435,70 @@ function resetFilters() {
   margin: 8px 0;
 }
 
+.events-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.events-pagination--mobile {
+  justify-content: center;
+}
+
+.event-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.event-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+}
+
+.event-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.event-card__name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-card__meta {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow-wrap: anywhere;
+}
+
+.events-reset--mobile {
+  width: 100%;
+}
+
 @media (max-width: 768px) {
   .page-container {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
   }
 }
 </style>

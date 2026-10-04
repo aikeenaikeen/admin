@@ -384,4 +384,83 @@ async function loadStats() {
   font-weight: 500;
   text-align: center;
 }
+
+/* Телефон: плитки по две в ряд, без крупных иконок; шапка компактнее */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 12px;
+  }
+
+  .page-head {
+    margin-bottom: 12px;
+    gap: 8px;
+  }
+
+  .page-title {
+    font-size: 22px;
+  }
+
+  .page-head__meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-card :deep(.el-card__body) {
+    padding: 12px;
+  }
+
+  .stat-card:hover {
+    transform: none;
+  }
+
+  .stat-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .stat-icon :deep(.el-icon) {
+    font-size: 20px !important;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .quick-links {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .quick-link {
+    min-height: 88px;
+    padding: 14px 8px;
+    gap: 8px;
+  }
+
+  .quick-link :deep(.el-icon) {
+    font-size: 28px !important;
+  }
+
+  .quick-link span {
+    font-size: 13px;
+  }
+}
 </style>

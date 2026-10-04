@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { computed, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -8,6 +8,7 @@ import { type AppLocale, persistLocale } from '@/i18n'
 import LogoIcon from '@/components/icons/LogoIcon.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import { translateUserRole } from '@/utils/uiText'
+import { useIsMobile } from '@/composables/useIsMobile'
 import {
   Location,
   Setting,
@@ -32,9 +33,8 @@ const themeStore = useThemeStore()
 const { t, locale } = useI18n()
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed'
-const MOBILE_BREAKPOINT = 768
 
-const isMobile = ref(false)
+const isMobile = useIsMobile()
 const isCollapsed = ref(false)
 const mobileDrawerOpen = ref(false)
 const commandPaletteRef = ref<InstanceType<typeof CommandPalette> | null>(null)
@@ -55,24 +55,17 @@ function persistCollapsed(value: boolean) {
   window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, value ? '1' : '0')
 }
 
-function syncBreakpoint() {
-  if (typeof window === 'undefined') return
-  isMobile.value = window.innerWidth < MOBILE_BREAKPOINT
-}
-
 onMounted(() => {
   isCollapsed.value = readStoredCollapsed()
-  syncBreakpoint()
-  window.addEventListener('resize', syncBreakpoint)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', syncBreakpoint)
 })
 
 watch(isCollapsed, (value) => persistCollapsed(value))
+// Выезжающее меню закрывается после перехода и при повороте/расширении экрана до компьютерного
 watch(() => route.fullPath, () => {
   mobileDrawerOpen.value = false
+})
+watch(isMobile, (mobile) => {
+  if (!mobile) mobileDrawerOpen.value = false
 })
 
 const activeIndex = computed(() => route.path)
@@ -114,6 +107,7 @@ const menuItems = computed(() => {
 })
 
 function handleSelect(index: string) {
+  mobileDrawerOpen.value = false
   router.push(index)
 }
 
@@ -261,11 +255,12 @@ function logout() {
       v-if="isMobile"
       v-model="mobileDrawerOpen"
       direction="ltr"
-      size="260px"
+      size="min(280px, 85vw)"
       :with-header="false"
       :modal="true"
+      class="mobile-nav-drawer"
     >
-      <div class="sidebar mobile">
+      <div class="sidebar mobile" data-test="mobile-nav">
         <div class="logo">
           <LogoIcon class="logo-image" :size="36" :title="t('common.brandLogoTitle')" />
           <h2>{{ t('common.appName') }}</h2>
@@ -322,13 +317,17 @@ function logout() {
     <el-container>
       <el-header v-if="isMobile" class="mobile-header">
         <el-button
-          :icon="Expand"
+          data-test="menu-toggle"
+          class="mobile-header__menu"
           text
           :aria-label="t('layout.openMenu')"
+          :aria-expanded="mobileDrawerOpen"
           @click="toggleSidebar"
-        />
+        >
+          <span class="mobile-header__burger" aria-hidden="true">☰</span>
+        </el-button>
         <div class="mobile-brand">
-          <LogoIcon :size="28" :title="t('common.brandLogoTitle')" />
+          <LogoIcon :size="24" :title="t('common.brandLogoTitle')" />
           <span>{{ t('common.appName') }}</span>
         </div>
         <div class="mobile-header__actions">
@@ -404,8 +403,14 @@ function logout() {
 }
 
 .sidebar.mobile {
-  height: 100vh;
+  height: 100%;
+  min-height: 100%;
   border-right: none;
+}
+
+.mobile-header__burger {
+  font-size: 22px;
+  line-height: 1;
 }
 
 .logo {
@@ -538,7 +543,16 @@ function logout() {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: 56px;
+  height: 48px;
+  padding-top: env(safe-area-inset-top);
+  box-sizing: content-box;
+}
+
+.mobile-header__menu {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  margin-left: -8px;
 }
 
 .mobile-brand {
@@ -551,7 +565,22 @@ function logout() {
 
 .mobile-header__actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+}
+
+.mobile-header__actions .el-button + .el-button {
+  margin-left: 0;
+}
+
+@media (max-width: 768px) {
+  /* Контент на всю ширину; горизонтальный скролл страницы отрезаем,
+     clip (в отличие от hidden) не ломает position: sticky внутри */
+  .main-content {
+    overflow: visible;
+    overflow-x: clip;
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 /* Command palette trigger */

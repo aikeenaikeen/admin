@@ -310,4 +310,112 @@ function formatTime(time: string | null): string {
   color: var(--el-text-color-secondary);
   line-height: 1.5;
 }
+
+/* Телефон: компактные строки (аватар слева), фильтры во всю ширину */
+@media (max-width: 768px) {
+  .page-container {
+    padding: 12px;
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .search {
+    max-width: none;
+    flex: none;
+  }
+
+  .toolbar :deep(.el-radio-group) {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .toolbar :deep(.el-radio-button) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .toolbar :deep(.el-radio-button__inner) {
+    width: 100%;
+    padding: 8px 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .presence-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .presence-card:hover {
+    transform: none;
+  }
+
+  .presence-card :deep(.el-card__body) {
+    padding: 10px 12px;
+  }
+
+  .employee-content {
+    flex-direction: row;
+    align-items: center;
+    text-align: left;
+    gap: 12px;
+  }
+
+  .employee-content > :deep(.el-avatar) {
+    --el-avatar-size: 48px !important;
+    width: 48px !important;
+    height: 48px !important;
+    flex-shrink: 0;
+  }
+
+  .employee-content > :deep(.el-avatar .el-icon) {
+    font-size: 24px !important;
+  }
+
+  .employee-info {
+    margin-top: 0;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+
+  .employee-name {
+    margin: 0;
+    font-size: 15px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .employee-info :deep(.el-tag) {
+    margin-top: 0 !important;
+  }
+
+  .last-event {
+    margin-top: 0;
+    flex-basis: 100%;
+    font-size: 11px;
+  }
+}
 </style>

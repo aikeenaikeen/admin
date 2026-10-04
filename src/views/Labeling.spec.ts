@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import ElementPlus, { ElMessage, ElSelect, ElRadioGroup } from 'element-plus'
+import ElementPlus, { ElDrawer, ElMessage, ElSelect, ElRadioGroup } from 'element-plus'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import dayjs from 'dayjs'
 import Labeling from './Labeling.vue'
 import apiClient from '../api/client'
+import { stubViewportWidth } from '../test-utils/viewport'
 vi.mock('../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
 const clip = (id: number, activityId: number | null = 42) => ({ id, companySlug: 'test', cameraId: 7,
@@ -249,4 +250,98 @@ it('does not query an empty slice when bounds are reversed', async () => {
   expect(listCalls()).toHaveLength(0)
   expect(wrapper.text()).toContain('labeling.filters.badDates')
   expect(wrapper.find('img').exists()).toBe(false)
+})
+
+describe('mobile layout (≤ 768px)', () => {
+  const player = () => wrapper.get('[data-test="player"]')
+  async function swipe(dx: number, dy = 0, pointerType = 'touch') {
+    const start = { pointerId: 1, pointerType, clientX: 150, clientY: 200 }
+    await player().trigger('pointerdown', start)
+    await player().trigger('pointermove', { ...start, clientX: 150 + dx / 2, clientY: 200 + dy / 2 })
+    await player().trigger('pointermove', { ...start, clientX: 150 + dx, clientY: 200 + dy })
+    await player().trigger('pointerup', { ...start, clientX: 150 + dx, clientY: 200 + dy })
+    await flushPromises()
+  }
+  beforeEach(() => { stubViewportWidth(390) })
+
+  it('pins large label, wrong-person and undo buttons into the bottom action bar', async () => {
+    await start()
+    const bar = wrapper.get('[data-test="actionbar"]')
+    for (const name of ['positive', 'negative', 'unclear', 'wrong-person', 'undo']) {
+      expect(bar.find(`[data-test="${name}"]`).exists()).toBe(true)
+      expect(wrapper.findAll(`[data-test="${name}"]`)).toHaveLength(1)
+    }
+    expect(wrapper.find('[data-test="filters"]').exists()).toBe(false)
+    await bar.get('[data-test="positive"]').trigger('click')
+    await flushPromises()
+    expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: 'positive', activityId: 42 })
+    await bar.get('[data-test="undo"]').trigger('click')
+    await flushPromises()
+    expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: null })
+  })
+
+  it('hides filters behind a "Filters (N)" button that opens a drawer', async () => {
+    await start({ reason: 'random', cameraId: '64' })
+    const toggle = wrapper.get('[data-test="filters-toggle"]')
+    expect(toggle.text()).toContain('(2)')
+    expect(wrapper.getComponent(ElDrawer).props('modelValue')).toBe(false)
+    await toggle.trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(ElDrawer).props('modelValue')).toBe(true)
+    wrapper.get('[data-test="filter-vlm"]').getComponent(ElSelect).vm.$emit('update:modelValue', 'rejected')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ reason: 'random', cameraId: '64', vlmDecision: 'rejected' })
+    expect(wrapper.get('[data-test="filters-toggle"]').text()).toContain('(3)')
+  })
+
+  it('swipe right labels "positive", swipe left labels "negative"', async () => {
+    await start()
+    await swipe(120)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/1/label', { label: 'positive', activityId: 42 })
+    await swipe(-120)
+    expect(apiClient.post).toHaveBeenLastCalledWith('/api/captures/2/label', { label: 'negative', activityId: 42 })
+    expect(apiClient.post).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores short, vertical and mouse drags', async () => {
+    await start()
+    await swipe(40)
+    await swipe(100, 160)
+    await swipe(150, 0, 'mouse')
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+
+  it('shows a yes/no hint while dragging and arms it past the threshold', async () => {
+    await start()
+    const base = { pointerId: 1, pointerType: 'touch', clientX: 150, clientY: 200 }
+    await player().trigger('pointerdown', base)
+    await player().trigger('pointermove', { ...base, clientX: 190 })
+    const hint = () => wrapper.get('[data-test="swipe-hint"]')
+    expect(hint().text()).toBe('labeling.mobile.yes')
+    expect(hint().classes()).not.toContain('labeling__swipe--armed')
+    await player().trigger('pointermove', { ...base, clientX: 250 })
+    expect(hint().classes()).toContain('labeling__swipe--armed')
+    await player().trigger('pointercancel', base)
+    expect(wrapper.find('[data-test="swipe-hint"]').exists()).toBe(false)
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+
+  it('does not label by swipe while labels are unavailable', async () => {
+    const baseGet = vi.mocked(apiClient.get).getMockImplementation()!
+    vi.mocked(apiClient.get).mockImplementation((url, config) => url.endsWith('/activities')
+      ? Promise.resolve({ data: [] }) : baseGet(url, config))
+    rows = [clip(1, null)]
+    await start()
+    await swipe(150)
+    expect(apiClient.post).not.toHaveBeenCalled()
+  })
+})
+
+it('desktop keeps the filter card and inline buttons, without the mobile action bar', async () => {
+  stubViewportWidth(1280)
+  await start()
+  expect(wrapper.find('[data-test="filters"]').exists()).toBe(true)
+  expect(wrapper.find('[data-test="actionbar"]').exists()).toBe(false)
+  expect(wrapper.find('[data-test="filters-toggle"]').exists()).toBe(false)
+  expect(wrapper.text()).toContain('labeling.shortcuts')
 })
