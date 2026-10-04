@@ -1,5 +1,6 @@
 const en = {
   labeling: {
+    "idHint": "System ID:",
     "title": "Label captured clips",
     "shortcuts": "Select an activity. 1 — present, 2 — absent, 3 — unclear, 4 — wrong person, Backspace — undo last action label.",
     "remaining": "Remaining",

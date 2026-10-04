@@ -8,9 +8,10 @@ import apiClient from '../api/client'
 import { stubViewportWidth } from '../test-utils/viewport'
 vi.mock('../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+type Named = { id: number; name: string } | null
 const clip = (id: number, activityId: number | null = 42) => ({ id, companySlug: 'test', cameraId: 7,
   employeeId: 8, activityId, reason: 'random', capturedAt: '2026-09-22T00:00:00Z', frameCount: 2,
-  label: null, meta: { nominalFps: 8 } })
+  label: null, meta: { nominalFps: 8 }, employee: undefined as Named | undefined, camera: undefined as Named | undefined })
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
@@ -351,4 +352,45 @@ it('desktop keeps the filter card and inline buttons, without the mobile action 
   expect(wrapper.find('[data-test="actionbar"]').exists()).toBe(false)
   expect(wrapper.find('[data-test="filters-toggle"]').exists()).toBe(false)
   expect(wrapper.text()).toContain('labeling.shortcuts')
+})
+
+it('shows employee and camera names with the number small; number alone when not found', async () => {
+  stubViewportWidth(1280)
+  rows = [
+    { ...clip(1), employee: { id: 8, name: 'Семён' }, camera: { id: 7, name: 'DVR Канал 9 (офис)' } },
+    { ...clip(2), employeeId: 99, cameraId: 98, employee: null, camera: null },
+  ]
+  await start()
+  expect(wrapper.get('[data-test="employee-name"]').text()).toMatch(/^Семён\s+№ 8$/)
+  expect(wrapper.get('[data-test="employee-name"]').attributes('title')).toBe('labeling.idHint 8')
+  expect(wrapper.get('[data-test="camera-name"]').text()).toMatch(/^DVR Канал 9 \(офис\)\s+№ 7$/)
+  await wrapper.get('[data-test="positive"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-test="employee-name"]').text()).toBe('№ 99')
+  expect(wrapper.get('[data-test="camera-name"]').text()).toBe('№ 98')
+})
+
+it('falls back to the company directory when the clip has no name field', async () => {
+  stubViewportWidth(1280)
+  rows = [{ ...clip(1), cameraId: 64 }]
+  await start()
+  expect(wrapper.get('[data-test="employee-name"]').text()).toMatch(/^Employee\s+№ 8$/)
+  expect(wrapper.get('[data-test="camera-name"]').text()).toMatch(/^Office\s+№ 64$/)
+})
+
+it('employee and camera filters list names, merged from the directory and the clips', async () => {
+  stubViewportWidth(1280)
+  rows = [{ ...clip(1), employeeId: 57, employee: { id: 57, name: 'Семён' }, camera: { id: 7, name: 'Вход' } }]
+  await start()
+  // Опции ElSelect рисуются только при открытом списке, поэтому смотрим источник опций.
+  const vm = wrapper.vm as unknown as { employeeOptions: Array<{ name: string }>; cameraOptions: Array<{ name: string }> }
+  expect(vm.employeeOptions.map((option) => option.name)).toEqual(['Семён', 'Employee'])
+  expect(vm.cameraOptions.map((option) => option.name)).toEqual(['Вход', 'Office'])
+})
+
+it('on phone the activity choice comes first in the side panel', async () => {
+  stubViewportWidth(390)
+  await start()
+  expect(wrapper.get('.labeling').classes()).toContain('labeling--mobile')
+  expect(wrapper.get('[data-test="activity-block"]').find('[data-test="activity"]').exists()).toBe(true)
 })
