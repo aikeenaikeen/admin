@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
-import { createReusableTemplate } from '@vueuse/core'
+import { createReusableTemplate, useResizeObserver } from '@vueuse/core'
 import apiClient from '../api/client'
 import { formatDateTime } from '../utils/date'
 import { useIsMobile } from '../composables/useIsMobile'
@@ -39,6 +39,9 @@ interface CaptureClip {
   label: Label | null
   wrongPerson?: boolean
   meta?: { nominalFps?: number }
+  /** Имена из компании клипа; null — сотрудник или камера удалены, показываем номер. */
+  employee?: Option | null
+  camera?: Option | null
 }
 type HistoryEntry = CaptureClip & { filterKey: string }
 interface Activity { id: number; name: string }
@@ -145,6 +148,32 @@ const activityId = ref<number | null>(null)
 const stats = ref<{ counts: Record<string, number>; total: number } | null>(null)
 const history = ref<Array<HistoryEntry>>([])
 const current = computed(() => clips.value[0] ?? null)
+/** Имена для фильтров: справочник компании плюс то, что пришло вместе с клипами. */
+function mergeOptions(base: Array<Option>, extra: Array<Option | null | undefined>): Array<Option> {
+  const byId = new Map(base.map((option) => [option.id, option]))
+  for (const option of extra) {
+    if (option && !byId.has(option.id)) { byId.set(option.id, option) }
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+}
+const employeeOptions = computed(() => mergeOptions(employees.value,
+  [...clips.value, ...history.value].map((clip) => clip.employee)))
+const cameraOptions = computed(() => mergeOptions(cameras.value,
+  [...clips.value, ...history.value].map((clip) => clip.camera)))
+const employeeName = computed(() => current.value && (current.value.employee?.name
+  ?? employees.value.find((employee) => employee.id === current.value?.employeeId)?.name))
+const cameraName = computed(() => current.value && (current.value.camera?.name
+  ?? cameras.value.find((camera) => camera.id === current.value?.cameraId)?.name))
+/**
+ * Нижняя панель кнопок на телефоне прибита к экрану; её высота зависит от
+ * переноса подписей и safe-area iPhone, поэтому меряем, а не угадываем.
+ */
+const actionbar = ref<HTMLElement | null>(null)
+const actionbarHeight = ref<number | null>(null)
+useResizeObserver(actionbar, () => { actionbarHeight.value = actionbar.value?.offsetHeight ?? null })
+const rootStyle = computed(() => actionbarHeight.value
+  ? { '--labeling-actionbar-height': `${actionbarHeight.value}px` }
+  : undefined)
 /** Сколько неразмеченных осталось именно в текущем срезе. */
 const remaining = computed(() => listTotal.value ?? stats.value?.counts.unlabeled ?? 0)
 const completed = computed(() => (stats.value?.total ?? 0) - (stats.value?.counts.unlabeled ?? 0))
@@ -396,7 +425,7 @@ onBeforeUnmount(() => {
 
 
 <template>
-  <div class="labeling" :class="{ 'labeling--mobile': isMobile }">
+  <div class="labeling" :class="{ 'labeling--mobile': isMobile }" :style="rootStyle">
     <DefineFilters>
       <div class="labeling__filters-grid">
         <div class="labeling__filter labeling__filter--wide">
@@ -413,8 +442,10 @@ onBeforeUnmount(() => {
           <el-select data-test="filter-employee" :model-value="filters.employeeId ?? undefined" clearable filterable
             :placeholder="t('labeling.filters.any')" :disabled="isSaving"
             @update:model-value="onFilter('employeeId', $event)">
-            <el-option v-for="employee in employees" :key="employee.id" :value="employee.id"
-              :label="`${employee.name} · ${employee.id}`" />
+            <el-option v-for="employee in employeeOptions" :key="employee.id" :value="employee.id"
+              :label="employee.name">
+              <span>{{ employee.name }}</span><span class="labeling__option-id">{{ employee.id }}</span>
+            </el-option>
           </el-select>
         </div>
         <div class="labeling__filter">
@@ -422,8 +453,10 @@ onBeforeUnmount(() => {
           <el-select data-test="filter-camera" :model-value="filters.cameraId ?? undefined" clearable filterable
             :placeholder="t('labeling.filters.any')" :disabled="isSaving"
             @update:model-value="onFilter('cameraId', $event)">
-            <el-option v-for="camera in cameras" :key="camera.id" :value="camera.id"
-              :label="`${camera.name} · ${camera.id}`" />
+            <el-option v-for="camera in cameraOptions" :key="camera.id" :value="camera.id"
+              :label="camera.name">
+              <span>{{ camera.name }}</span><span class="labeling__option-id">{{ camera.id }}</span>
+            </el-option>
           </el-select>
         </div>
         <div class="labeling__filter">
@@ -529,7 +562,11 @@ onBeforeUnmount(() => {
           <el-descriptions-item :label="t('labeling.company')">{{ current.companySlug }}</el-descriptions-item>
           <el-descriptions-item :label="t('labeling.employee')">
             <div class="labeling__employee">
-              <span :class="{ 'labeling__employee-id--wrong': current.wrongPerson }">{{ current.employeeId }}</span>
+              <span data-test="employee-name" :class="{ 'labeling__employee-id--wrong': current.wrongPerson }"
+                :title="`${t('labeling.idHint')} ${current.employeeId}`">
+                {{ employeeName ?? `№ ${current.employeeId}` }}
+                <small v-if="employeeName" class="labeling__id">№ {{ current.employeeId }}</small>
+              </span>
               <el-button v-if="!isMobile" data-test="wrong-person" size="small" type="warning" :plain="!current.wrongPerson"
                 :aria-pressed="Boolean(current.wrongPerson)" :title="t('labeling.wrongPersonHint')"
                 :disabled="!canMarkWrongPerson" @click="toggleWrongPerson">
@@ -538,14 +575,22 @@ onBeforeUnmount(() => {
               <el-tag v-else-if="current.wrongPerson" type="warning" size="small">{{ t('labeling.wrongPerson') }}</el-tag>
             </div>
           </el-descriptions-item>
-          <el-descriptions-item :label="t('labeling.camera')">{{ current.cameraId }}</el-descriptions-item>
+          <el-descriptions-item :label="t('labeling.camera')">
+            <span data-test="camera-name" :title="`${t('labeling.idHint')} ${current.cameraId}`">
+              {{ cameraName ?? `№ ${current.cameraId}` }}
+              <small v-if="cameraName" class="labeling__id">№ {{ current.cameraId }}</small>
+            </span>
+          </el-descriptions-item>
           <el-descriptions-item :label="t('labeling.captured')">{{ formatDateTime(current.capturedAt) }}</el-descriptions-item>
         </el-descriptions>
-        <label>{{ t('labeling.activity') }}</label>
-        <el-select v-model="activityId" data-test="activity" :placeholder="t('labeling.selectActivity')" :disabled="isSaving || isMediaLoading">
-          <el-option v-for="activity in activities" :key="activity.id" :value="activity.id" :label="activity.name" />
-        </el-select>
-        <p v-if="!isMediaLoading && !activities.length">{{ t('labeling.noActivities') }}</p>
+        <!-- На телефоне выбор активности сразу под видео: без него кнопки не работают -->
+        <div class="labeling__activity" data-test="activity-block">
+          <label>{{ t('labeling.activity') }}</label>
+          <el-select v-model="activityId" data-test="activity" :placeholder="t('labeling.selectActivity')" :disabled="isSaving || isMediaLoading">
+            <el-option v-for="activity in activities" :key="activity.id" :value="activity.id" :label="activity.name" />
+          </el-select>
+          <p v-if="!isMediaLoading && !activities.length">{{ t('labeling.noActivities') }}</p>
+        </div>
         <div v-if="!isMobile" class="labeling__buttons">
           <el-button data-test="positive" type="success" :disabled="!canLabel" @click="setLabel('positive')">1 · {{ t('labeling.positive') }}</el-button>
           <el-button data-test="negative" type="danger" :disabled="!canLabel" @click="setLabel('negative')">2 · {{ t('labeling.negative') }}</el-button>
@@ -557,7 +602,7 @@ onBeforeUnmount(() => {
     <el-button v-if="!isMobile" data-test="undo" :disabled="!history.length || isSaving || isLoading" @click="undoLast">{{ t('labeling.undo') }}</el-button>
 
     <!-- Телефон: кнопки под большой палец, прибиты к низу экрана -->
-    <div v-if="isMobile" class="labeling__actionbar" data-test="actionbar">
+    <div v-if="isMobile" ref="actionbar" class="labeling__actionbar" data-test="actionbar">
       <el-button data-test="positive" type="success" :disabled="!canLabel" @click="setLabel('positive')">1 · {{ t('labeling.mobile.yes') }}</el-button>
       <el-button data-test="negative" type="danger" :disabled="!canLabel" @click="setLabel('negative')">2 · {{ t('labeling.mobile.no') }}</el-button>
       <el-button data-test="unclear" :disabled="!canLabel" @click="setLabel('unclear')">3 · {{ t('labeling.mobile.unclear') }}</el-button>
@@ -601,9 +646,16 @@ onBeforeUnmount(() => {
 .labeling__buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .labeling__employee { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .labeling__employee-id--wrong { text-decoration: line-through; color: var(--el-color-warning); }
+.labeling__id { margin-left: 4px; font-size: 12px; color: var(--el-text-color-secondary); white-space: nowrap; }
+.labeling__option-id { float: right; margin-left: 12px; font-size: 12px; color: var(--el-text-color-secondary); }
+.labeling__activity { display: flex; flex-direction: column; gap: 8px; }
+.labeling__activity p { margin: 0; }
 
 /* ── Телефон ─────────────────────────────────────────────── */
-.labeling--mobile { padding: 12px 12px calc(136px + env(safe-area-inset-bottom)); }
+/* Снизу место под прибитую панель кнопок (её высота уже включает safe-area) и ещё запас,
+   чтобы последний блок прокручивался выше панели. До замера — оценка на две строки кнопок. */
+.labeling--mobile { padding: 12px 12px
+  calc(var(--labeling-actionbar-height, calc(121px + env(safe-area-inset-bottom))) + 16px); }
 .labeling--mobile .labeling__header { gap: 8px; }
 .labeling--mobile .labeling__header h2 { font-size: 20px; }
 .labeling--mobile .labeling__counters { width: 100%; }
@@ -612,6 +664,7 @@ onBeforeUnmount(() => {
 .labeling--mobile .labeling__stage { width: 100%; }
 .labeling--mobile .labeling__player { border-radius: 6px; }
 .labeling--mobile .labeling__side { min-width: 0; }
+.labeling--mobile .labeling__activity { order: -1; }
 .labeling__filters-drawer .labeling__filters-grid { grid-template-columns: 1fr; }
 .labeling__filters-drawer .labeling__filter--wide { grid-column: auto; }
 .labeling__filters-done { width: 100%; height: 44px; }
