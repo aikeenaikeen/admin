@@ -61,9 +61,11 @@ function withCacheBust(url: string): string {
   return `${url}${separator}ts=${Date.now()}`
 }
 
-function getRecognitionStreamUrl(cameraId: number): string {
+// Подписанный адрес /video_feed?cameraId=..&exp=..&sig=.. выдаёт backend
+// (как и mjpegUrl), ссылка живёт несколько минут: при каждом открытии берём новую.
+function getRecognitionStreamUrl(recognitionUrl: string): string {
   const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
-  return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
+  return withCacheBust(/^https?:\/\//.test(recognitionUrl) ? recognitionUrl : `${streamBase}${recognitionUrl}`)
 }
 
 async function loadStream(cameraId: number) {
@@ -73,9 +75,10 @@ async function loadStream(cameraId: number) {
   loading.value = true
 
   try {
+    const { data } = await apiClient.get(`/api/cameras/${cameraId}/stream-url`)
     const nextStreamUrl = props.recognition
-      ? getRecognitionStreamUrl(cameraId)
-      : withCacheBust((await apiClient.get(`/api/cameras/${cameraId}/stream-url`)).data.mjpegUrl)
+      ? getRecognitionStreamUrl(data.recognitionUrl)
+      : withCacheBust(data.mjpegUrl)
 
     if (currentToken !== requestToken.value) {
       return
