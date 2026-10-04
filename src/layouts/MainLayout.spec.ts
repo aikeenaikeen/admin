@@ -69,6 +69,14 @@ describe('MainLayout', () => {
     expect(document.body.querySelector('[data-test="mobile-nav"]')).not.toBeNull()
   })
 
+  it('shows the current section title in the compact phone header', async () => {
+    const w = await start(390)
+    expect(w.get('[data-test="mobile-title"]').text()).toBe('layout.menu.dashboard')
+    await router.push('/presence')
+    await flushPromises()
+    expect(w.get('[data-test="mobile-title"]').text()).toBe('layout.menu.presence')
+  })
+
   it('closes the drawer after navigating from the menu', async () => {
     const w = await start(390)
     await w.get('[data-test="menu-toggle"]').trigger('click')

@@ -106,6 +106,12 @@ const menuItems = computed(() => {
   return items
 })
 
+/** Название текущего раздела для мобильной шапки; вне меню — название приложения. */
+const mobileTitle = computed(() => {
+  const item = menuItems.value.find((entry) => route.path === entry.index || route.path.startsWith(`${entry.index}/`))
+  return item?.title ?? t('common.appName')
+})
+
 function handleSelect(index: string) {
   mobileDrawerOpen.value = false
   router.push(index)
@@ -328,7 +334,7 @@ function logout() {
         </el-button>
         <div class="mobile-brand">
           <LogoIcon :size="24" :title="t('common.brandLogoTitle')" />
-          <span>{{ t('common.appName') }}</span>
+          <span class="mobile-brand__title" data-test="mobile-title">{{ mobileTitle }}</span>
         </div>
         <div class="mobile-header__actions">
           <el-button
@@ -406,6 +412,12 @@ function logout() {
   height: 100%;
   min-height: 100%;
   border-right: none;
+}
+
+.mobile-brand__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-header__burger {
@@ -559,6 +571,9 @@ function logout() {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  flex: 1;
+  justify-content: center;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }

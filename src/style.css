@@ -163,6 +163,18 @@ body,
     justify-content: center;
   }
 
+  /* iOS Safari увеличивает страницу при фокусе на поле со шрифтом меньше 16px */
+  input,
+  textarea,
+  select,
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__input,
+  .el-select__selected-item,
+  .el-input-number .el-input__inner {
+    font-size: 16px !important;
+  }
+
   /* Выпадающие списки не шире экрана */
   .el-select-dropdown {
     max-width: calc(100vw - 16px);

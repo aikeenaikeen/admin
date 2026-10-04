@@ -1,4 +1,4 @@
-import { getCurrentScope, onScopeDispose, readonly, ref, type Ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref, type Ref } from 'vue'
 
 /** Ширина, до которой (включительно) показываем мобильную раскладку. */
 export const MOBILE_BREAKPOINT = 768
@@ -19,9 +19,9 @@ function readIsMobile(): boolean {
  * на первом кадре) и обновляется при изменении размера окна. Подписка
  * снимается вместе со scope компонента/эффекта.
  */
-export function useIsMobile(): Readonly<Ref<boolean>> {
+export function useIsMobile(): Ref<boolean> {
   const isMobile = ref(readIsMobile())
-  if (typeof window === 'undefined') return readonly(isMobile)
+  if (typeof window === 'undefined') return isMobile
 
   const sync = () => {
     isMobile.value = readIsMobile()
@@ -43,5 +43,5 @@ export function useIsMobile(): Readonly<Ref<boolean>> {
     })
   }
 
-  return readonly(isMobile)
+  return isMobile
 }
