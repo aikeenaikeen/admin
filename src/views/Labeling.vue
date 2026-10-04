@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
+import { createReusableTemplate } from '@vueuse/core'
 import apiClient from '../api/client'
 import { formatDateTime } from '../utils/date'
+import { useIsMobile } from '../composables/useIsMobile'
 
 type Label = 'positive' | 'negative' | 'unclear'
 type Reason = 'all' | 'vlm_verdict' | 'random'
@@ -42,6 +44,10 @@ type HistoryEntry = CaptureClip & { filterKey: string }
 interface Activity { id: number; name: string }
 /** error — Квен не ответил или ответ не разобрался; распознавание пишет это решение как есть. */
 const VLM_DECISIONS: ReadonlyArray<VlmDecision> = ['confirmed', 'rejected', 'uncertain', 'error']
+/** Насколько (px) нужно протащить клип пальцем, чтобы свайп засчитался как метка. */
+const SWIPE_THRESHOLD = 80
+/** Пока смещение меньше, жест считаем случайным касанием или вертикальной прокруткой. */
+const SWIPE_DEAD_ZONE = 10
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function queryText(query: LocationQuery, key: string): string | null {
@@ -112,7 +118,12 @@ const route = useRoute()
 const router = useRouter()
 const filters = computed(() => parseFilters(route.query))
 const filterKey = computed(() => JSON.stringify(filters.value))
-const hasFilters = computed(() => Object.keys(toQuery(filters.value)).length > 0)
+const activeFilterCount = computed(() => Object.keys(toQuery(filters.value)).length)
+const hasFilters = computed(() => activeFilterCount.value > 0)
+const isMobile = useIsMobile()
+const isFiltersOpen = ref(false)
+/** Панель фильтров одна; на компьютере она в карточке, на телефоне — в выезжающей панели. */
+const [DefineFilters, ReuseFilters] = createReusableTemplate()
 const rangeError = computed(() => {
   const { from, to, minScore, maxScore } = filters.value
   if (from && to && from > to) { return t('labeling.filters.badDates') }
@@ -310,6 +321,50 @@ async function undoLast() {
   finally { isSaving.value = false }
 }
 
+interface SwipeState { pointerId: number; startX: number; startY: number; dx: number }
+const swipe = ref<SwipeState | null>(null)
+const swipeDx = computed(() => swipe.value?.dx ?? 0)
+const swipeLabel = computed<Label | null>(() => {
+  if (swipeDx.value >= SWIPE_THRESHOLD) { return 'positive' }
+  if (swipeDx.value <= -SWIPE_THRESHOLD) { return 'negative' }
+  return null
+})
+const swipeProgress = computed(() => Math.min(Math.abs(swipeDx.value) / SWIPE_THRESHOLD, 1))
+const playerStyle = computed(() => swipeDx.value
+  ? { transform: `translateX(${swipeDx.value * 0.6}px) rotate(${swipeDx.value / 40}deg)`, transition: 'none' }
+  : undefined)
+
+/** Свайп вправо — «выполняет», влево — «не выполняет». Мышь не участвует: на компьютере есть клавиатура. */
+function onSwipeStart(event: PointerEvent) {
+  if (event.pointerType === 'mouse' || !canLabel.value) { return }
+  swipe.value = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, dx: 0 }
+}
+function onSwipeMove(event: PointerEvent) {
+  const state = swipe.value
+  if (!state || event.pointerId !== state.pointerId) { return }
+  const dx = event.clientX - state.startX
+  const dy = event.clientY - state.startY
+  // Вертикальное движение — это прокрутка страницы, а не метка.
+  if (Math.abs(dx) < SWIPE_DEAD_ZONE || Math.abs(dy) > Math.abs(dx)) {
+    state.dx = 0
+    return
+  }
+  state.dx = dx
+}
+function onSwipeEnd(event: PointerEvent) {
+  const state = swipe.value
+  swipe.value = null
+  if (!state || event.pointerId !== state.pointerId) { return }
+  const dx = event.clientX - state.startX
+  const dy = event.clientY - state.startY
+  if (Math.abs(dy) > Math.abs(dx)) { return }
+  if (dx >= SWIPE_THRESHOLD) { void setLabel('positive') }
+  else if (dx <= -SWIPE_THRESHOLD) { void setLabel('negative') }
+}
+function onSwipeCancel() {
+  swipe.value = null
+}
+
 function onKey(event: KeyboardEvent) {
   if (event.repeat || (event.target instanceof HTMLElement
     && event.target.closest('input,textarea,select,button,[contenteditable="true"],[role="combobox"]'))) { return }
@@ -340,16 +395,10 @@ onBeforeUnmount(() => {
 })
 </script>
 
+
 <template>
-  <div class="labeling">
-    <div class="labeling__header">
-      <div><h2>{{ t('labeling.title') }}</h2><p>{{ t('labeling.shortcuts') }}</p></div>
-      <div class="labeling__counters">
-        <el-tag data-test="remaining" :title="t('labeling.remainingHint')">{{ t('labeling.remaining') }}: {{ remaining }}</el-tag>
-        <el-tag type="success">{{ t('labeling.completed') }}: {{ completed }}</el-tag>
-      </div>
-    </div>
-    <el-card shadow="never" class="labeling__filters" data-test="filters">
+  <div class="labeling" :class="{ 'labeling--mobile': isMobile }">
+    <DefineFilters>
       <div class="labeling__filters-grid">
         <div class="labeling__filter labeling__filter--wide">
           <div class="labeling__caption">{{ t('labeling.filters.source') }}</div>
@@ -382,14 +431,14 @@ onBeforeUnmount(() => {
           <div class="labeling__caption">{{ t('labeling.filters.from') }}</div>
           <el-date-picker data-test="filter-from" :model-value="filters.from ?? undefined" type="date"
             value-format="YYYY-MM-DD" format="DD.MM.YYYY" :placeholder="t('labeling.filters.anyDate')"
-            :disabled="isSaving" style="width: 100%"
+            :disabled="isSaving" :editable="!isMobile" style="width: 100%"
             @update:model-value="onFilter('from', $event)" />
         </div>
         <div class="labeling__filter">
           <div class="labeling__caption">{{ t('labeling.filters.to') }}</div>
           <el-date-picker data-test="filter-to" :model-value="filters.to ?? undefined" type="date"
             value-format="YYYY-MM-DD" format="DD.MM.YYYY" :placeholder="t('labeling.filters.anyDate')"
-            :disabled="isSaving" style="width: 100%"
+            :disabled="isSaving" :editable="!isMobile" style="width: 100%"
             @update:model-value="onFilter('to', $event)" />
         </div>
         <div class="labeling__filter">
@@ -427,6 +476,30 @@ onBeforeUnmount(() => {
           </el-button>
         </div>
       </div>
+    </DefineFilters>
+
+    <div class="labeling__header">
+      <div><h2>{{ t('labeling.title') }}</h2><p v-if="!isMobile">{{ t('labeling.shortcuts') }}</p></div>
+      <div class="labeling__counters">
+        <el-tag data-test="remaining" :title="t('labeling.remainingHint')">{{ t('labeling.remaining') }}: {{ remaining }}</el-tag>
+        <el-tag type="success">{{ t('labeling.completed') }}: {{ completed }}</el-tag>
+        <el-button v-if="isMobile" data-test="filters-toggle" class="labeling__filters-toggle"
+          :type="hasFilters ? 'primary' : 'default'" plain @click="isFiltersOpen = true">
+          {{ t('labeling.mobile.filters') }} ({{ activeFilterCount }})
+        </el-button>
+      </div>
+    </div>
+    <el-drawer v-if="isMobile" v-model="isFiltersOpen" direction="btt" size="85%"
+      :title="t('labeling.mobile.filtersTitle')" class="labeling__filters-drawer">
+      <ReuseFilters />
+      <template #footer>
+        <el-button type="primary" class="labeling__filters-done" @click="isFiltersOpen = false">
+          {{ t('labeling.mobile.done') }}
+        </el-button>
+      </template>
+    </el-drawer>
+    <el-card v-else shadow="never" class="labeling__filters" data-test="filters">
+      <ReuseFilters />
     </el-card>
     <el-alert v-if="rangeError" :title="rangeError" type="warning" :closable="false" />
     <el-alert v-if="hasLoadError" :title="t('labeling.loadFailed')" type="error" :closable="false" />
@@ -434,12 +507,23 @@ onBeforeUnmount(() => {
     <p v-if="isLoading">{{ t('labeling.loading') }}</p>
     <el-empty v-else-if="!current && !hasLoadError" :description="t('labeling.empty')" />
     <div v-else-if="current" class="labeling__body">
-      <div class="labeling__player">
-        <p v-if="isMediaLoading">{{ t('labeling.loading') }}</p>
-        <el-alert v-else-if="hasMediaError" :title="t('labeling.mediaFailed')" type="error" :closable="false" />
-        <img v-for="(url, n) in frameUrls" v-show="n === frame" :key="url" :src="url"
-          class="labeling__frame" :alt="t('labeling.frame', { number: n + 1 })" @error="hasMediaError = true" />
-        <div v-if="frameUrls.length" class="labeling__progress">{{ frame + 1 }} / {{ frameUrls.length }}</div>
+      <div class="labeling__stage">
+        <div data-test="player" class="labeling__player" :style="playerStyle"
+          @pointerdown="onSwipeStart" @pointermove="onSwipeMove" @pointerup="onSwipeEnd"
+          @pointercancel="onSwipeCancel">
+          <p v-if="isMediaLoading">{{ t('labeling.loading') }}</p>
+          <el-alert v-else-if="hasMediaError" :title="t('labeling.mediaFailed')" type="error" :closable="false" />
+          <img v-for="(url, n) in frameUrls" v-show="n === frame" :key="url" :src="url" draggable="false"
+            class="labeling__frame" :alt="t('labeling.frame', { number: n + 1 })" @error="hasMediaError = true" />
+          <div v-if="frameUrls.length" class="labeling__progress">{{ frame + 1 }} / {{ frameUrls.length }}</div>
+          <div v-if="swipeDx" data-test="swipe-hint" class="labeling__swipe"
+            :class="[swipeDx > 0 ? 'labeling__swipe--positive' : 'labeling__swipe--negative',
+                     { 'labeling__swipe--armed': swipeLabel }]"
+            :style="{ opacity: 0.35 + swipeProgress * 0.65 }">
+            {{ swipeDx > 0 ? t('labeling.mobile.yes') : t('labeling.mobile.no') }}
+          </div>
+        </div>
+        <p v-if="isMobile" class="labeling__swipe-tip">{{ t('labeling.mobile.swipeHint') }}</p>
       </div>
       <div class="labeling__side">
         <el-descriptions :column="1" border>
@@ -447,11 +531,12 @@ onBeforeUnmount(() => {
           <el-descriptions-item :label="t('labeling.employee')">
             <div class="labeling__employee">
               <span :class="{ 'labeling__employee-id--wrong': current.wrongPerson }">{{ current.employeeId }}</span>
-              <el-button data-test="wrong-person" size="small" type="warning" :plain="!current.wrongPerson"
+              <el-button v-if="!isMobile" data-test="wrong-person" size="small" type="warning" :plain="!current.wrongPerson"
                 :aria-pressed="Boolean(current.wrongPerson)" :title="t('labeling.wrongPersonHint')"
                 :disabled="!canMarkWrongPerson" @click="toggleWrongPerson">
                 4 · {{ t('labeling.wrongPerson') }}
               </el-button>
+              <el-tag v-else-if="current.wrongPerson" type="warning" size="small">{{ t('labeling.wrongPerson') }}</el-tag>
             </div>
           </el-descriptions-item>
           <el-descriptions-item :label="t('labeling.camera')">{{ current.cameraId }}</el-descriptions-item>
@@ -462,7 +547,7 @@ onBeforeUnmount(() => {
           <el-option v-for="activity in activities" :key="activity.id" :value="activity.id" :label="activity.name" />
         </el-select>
         <p v-if="!isMediaLoading && !activities.length">{{ t('labeling.noActivities') }}</p>
-        <div class="labeling__buttons">
+        <div v-if="!isMobile" class="labeling__buttons">
           <el-button data-test="positive" type="success" :disabled="!canLabel" @click="setLabel('positive')">1 · {{ t('labeling.positive') }}</el-button>
           <el-button data-test="negative" type="danger" :disabled="!canLabel" @click="setLabel('negative')">2 · {{ t('labeling.negative') }}</el-button>
           <el-button data-test="unclear" :disabled="!canLabel" @click="setLabel('unclear')">3 · {{ t('labeling.unclear') }}</el-button>
@@ -470,7 +555,22 @@ onBeforeUnmount(() => {
         <el-button v-if="hasMediaError" :disabled="isSaving" @click="loadClips">{{ t('labeling.retry') }}</el-button>
       </div>
     </div>
-    <el-button data-test="undo" :disabled="!history.length || isSaving || isLoading" @click="undoLast">{{ t('labeling.undo') }}</el-button>
+    <el-button v-if="!isMobile" data-test="undo" :disabled="!history.length || isSaving || isLoading" @click="undoLast">{{ t('labeling.undo') }}</el-button>
+
+    <!-- Телефон: кнопки под большой палец, прибиты к низу экрана -->
+    <div v-if="isMobile" class="labeling__actionbar" data-test="actionbar">
+      <el-button data-test="positive" type="success" :disabled="!canLabel" @click="setLabel('positive')">1 · {{ t('labeling.mobile.yes') }}</el-button>
+      <el-button data-test="negative" type="danger" :disabled="!canLabel" @click="setLabel('negative')">2 · {{ t('labeling.mobile.no') }}</el-button>
+      <el-button data-test="unclear" :disabled="!canLabel" @click="setLabel('unclear')">3 · {{ t('labeling.mobile.unclear') }}</el-button>
+      <el-button data-test="wrong-person" class="labeling__actionbar-wide" type="warning"
+        :plain="!current?.wrongPerson" :aria-pressed="Boolean(current?.wrongPerson)"
+        :disabled="!canMarkWrongPerson" @click="toggleWrongPerson">
+        4 · {{ t('labeling.wrongPerson') }}
+      </el-button>
+      <el-button data-test="undo" :disabled="!history.length || isSaving || isLoading" @click="undoLast">
+        {{ t('labeling.mobile.undo') }}
+      </el-button>
+    </div>
   </div>
 </template>
 
@@ -487,11 +587,38 @@ onBeforeUnmount(() => {
 .labeling__range { display: flex; gap: 6px; align-items: center; }
 .labeling__range .el-input-number { flex: 1; min-width: 0; }
 .labeling__body { display: flex; gap: 20px; margin: 16px 0; flex-wrap: wrap; }
-.labeling__player { position: relative; width: 448px; max-width: 100%; background: #000; color: white; border-radius: 8px; overflow: hidden; }
-.labeling__frame { width: 100%; display: block; }
+.labeling__stage { width: 448px; max-width: 100%; }
+.labeling__player { position: relative; width: 100%; background: #000; color: white; border-radius: 8px; overflow: hidden;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: transform 0.18s ease; }
+.labeling__frame { width: 100%; display: block; -webkit-user-drag: none; }
 .labeling__progress { position: absolute; right: 8px; bottom: 8px; color: #fff; background: rgba(0,0,0,.55); padding: 2px 8px; border-radius: 4px; }
+.labeling__swipe { position: absolute; top: 16px; padding: 6px 14px; border: 3px solid currentColor; border-radius: 8px;
+  font-size: 22px; font-weight: 700; text-transform: uppercase; background: rgba(0,0,0,.35); pointer-events: none; }
+.labeling__swipe--positive { left: 16px; color: var(--el-color-success-light-3); }
+.labeling__swipe--negative { right: 16px; color: var(--el-color-danger-light-3); }
+.labeling__swipe--armed { transform: scale(1.12); background: rgba(0,0,0,.6); }
+.labeling__swipe-tip { margin-top: 6px; font-size: 12px; color: var(--el-text-color-secondary); text-align: center; }
 .labeling__side { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 12px; }
 .labeling__buttons { display: flex; gap: 8px; flex-wrap: wrap; }
 .labeling__employee { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 .labeling__employee-id--wrong { text-decoration: line-through; color: var(--el-color-warning); }
+
+/* ── Телефон ─────────────────────────────────────────────── */
+.labeling--mobile { padding: 12px 12px calc(136px + env(safe-area-inset-bottom)); }
+.labeling--mobile .labeling__header { gap: 8px; }
+.labeling--mobile .labeling__header h2 { font-size: 20px; }
+.labeling--mobile .labeling__counters { width: 100%; }
+.labeling--mobile .labeling__filters-toggle { margin-left: auto; }
+.labeling--mobile .labeling__body { flex-direction: column; flex-wrap: nowrap; gap: 12px; margin: 12px 0; }
+.labeling--mobile .labeling__stage { width: 100%; }
+.labeling--mobile .labeling__player { border-radius: 6px; }
+.labeling--mobile .labeling__side { min-width: 0; }
+.labeling__filters-drawer .labeling__filters-grid { grid-template-columns: 1fr; }
+.labeling__filters-drawer .labeling__filter--wide { grid-column: auto; }
+.labeling__filters-done { width: 100%; height: 44px; }
+.labeling__actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid;
+  grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--el-bg-color); border-top: 1px solid var(--el-border-color); box-shadow: 0 -4px 12px rgba(0,0,0,.06); }
+.labeling__actionbar .el-button { height: 48px; margin: 0; font-size: 15px; padding: 0 6px; min-width: 0; }
+.labeling__actionbar .labeling__actionbar-wide { grid-column: span 2; }
 </style>

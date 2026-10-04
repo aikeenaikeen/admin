@@ -38,7 +38,13 @@ body {
   min-height: 100vh;
 }
 
-.el-page-header__left {
+/*
+ * Прячем только кнопку «Назад» и разделитель у el-page-header.
+ * В Element Plus 2.x заголовок (__content) лежит внутри __left, поэтому
+ * прятать весь __left нельзя — пропадают заголовки страниц.
+ */
+.el-page-header__back,
+.el-page-header__left > .el-divider {
   display: none !important;
 }
 

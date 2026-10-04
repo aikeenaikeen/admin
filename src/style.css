@@ -110,6 +110,77 @@ body,
   }
 }
 
+/*
+ * Мобильная оболочка (≤ 768px, тот же брейкпоинт, что в useIsMobile).
+ * Диалоги — на весь экран, шапки страниц переносятся, пагинация не вылезает за край.
+ */
+@media (max-width: 768px) {
+  .el-overlay-dialog .el-dialog:not(.command-palette-dialog) {
+    --el-dialog-width: 100% !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100%;
+    margin: 0 !important;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .el-overlay-dialog .el-dialog:not(.command-palette-dialog) .el-dialog__body {
+    flex: 1;
+    overflow-x: auto;
+  }
+
+  .el-overlay-dialog .el-dialog:not(.command-palette-dialog) .el-dialog__footer {
+    position: sticky;
+    bottom: 0;
+    background: var(--el-dialog-bg-color, var(--el-bg-color));
+    padding-bottom: calc(var(--el-dialog-padding-primary, 16px) + env(safe-area-inset-bottom));
+  }
+
+  /* Выезжающее боковое меню: без внутренних отступов, меню само себе задаёт поля */
+  .mobile-nav-drawer {
+    --el-drawer-padding-primary: 0px;
+  }
+
+  .mobile-nav-drawer .el-drawer__body {
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .el-message-box {
+    max-width: calc(100vw - 32px);
+  }
+
+  .el-page-header__header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .el-pagination {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    justify-content: center;
+  }
+
+  /* iOS Safari увеличивает страницу при фокусе на поле со шрифтом меньше 16px */
+  input,
+  textarea,
+  select,
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__input,
+  .el-select__selected-item,
+  .el-input-number .el-input__inner {
+    font-size: 16px !important;
+  }
+
+  /* Выпадающие списки не шире экрана */
+  .el-select-dropdown {
+    max-width: calc(100vw - 16px);
+  }
+}
+
 @media (max-width: 480px) {
   .page-container {
     padding: 12px;
