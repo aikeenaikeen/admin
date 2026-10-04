@@ -4,6 +4,7 @@ import { Close } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 interface Point {
   x: number // Normalized 0..1
@@ -28,6 +29,8 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const { t } = useI18n()
+// На телефоне точки полигона пальцем не поставить точно: редактор не показываем.
+const isMobile = useIsMobile()
 
 const imgEl = ref<HTMLImageElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -272,6 +275,22 @@ function onImgLoad() {
 
 <template>
   <div class="roi-editor">
+    <template v-if="isMobile">
+      <el-alert
+        type="info"
+        :title="t('roiEditor.mobileHint')"
+        :closable="false"
+        show-icon
+        data-test="roi-mobile-hint"
+      />
+      <div class="editor-actions">
+        <el-button type="danger" plain :icon="Close" @click="handleCancel">
+          {{ t('common.actions.cancel') }}
+        </el-button>
+      </div>
+    </template>
+
+    <template v-else>
     <div class="editor-toolbar">
       <el-space>
         <el-button
@@ -358,6 +377,7 @@ function onImgLoad() {
         {{ t('roiEditor.saveZones') }}
       </el-button>
     </div>
+    </template>
   </div>
 </template>
 

@@ -5,6 +5,11 @@ import CameraStreamDialog from './CameraStreamDialog.vue'
 import apiClient from '@/api/client'
 
 vi.mock('@/api/client', () => ({ default: { get: vi.fn() } }))
+const mobile = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useIsMobile', async () => {
+  const { ref } = await import('vue')
+  return { useIsMobile: () => ref(mobile.value) }
+})
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string) => key }),
@@ -14,12 +19,17 @@ const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
 
 // Без телепорта и анимаций: содержимое рендерится на месте, пока modelValue = true.
 const DialogStub = defineComponent({
-  props: ['modelValue'],
+  props: ['modelValue', 'fullscreen'],
   emits: ['update:modelValue', 'close'],
-  template: '<div v-if="modelValue" class="dialog"><slot /></div>',
+  template: '<div v-if="modelValue" class="dialog" :data-fullscreen="fullscreen"><slot /></div>',
 })
 
 const passthrough = defineComponent({ template: '<div><slot /></div>' })
+const SwitchStub = defineComponent({
+  props: ['modelValue'],
+  emits: ['update:modelValue'],
+  template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
+})
 
 const camera = (id: number) => ({ id, name: `Cam ${id}`, location: null })
 
@@ -28,7 +38,7 @@ function createWrapper(props: Record<string, unknown> = {}) {
     props: { modelValue: false, camera: camera(1), ...props },
     attachTo: document.body,
     global: {
-      stubs: { ElDialog: DialogStub, ElTag: passthrough, ElIcon: passthrough, ElAlert: true },
+      stubs: { ElDialog: DialogStub, ElTag: passthrough, ElIcon: passthrough, ElAlert: true, ElSwitch: SwitchStub },
       directives: { loading: {} },
     },
   })
@@ -60,6 +70,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  mobile.value = false
   restoreSrc()
   vi.clearAllMocks()
   document.body.innerHTML = ''
@@ -175,5 +186,37 @@ describe('CameraStreamDialog', () => {
     await flushPromises()
     expect(document.querySelectorAll('img')).toHaveLength(1)
     expect(srcWrites.filter((w) => w.value.startsWith('/streams/'))).toHaveLength(1)
+  })
+})
+
+describe('CameraStreamDialog on a phone', () => {
+  it('stays a regular dialog without the switch on a computer', async () => {
+    const wrapper = createWrapper({ modeSwitchable: true })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+
+    expect(wrapper.get('.dialog').attributes('data-fullscreen')).toBe('false')
+    expect(wrapper.find('[data-test="recognition-switch"]').exists()).toBe(false)
+  })
+
+  it('goes full screen and lets the user toggle recognition mode', async () => {
+    mobile.value = true
+    const wrapper = createWrapper({ modeSwitchable: true })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+
+    expect(wrapper.get('.dialog').attributes('data-fullscreen')).toBe('true')
+    const toggle = wrapper.get('[data-test="recognition-switch"]')
+    await toggle.setValue(true)
+    expect(wrapper.emitted('update:recognition')).toEqual([[true]])
+  })
+
+  it('hides the switch when the camera has no recognition', async () => {
+    mobile.value = true
+    const wrapper = createWrapper({ modeSwitchable: false })
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="recognition-switch"]').exists()).toBe(false)
   })
 })

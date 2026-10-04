@@ -6,6 +6,11 @@ import Employees from './Employees.vue'
 import apiClient from '@/api/client'
 
 vi.mock('@/api/client', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
+const mobile = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useIsMobile', async () => {
+  const { ref } = await import('vue')
+  return { useIsMobile: () => ref(mobile.value) }
+})
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string) => key }),
@@ -93,6 +98,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   wrapper?.unmount()
+  mobile.value = false
   vi.restoreAllMocks()
 })
 
@@ -186,5 +192,38 @@ describe('Employee gallery request isolation', () => {
     confirmation.resolve('confirm')
     await flushPromises()
     expect(apiClient.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe('Employees on a phone', () => {
+  beforeEach(async () => {
+    wrapper.unmount()
+    mobile.value = true
+    wrapper = createWrapper()
+    await flushPromises()
+  })
+
+  it('shows employees as cards instead of the table', () => {
+    const cards = wrapper.findAll('.employee-card')
+    expect(cards).toHaveLength(2)
+    expect(cards[0].text()).toContain('A')
+    expect(wrapper.find('[data-test="employee-cards"]').exists()).toBe(true)
+  })
+
+  it('opens the employee with the gallery on card tap', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: [{ id: 10, employeeId: 2, url: '/photo.jpg' }] })
+    await wrapper.findAll('.employee-card__main')[1].trigger('click')
+    await flushPromises()
+
+    expect(apiClient.get).toHaveBeenCalledWith('/api/employees/2/photos')
+    expect(wrapper.findAll('.gallery-field__item')).toHaveLength(1)
+  })
+
+  it('lets the phone pick photos from the camera or gallery', async () => {
+    await wrapper.findAll('.employee-card__main')[0].trigger('click')
+    await flushPromises()
+    const inputs = wrapper.findAll('input[type="file"]')
+    expect(inputs.length).toBeGreaterThan(0)
+    expect(inputs.every((input) => input.attributes('accept') === 'image/*')).toBe(true)
   })
 })

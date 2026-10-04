@@ -6,6 +6,11 @@ import Cameras from './Cameras.vue'
 import apiClient from '@/api/client'
 
 vi.mock('@/api/client', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }))
+const mobile = vi.hoisted(() => ({ value: false }))
+vi.mock('@/composables/useIsMobile', async () => {
+  const { ref } = await import('vue')
+  return { useIsMobile: () => ref(mobile.value) }
+})
 vi.mock('vue-i18n', async (importOriginal) => ({
   ...await importOriginal<typeof import('vue-i18n')>(),
   useI18n: () => ({ t: (key: string, params?: Record<string, unknown>) => (params ? `${key}:${JSON.stringify(params)}` : key) }),
@@ -41,6 +46,12 @@ const TableColumnStub = defineComponent({
   template: '<div><slot v-for="row in rows()" :row="row" /></div>',
 })
 
+const StreamDialogStub = defineComponent({
+  name: 'CameraStreamDialog',
+  props: ['modelValue', 'camera', 'recognition', 'modeSwitchable'],
+  template: '<div data-test="stream-dialog" />',
+})
+
 const ceilingCamera = {
   id: 64,
   name: 'Потолок',
@@ -64,7 +75,7 @@ function createWrapper() {
         ElTable: TableStub,
         ElTableColumn: TableColumnStub,
         TableActionsMenu: MenuStub,
-        CameraStreamDialog: true,
+        CameraStreamDialog: StreamDialogStub,
       },
     },
   })
@@ -93,6 +104,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   wrapper?.unmount()
+  mobile.value = false
   vi.restoreAllMocks()
 })
 
@@ -124,5 +136,40 @@ describe('Camera rotation field', () => {
     await flushPromises()
 
     expect(apiClient.post).toHaveBeenCalledWith('/api/cameras', expect.objectContaining({ rotation: 0 }))
+  })
+})
+
+describe('Cameras on a phone', () => {
+  beforeEach(async () => {
+    wrapper.unmount()
+    mobile.value = true
+    wrapper = createWrapper()
+    await flushPromises()
+  })
+
+  it('shows cameras as cards with status and both stream buttons', () => {
+    const card = wrapper.get('.camera-card')
+    expect(card.text()).toContain('Потолок')
+    expect(card.text()).toContain('192.168.1.64:554')
+    expect(card.text()).toContain('cameras.table.active')
+    expect(card.findAll('.camera-card__actions button')).toHaveLength(2)
+  })
+
+  it('opens the stream full screen with the recognition switch allowed', async () => {
+    await buttonByText('cameras.table.ai').trigger('click')
+    const dialog = wrapper.getComponent(StreamDialogStub)
+    expect(dialog.props('modelValue')).toBe(true)
+    expect(dialog.props('recognition')).toBe(true)
+    expect(dialog.props('modeSwitchable')).toBe(true)
+
+    dialog.vm.$emit('update:recognition', false)
+    await flushPromises()
+    expect(dialog.props('recognition')).toBe(false)
+  })
+
+  it('edits rotation from the card menu in a one-column form', async () => {
+    await wrapper.get('[data-edit-camera]').trigger('click')
+    expect(rotationSelect().element.value).toBe('90')
+    expect(wrapper.find('.el-form--label-top').exists()).toBe(true)
   })
 })

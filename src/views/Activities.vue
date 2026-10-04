@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import apiClient from '@/api/client'
 import { formatDateTime } from '@/utils/date'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import {
   translateActivityStatus,
   translateModelStatus,
@@ -288,6 +289,7 @@ interface PersistedTrainingUiState {
 const activities = ref<Activity[]>([])
 const companies = ref<Company[]>([])
 const { t } = useI18n()
+const isMobile = useIsMobile()
 const loading = ref(true)
 const dialogVisible = ref(false)
 const isEditing = ref(false)
@@ -2231,8 +2233,9 @@ function onActivityAction(action: string, row: Activity) {
       v-model="dialogVisible"
       :title="isEditing ? t('activities.dialog.editTitle') : t('activities.dialog.createTitle')"
       width="min(900px, calc(100vw - 32px))"
+      :fullscreen="isMobile"
     >
-      <el-form :model="form" label-width="150px">
+      <el-form :model="form" label-width="150px" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item :label="t('activities.dialog.name')" required>
           <el-input v-model="form.name" :placeholder="t('activities.dialog.namePlaceholder')" />
         </el-form-item>
@@ -2475,6 +2478,7 @@ function onActivityAction(action: string, row: Activity) {
       v-model="trainingDialogVisible"
       :title="t('activities.dialog.trainingTitle', { name: trainingActivity?.name || '' })"
       width="min(1240px, calc(100vw - 32px))"
+      :fullscreen="isMobile"
     >
       <div class="training-wizard">
         <div class="training-step-strip">
@@ -2557,7 +2561,7 @@ function onActivityAction(action: string, row: Activity) {
 
         <div v-else-if="trainingStep === 2">
           <el-row :gutter="12">
-            <el-col :span="10">
+            <el-col :xs="24" :span="10">
               <el-card shadow="never">
                 <div class="training-step-header">
                   <div>
@@ -2603,7 +2607,7 @@ function onActivityAction(action: string, row: Activity) {
               </el-card>
             </el-col>
 
-            <el-col :span="14">
+            <el-col :xs="24" :span="14">
               <el-card shadow="never">
                 <div v-if="!selectedTrimAsset" class="training-empty-state">
                   {{ t('activities.dialog.selectVideoHint') }}
@@ -2714,7 +2718,7 @@ function onActivityAction(action: string, row: Activity) {
 
         <div v-else-if="trainingStep === 3">
           <el-row :gutter="12">
-            <el-col :span="10">
+            <el-col :xs="24" :span="10">
               <el-card shadow="never">
                 <div class="training-step-header">
                   <div>
@@ -2770,7 +2774,7 @@ function onActivityAction(action: string, row: Activity) {
               </el-card>
             </el-col>
 
-            <el-col :span="14">
+            <el-col :xs="24" :span="14">
               <el-card shadow="never">
                 <div class="training-step-header">
                   <div>
@@ -2909,21 +2913,21 @@ function onActivityAction(action: string, row: Activity) {
                   </div>
 
                   <el-row :gutter="12">
-                    <el-col :span="8">
+                    <el-col :xs="24" :span="8">
                       <div class="training-field-label">{{ t('activities.dialog.intervalStart') }}</div>
                       <el-input-number v-model="annotationForm.startSec" :min="0" :step="0.1" style="width: 100%;" />
                       <el-button text size="small" @click="setAnnotationStartFromCurrentTime">
                         {{ t('activities.dialog.useCurrentTimeForStart') }}
                       </el-button>
                     </el-col>
-                    <el-col :span="8">
+                    <el-col :xs="24" :span="8">
                       <div class="training-field-label">{{ t('activities.dialog.intervalEnd') }}</div>
                       <el-input-number v-model="annotationForm.endSec" :min="0" :step="0.1" style="width: 100%;" />
                       <el-button text size="small" @click="setAnnotationEndFromCurrentTime">
                         {{ t('activities.dialog.useCurrentTimeForEnd') }}
                       </el-button>
                     </el-col>
-                    <el-col :span="8">
+                    <el-col :xs="24" :span="8">
                       <div class="training-field-label">{{ t('common.labels.type') }}</div>
                       <el-select v-model="annotationForm.type" style="width: 100%;">
                         <el-option :label="translateTrainingAnnotationType('POSITIVE')" value="POSITIVE" />
@@ -2963,7 +2967,7 @@ function onActivityAction(action: string, row: Activity) {
                 <el-table-column type="expand" width="48">
                 <template #default="{ row }">
                   <div class="training-job-details">
-                    <el-descriptions :column="2" border size="small">
+                    <el-descriptions :column="isMobile ? 1 : 2" border size="small">
                       <el-descriptions-item :label="t('activities.dialog.progress')">
                         {{ getTrainingJobPhaseText(getTrainingJobLiveProgress(row)?.phase || row.status) }}
                       </el-descriptions-item>
@@ -3206,6 +3210,7 @@ function onActivityAction(action: string, row: Activity) {
       v-model="companyDialogVisible"
       :title="t('activities.dialog.companySettingsTitle', { name: selectedActivity?.name || '' })"
       width="1100px"
+      :fullscreen="isMobile"
     >
       <el-table :data="companies" style="width: 100%">
         <el-table-column prop="name" :label="t('common.labels.company')" min-width="200" />
@@ -3328,6 +3333,7 @@ function onActivityAction(action: string, row: Activity) {
       v-model="trainingPreviewDialogVisible"
       :title="t('activities.dialog.trainingPreviewTitle', { id: trainingPreviewJob?.id || '' })"
       width="min(1180px, calc(100vw - 32px))"
+      :fullscreen="isMobile"
       @closed="closeTrainingPreview"
     >
       <div v-loading="loadingTrainingPreview" class="training-preview-dialog">
@@ -3339,7 +3345,7 @@ function onActivityAction(action: string, row: Activity) {
         />
 
         <template v-if="trainingPreviewData">
-          <el-descriptions :column="3" border size="small" class="training-preview-summary">
+          <el-descriptions :column="isMobile ? 1 : 3" border size="small" class="training-preview-summary">
             <el-descriptions-item :label="t('activities.dialog.trainingPreviewGeneratedAt')">
               {{ formatDateTime(trainingPreviewData.generatedAt) }}
             </el-descriptions-item>

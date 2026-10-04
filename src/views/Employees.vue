@@ -8,8 +8,10 @@ import apiClient from '@/api/client'
 import { translateActivityKind } from '@/utils/uiText'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
 import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { t } = useI18n()
+const isMobile = useIsMobile()
 
 interface Employee {
   id: number
@@ -529,6 +531,29 @@ function onEmployeeAction(action: string, row: Employee) {
           :description="t('employees.emptyFiltered')"
         />
 
+        <div
+          v-else-if="isMobile"
+          v-loading="loading"
+          class="employee-cards"
+          data-test="employee-cards"
+        >
+          <article v-for="employee in filteredEmployees" :key="employee.id" class="employee-card">
+            <button type="button" class="employee-card__main" @click="startEdit(employee)">
+              <el-avatar :src="employee.photoUrl ?? undefined" :size="56" class="employee-card__avatar">
+                <el-icon :size="28"><User /></el-icon>
+              </el-avatar>
+              <span class="employee-card__text">
+                <span class="employee-card__name">{{ employee.name }}</span>
+                <span class="employee-card__meta">{{ t('common.labels.number') }} {{ employee.id }}</span>
+              </span>
+            </button>
+            <TableActionsMenu
+              :actions="getEmployeeActions()"
+              @select="onEmployeeAction($event, employee)"
+            />
+          </article>
+        </div>
+
         <el-table
           v-else
           :data="filteredEmployees"
@@ -563,6 +588,7 @@ function onEmployeeAction(action: string, row: Employee) {
       v-model="activitiesDialogVisible"
       :title="t('employees.activitiesDialog.title')"
       width="700px"
+      :fullscreen="isMobile"
     >
       <div v-if="selectedEmployee" style="margin-bottom: 12px; color: var(--el-text-color-regular);">
         {{ t('employees.activitiesDialog.employee') }} <strong>{{ selectedEmployee.name }}</strong>
@@ -570,7 +596,7 @@ function onEmployeeAction(action: string, row: Employee) {
 
       <el-checkbox-group v-model="selectedActivityIds">
         <el-row :gutter="12">
-          <el-col v-for="ca in companyActivities" :key="ca.activityId" :span="12" style="margin-bottom: 8px;">
+          <el-col v-for="ca in companyActivities" :key="ca.activityId" :xs="24" :span="12" style="margin-bottom: 8px;">
             <el-checkbox :value="ca.activityId">
               {{ ca.activity.name }} <span style="color: var(--el-text-color-secondary);">({{ translateActivityKind(ca.activity.kind) }})</span>
             </el-checkbox>
@@ -590,8 +616,13 @@ function onEmployeeAction(action: string, row: Employee) {
       v-model="dialogVisible"
       :title="isEditing ? t('employees.dialog.editTitle') : t('employees.dialog.addTitle')"
       width="500px"
+      :fullscreen="isMobile"
     >
-      <el-form :model="form" label-width="120px">
+      <el-form
+        :model="form"
+        label-width="120px"
+        :label-position="isMobile ? 'top' : 'right'"
+      >
         <el-form-item :label="t('employees.dialog.name')" required>
           <el-input v-model="form.name" :placeholder="t('employees.dialog.namePlaceholder')" />
         </el-form-item>
@@ -829,9 +860,94 @@ function onEmployeeAction(action: string, row: Employee) {
   color: var(--el-text-color-primary);
 }
 
+.employee-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 80px;
+}
+
+.employee-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+}
+
+/* Вся карточка кликабельна: открывает просмотр/редактирование сотрудника с галереей. */
+.employee-card__main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.employee-card__avatar {
+  flex-shrink: 0;
+  background: var(--el-fill-color-light);
+}
+
+.employee-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.employee-card__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.employee-card__meta {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
+  }
+
+  .list-toolbar__search {
+    max-width: none;
+  }
+
+  /* Фото галереи крупнее — проще попасть пальцем и разглядеть. */
+  .gallery-field__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: 10px;
+  }
+
+  .gallery-field__item,
+  .gallery-field__image {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .gallery-field__remove {
+    top: 4px;
+    right: 4px;
+  }
+
+  .photo-field__hint {
+    line-height: 1.5;
   }
 }
 

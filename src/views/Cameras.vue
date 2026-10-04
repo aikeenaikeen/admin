@@ -7,8 +7,10 @@ import apiClient from '@/api/client'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
 import { extractErrorMessage } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { t } = useI18n()
+const isMobile = useIsMobile()
 
 const CAMERA_ROTATIONS = [0, 90, 180, 270] as const
 type CameraRotation = (typeof CAMERA_ROTATIONS)[number]
@@ -350,7 +352,11 @@ function onCameraAction(action: string, row: Camera) {
         <h2 style="margin: 0; font-size: 18px;">{{ isEditing ? t('cameras.editTitle') : t('cameras.addTitle') }}</h2>
       </template>
       
-      <el-form :model="form" label-width="140px" label-position="left">
+      <el-form
+        :model="form"
+        :label-width="isMobile ? 'auto' : '140px'"
+        :label-position="isMobile ? 'top' : 'left'"
+      >
         <el-row :gutter="16">
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('cameras.form.name')" required>
@@ -456,6 +462,56 @@ function onCameraAction(action: string, row: Camera) {
           :description="t('cameras.emptyFiltered')"
         />
 
+        <div
+          v-else-if="isMobile"
+          v-loading="loading"
+          class="camera-cards"
+          data-test="camera-cards"
+        >
+          <article v-for="camera in filteredCameras" :key="camera.id" class="camera-card">
+            <div class="camera-card__head">
+              <div class="camera-card__title">
+                <span class="camera-card__name">{{ camera.name }}</span>
+                <span class="camera-card__meta">
+                  <template v-if="camera.location">{{ camera.location }} · </template>{{ camera.ip }}:{{ camera.rtspPort }}
+                </span>
+              </div>
+              <TableActionsMenu
+                :actions="getCameraActions(camera)"
+                :loading="testingCamera === camera.id || duplicatingCamera === camera.id"
+                @select="onCameraAction($event, camera)"
+              />
+            </div>
+            <div class="camera-card__tags">
+              <el-tag :type="camera.isActive ? 'success' : 'danger'" size="small">
+                {{ camera.isActive ? t('cameras.table.active') : t('cameras.table.inactive') }}
+              </el-tag>
+              <el-tag :type="camera.recognitionEnabled ? 'success' : 'info'" size="small">
+                {{ t('cameras.table.ai') }}:
+                {{ camera.recognitionEnabled ? t('cameras.table.enabled') : t('cameras.table.disabled') }}
+              </el-tag>
+            </div>
+            <div class="camera-card__actions">
+              <el-button
+                type="primary"
+                :icon="VideoCamera"
+                :disabled="!camera.isActive"
+                @click="openCameraStream(camera, false)"
+              >
+                {{ t('cameras.table.video') }}
+              </el-button>
+              <el-button
+                type="success"
+                :icon="Monitor"
+                :disabled="!camera.isActive || !camera.recognitionEnabled"
+                @click="openCameraStream(camera, true)"
+              >
+                {{ t('cameras.table.ai') }}
+              </el-button>
+            </div>
+          </article>
+        </div>
+
         <el-table
           v-else
           :data="filteredCameras"
@@ -524,7 +580,8 @@ function onCameraAction(action: string, row: Camera) {
     <CameraStreamDialog
       v-model="streamDialogVisible"
       :camera="streamDialogCamera"
-      :recognition="streamDialogRecognition"
+      v-model:recognition="streamDialogRecognition"
+      :mode-switchable="!!streamDialogCamera?.recognitionEnabled"
     />
   </div>
 </template>
@@ -588,6 +645,66 @@ function onCameraAction(action: string, row: Camera) {
   white-space: nowrap;
 }
 
+.camera-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 80px;
+}
+
+.camera-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+}
+
+.camera-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.camera-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.camera-card__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.camera-card__meta {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  overflow-wrap: anywhere;
+}
+
+.camera-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.camera-card__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.camera-card__actions .el-button {
+  margin: 0;
+}
+
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
@@ -595,6 +712,10 @@ function onCameraAction(action: string, row: Camera) {
 
   .camera-actions {
     gap: 6px;
+  }
+
+  .list-toolbar__search {
+    max-width: none;
   }
 }
 </style>

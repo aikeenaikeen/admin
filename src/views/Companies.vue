@@ -8,6 +8,7 @@ import { formatDate } from '@/utils/date'
 import { extractErrorMessage, isCancelledMessageBox } from '@/utils/error'
 import RecognitionConfigForm from '@/components/RecognitionConfigForm.vue'
 import TableActionsMenu from '@/components/TableActionsMenu.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import {
   RECOMMENDED_RECOGNITION_CONFIG,
   type RecognitionConfig,
@@ -33,6 +34,7 @@ const companies = ref<Company[]>([])
 const loading = ref(true)
 const dialogVisible = ref(false)
 const { t } = useI18n()
+const isMobile = useIsMobile()
 const query = ref('')
 
 const activeCount = computed(() => companies.value.filter((c) => c.isActive).length)
@@ -340,8 +342,9 @@ function onCompanyAction(action: string, row: Company) {
       v-model="dialogVisible"
       :title="t('companies.dialog.addTitle')"
       width="800px"
+      :fullscreen="isMobile"
     >
-      <el-form :model="form" label-width="200px">
+      <el-form :model="form" label-width="200px" :label-position="isMobile ? 'top' : 'right'">
         <el-form-item :label="t('companies.dialog.name')" required>
           <el-input
             v-model="form.name"
@@ -387,9 +390,10 @@ function onCompanyAction(action: string, row: Company) {
       v-model="editConfigDialogVisible"
       :title="t('companies.dialog.configTitle', { name: editingCompanyName })"
       width="800px"
+      :fullscreen="isMobile"
       v-loading="configLoading"
     >
-      <el-form :model="editConfig" label-width="200px">
+      <el-form :model="editConfig" label-width="200px" :label-position="isMobile ? 'top' : 'right'">
         <RecognitionConfigForm
           :config="editConfig"
           :show-advanced="showAdvancedEdit"
@@ -457,6 +461,10 @@ function onCompanyAction(action: string, row: Company) {
 @media (max-width: 768px) {
   .page-container {
     padding: 16px;
+  }
+
+  .list-toolbar__search {
+    max-width: none;
   }
 }
 </style>

@@ -336,6 +336,7 @@ const en = {
     deleteError: 'Failed to delete camera',
     streamUrlError: 'Failed to get stream address',
     streamTitleFallback: 'Camera',
+    recognitionSwitch: 'Recognition mode',
     recognitionMode: 'Recognition mode',
     recognitionHint: 'Green boxes indicate recognized faces',
     rtspOk: 'RTSP: reachable (latency {latency} ms)',
@@ -1013,6 +1014,7 @@ const en = {
     durationSeconds: '{value} s',
   },
   roiEditor: {
+    mobileHint: 'Edit zones on a computer: points cannot be placed precisely on a phone.',
     streamAddressError: 'Failed to get camera stream address',
     streamError: 'Error while getting camera stream',
     polygonMinPoints: 'A polygon must contain at least 3 points',

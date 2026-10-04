@@ -83,4 +83,27 @@ p {
   gap: 12px;
   justify-content: center;
 }
+
+@media (max-width: 768px) {
+  .not-found {
+    padding: 16px;
+  }
+
+  .card {
+    padding: 32px 20px;
+  }
+
+  .code {
+    font-size: 72px;
+  }
+
+  .actions {
+    flex-wrap: wrap;
+  }
+
+  .actions .el-button {
+    flex: 1 1 140px;
+    margin: 0;
+  }
+}
 </style>
