@@ -518,6 +518,7 @@ const en = {
     noAssignedActivities: 'This employee has no assigned activities',
     noEvents: 'No events for the selected period',
     noActivityIntervals: 'No activity intervals for the selected period',
+    swipeHint: 'Swipe frames →',
     emptyEmployees: 'No employees found',
   },
   companies: {
