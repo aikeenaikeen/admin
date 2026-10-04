@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus, { ElMessage, ElSelect, ElRadioGroup } from 'element-plus'
+import { createMemoryHistory, createRouter, type Router } from 'vue-router'
+import dayjs from 'dayjs'
 import Labeling from './Labeling.vue'
 import apiClient from '../api/client'
 vi.mock('../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
@@ -16,6 +18,7 @@ function deferred<T>() {
 }
 let rows = [clip(1), clip(2)]
 let wrapper: ReturnType<typeof mount>
+let router: Router
 beforeEach(() => {
   vi.clearAllMocks()
   rows = [clip(1), clip(2)]
@@ -24,16 +27,23 @@ beforeEach(() => {
   vi.mocked(apiClient.get).mockImplementation(async (url) => ({ data:
     url === '/api/captures' ? { data: [...rows] }
       : url === '/api/captures/stats' ? { counts: { unlabeled: 2 }, total: 2 }
+        : url === '/api/employees' ? [{ id: 8, name: 'Employee' }]
+        : url === '/api/cameras' ? [{ id: 64, name: 'Office' }]
         : url.endsWith('/activities') ? [{ id: 42, name: 'Cleaning' }]
           : new Blob(['jpeg'], { type: 'image/jpeg' }),
   }))
   vi.mocked(apiClient.post).mockResolvedValue({ data: {} })
 })
 afterEach(() => { wrapper?.unmount(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
-async function start() {
-  wrapper = mount(Labeling, { global: { plugins: [ElementPlus] } })
+async function start(query: Record<string, string> = {}) {
+  router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/labeling', component: Labeling }] })
+  await router.push({ path: '/labeling', query })
+  await router.isReady()
+  wrapper = mount(Labeling, { global: { plugins: [ElementPlus, router] } })
   await flushPromises()
 }
+const listCalls = () => vi.mocked(apiClient.get).mock.calls.filter(([url]) => url === '/api/captures')
+const lastListParams = () => listCalls()[listCalls().length - 1]?.[1]?.params
 it('fetches frames with API auth client as blobs, not naked img URLs; frees them', async () => {
   await start()
   expect(apiClient.get).toHaveBeenCalledWith('/api/captures/1/frames/0', expect.objectContaining({ responseType: 'blob' }))
@@ -68,7 +78,7 @@ it('requires an explicit target when random clips have multiple activities', asy
   rows = [clip(1, null)]
   await start()
   expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeDefined()
-  wrapper.getComponent(ElSelect).vm.$emit('update:modelValue', 42)
+  wrapper.get('[data-test="activity"]').getComponent(ElSelect).vm.$emit('update:modelValue', 42)
   await flushPromises()
   expect(wrapper.get('[data-test="positive"]').attributes('disabled')).toBeUndefined()
 })
@@ -192,4 +202,51 @@ it('wrong-person toggle is disabled until frames load and never shows the VLM ve
   window.dispatchEvent(new KeyboardEvent('keydown', { key: '4' }))
   expect(apiClient.post).not.toHaveBeenCalled()
   expect(wrapper.text()).not.toContain('secret reasoning')
+})
+
+it('opens the slice from the address bar and sends local-day bounds to the API', async () => {
+  await start({ reason: 'vlm_verdict', vlmDecision: 'confirmed', from: '2026-09-29', to: '2026-09-30',
+    minScore: '0.5', maxScore: '0.9', employeeId: '8', cameraId: '64', order: 'desc' })
+  expect(listCalls()).toHaveLength(1)
+  expect(lastListParams()).toEqual({ label: 'unlabeled', limit: 50, order: 'desc', reason: 'vlm_verdict',
+    vlmDecision: 'confirmed', employeeId: 8, cameraId: 64, minScore: 0.5, maxScore: 0.9,
+    from: dayjs('2026-09-29').startOf('day').toISOString(), to: dayjs('2026-09-30').endOf('day').toISOString() })
+})
+it('ignores junk in the address and keeps the old default request', async () => {
+  await start({ reason: 'everything', employeeId: 'abc', from: 'yesterday', vlmDecision: 'maybe', order: 'sideways' })
+  expect(lastListParams()).toEqual({ label: 'unlabeled', limit: 50, order: 'asc' })
+})
+it('writes filter changes to the address bar and reloads the list', async () => {
+  await start({ reason: 'vlm_verdict' })
+  wrapper.get('[data-test="filter-vlm"]').getComponent(ElSelect).vm.$emit('update:modelValue', 'rejected')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ reason: 'vlm_verdict', vlmDecision: 'rejected' })
+  expect(lastListParams()).toMatchObject({ reason: 'vlm_verdict', vlmDecision: 'rejected' })
+  wrapper.get('[data-test="filter-vlm"]').getComponent(ElSelect).vm.$emit('update:modelValue', undefined)
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ reason: 'vlm_verdict' })
+  await wrapper.get('[data-test="filter-reset"]').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({})
+  expect(lastListParams()).toEqual({ label: 'unlabeled', limit: 50, order: 'asc' })
+})
+it('shows the remaining count of the current slice and keeps it in step with labels and undo', async () => {
+  const base = vi.mocked(apiClient.get).getMockImplementation()!
+  vi.mocked(apiClient.get).mockImplementation((url, config) => url === '/api/captures'
+    ? Promise.resolve({ data: { data: [...rows], total: 37 } }) : base(url, config))
+  await start({ reason: 'random' })
+  const counter = () => wrapper.get('[data-test="remaining"]').text()
+  expect(counter()).toContain('37')
+  await wrapper.get('[data-test="positive"]').trigger('click')
+  await flushPromises()
+  expect(counter()).toContain('36')
+  await wrapper.get('[data-test="undo"]').trigger('click')
+  await flushPromises()
+  expect(counter()).toContain('37')
+})
+it('does not query an empty slice when bounds are reversed', async () => {
+  await start({ from: '2026-10-02', to: '2026-09-29' })
+  expect(listCalls()).toHaveLength(0)
+  expect(wrapper.text()).toContain('labeling.filters.badDates')
+  expect(wrapper.find('img').exists()).toBe(false)
 })
