@@ -6,11 +6,6 @@ WORKDIR /app
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-# Позволяет переопределять URL recognition streaming API на этапе сборки (Vite build-time)
-# Пустое значение = использовать текущий origin (через nginx `/video_feed`).
-ARG VITE_RECOGNITION_STREAM_URL=
-ENV VITE_RECOGNITION_STREAM_URL=$VITE_RECOGNITION_STREAM_URL
-
 COPY package*.json ./
 RUN npm ci
 
