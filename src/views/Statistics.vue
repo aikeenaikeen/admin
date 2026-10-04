@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, Calendar, Search, User, Right, Plus } from '@element-plus/icons-vue'
+import { Refresh, Calendar, Search, User, Right, Plus, ArrowDown } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Socket } from 'socket.io-client'
+import { createReusableTemplate } from '@vueuse/core'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import CameraStreamDialog from '@/components/CameraStreamDialog.vue'
-import { formatDateTime } from '@/utils/date'
+import { formatDateTime, formatTimeRange } from '@/utils/date'
 import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
 import { translateActivityKind, translateEventType } from '@/utils/uiText'
 import { createRealtimeSocket } from '@/utils/realtime'
+import { getIntervalEvidenceFrames, normalizeEvidenceUrl, type ActivityEvidenceFrame } from '@/utils/activityEvidence'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
+const isMobile = useIsMobile()
 
 interface StatisticsResponse {
   summary: {
@@ -133,23 +137,6 @@ interface IntervalItem {
   meta?: Record<string, any> | null
 }
 
-interface ActivityEvidenceFrame {
-  url: string
-  capturedAt?: string
-  score?: number
-  rawScore?: number
-  effectiveScore?: number
-  smoothScore?: number
-  cropPolicy?: string
-  modelVersionId?: number
-  windowIndex?: number
-  windowRank?: number
-  frameOffset?: number
-  requiredFrames?: number
-  frameSource?: string
-  frameSelection?: string
-}
-
 interface DetectionEvidenceBboxNormalized {
   x?: number
   y?: number
@@ -240,6 +227,20 @@ const canAddActivityEvidenceToTraining = computed(() => authStore.isSuperAdmin)
 const employeesDefaultSort = { prop: 'lastEventTime', order: 'descending' as const }
 
 const displayEmployees = computed(() => employees.value)
+
+// На телефоне таблица заменяется карточками; сортировка как у таблицы по умолчанию — свежие события сверху.
+const mobileEmployees = computed(() => {
+  return [...employees.value].sort((left, right) => compareEmployeeLastEventTime(right, left))
+})
+
+const detailPaginationLayout = computed(() => (isMobile.value ? 'prev, pager, next' : 'total, sizes, prev, pager, next'))
+const detailPaginationSize = computed(() => (isMobile.value ? 'small' : 'default'))
+const MOBILE_INTERVAL_PREVIEW_FRAMES = 6
+// На телефоне сразу открываем интервалы активностей — их показывают заказчику; на компьютере как раньше — события.
+const detailsTab = ref(isMobile.value ? 'intervals' : 'events')
+
+// Разметка раскрытого сотрудника одна на оба вида: строка таблицы (компьютер) и карточка (телефон).
+const [DefineEmployeeDetails, ReuseEmployeeDetails] = createReusableTemplate<{ row: Employee }>()
 
 onMounted(async () => {
   const today = new Date()
@@ -828,6 +829,10 @@ async function handleRowClick(row: Employee, column: { type?: string }) {
   }
 }
 
+async function toggleMobileEmployee(row: Employee) {
+  await handleRowClick(row, {})
+}
+
 async function handleExpandChange(row: Employee, expandedRows: Employee[]) {
   const isExpanded = expandedRows.some((item) => item.id === row.id)
   activeEmployeeId.value = isExpanded ? row.id : null
@@ -956,78 +961,8 @@ function openCameraStream(camera?: CameraDisplayInfo | null) {
   streamDialogVisible.value = true
 }
 
-function normalizeEvidenceUrl(url?: string | null): string {
-  const value = String(url || '').trim()
-  if (!value) return ''
-  if (/^https?:\/\//i.test(value)) return value
-  return value.startsWith('/') ? value : `/${value}`
-}
-
-function getIntervalEvidenceWindows(interval?: IntervalItem | null): any[] {
-  const evidence = interval?.meta?.evidence
-  if (!evidence || typeof evidence !== 'object') {
-    return []
-  }
-
-  if (Array.isArray(evidence.windows)) {
-    return evidence.windows
-  }
-
-  if (Array.isArray(evidence.frames)) {
-    return [evidence]
-  }
-
-  return []
-}
-
-function getEvidenceWindowScore(window: any, interval?: IntervalItem | null): number {
-  return Number(window?.score ?? window?.smoothScore ?? interval?.confidence ?? 0)
-}
-
-function getSortedIntervalEvidenceWindows(interval?: IntervalItem | null): any[] {
-  return [...getIntervalEvidenceWindows(interval)].sort((left, right) => {
-    const scoreDiff = getEvidenceWindowScore(right, interval) - getEvidenceWindowScore(left, interval)
-    if (Math.abs(scoreDiff) > Number.EPSILON) {
-      return scoreDiff
-    }
-
-    const leftCapturedAt = String(left?.capturedAt || '')
-    const rightCapturedAt = String(right?.capturedAt || '')
-    return rightCapturedAt.localeCompare(leftCapturedAt)
-  })
-}
-
-function getIntervalEvidenceFrames(interval?: IntervalItem | null): ActivityEvidenceFrame[] {
-  const frames: ActivityEvidenceFrame[] = []
-
-  getSortedIntervalEvidenceWindows(interval).forEach((window, windowIndex) => {
-    const windowFrames = Array.isArray(window?.frames) ? window.frames : []
-    windowFrames.forEach((frame: any) => {
-      const url = normalizeEvidenceUrl(frame?.url)
-      if (!url) {
-        return
-      }
-
-      frames.push({
-        ...frame,
-        url,
-        capturedAt: frame?.capturedAt || window?.capturedAt,
-        score: Number(frame?.score ?? window?.score ?? window?.smoothScore ?? interval?.confidence ?? 0),
-        rawScore: Number(frame?.rawScore ?? window?.rawScore ?? 0),
-        effectiveScore: Number(frame?.effectiveScore ?? window?.effectiveScore ?? 0),
-        smoothScore: Number(frame?.smoothScore ?? window?.smoothScore ?? frame?.score ?? window?.score ?? 0),
-        cropPolicy: frame?.cropPolicy || window?.cropPolicy,
-        modelVersionId: Number(frame?.modelVersionId ?? window?.modelVersionId ?? 0) || undefined,
-        requiredFrames: Number(frame?.requiredFrames ?? window?.requiredFrames ?? 0) || undefined,
-        frameSource: frame?.frameSource || window?.frameSource,
-        frameSelection: frame?.frameSelection || window?.frameSelection,
-        windowIndex,
-        windowRank: windowIndex + 1,
-      })
-    })
-  })
-
-  return frames
+function getIntervalPreviewFrames(interval: IntervalItem): ActivityEvidenceFrame[] {
+  return getIntervalEvidenceFrames(interval).slice(0, MOBILE_INTERVAL_PREVIEW_FRAMES)
 }
 
 function hasIntervalEvidence(interval: IntervalItem): boolean {
@@ -1253,6 +1188,561 @@ function formatEvidenceScore(value?: number): string {
 
 <template>
   <div class="page-container">
+    <DefineEmployeeDetails v-slot="{ row }">
+      <div v-loading="getEmployeeDetails(row.id)?.loading" class="employee-expand">
+        <el-alert
+          v-if="getEmployeeDetails(row.id)?.error"
+          :title="getEmployeeDetails(row.id)?.error || t('statistics.employeeLoadError')"
+          type="error"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 16px"
+        />
+
+        <el-row :gutter="16">
+          <el-col :xs="24" :lg="9">
+            <el-card shadow="never">
+              <div class="employee-summary">
+                <el-avatar :src="row.photoUrl" :size="96">
+                  <el-icon :size="42"><User /></el-icon>
+                </el-avatar>
+
+                <div class="employee-summary__meta">
+                  <div class="employee-summary__name">{{ row.name }}</div>
+
+                  <div class="employee-summary__tags">
+                    <el-tag :type="getEmployeePresence(row.id)?.present ? 'success' : 'info'">
+                      {{ getEmployeePresence(row.id)?.present ? t('statistics.present') : t('statistics.absent') }}
+                    </el-tag>
+                    <el-tag type="primary" effect="plain">ID: {{ row.id }}</el-tag>
+                  </div>
+                </div>
+              </div>
+
+              <el-descriptions :column="1" border style="margin-top: 16px">
+                <el-descriptions-item :label="t('statistics.lastEvent')">
+                  <span v-if="getEmployeePresence(row.id)?.lastEventType">
+                    {{ translateEventType(getEmployeePresence(row.id)?.lastEventType || '') }}
+                  </span>
+                  <span v-else>{{ t('common.misc.none') }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item :label="t('statistics.lastEventTime')">
+                  {{ formatDateTime(getEmployeePresence(row.id)?.lastEventTime || null) }}
+                </el-descriptions-item>
+                <el-descriptions-item :label="t('statistics.assignedActivities')">
+                  {{ getEmployeeDetails(row.id)?.activities.length || 0 }}
+                </el-descriptions-item>
+              </el-descriptions>
+            </el-card>
+          </el-col>
+
+          <el-col :xs="24" :lg="15">
+            <el-row :gutter="12">
+              <el-col :xs="8" :sm="8">
+                <el-card shadow="hover">
+                  <el-statistic
+                    :value="getEmployeeDetails(row.id)?.eventsTotal || 0"
+                    :title="t('statistics.totalEvents')"
+                  />
+                </el-card>
+              </el-col>
+
+              <el-col :xs="8" :sm="8">
+                <el-card shadow="hover">
+                  <el-statistic
+                    :value="getEmployeeDetails(row.id)?.intervalsTotal || 0"
+                    :title="t('statistics.totalActivityIntervals')"
+                  />
+                </el-card>
+              </el-col>
+
+              <el-col :xs="8" :sm="8">
+                <el-card shadow="hover">
+                  <el-statistic
+                    :value="getEmployeeDetails(row.id)?.activities.length || 0"
+                    :title="t('statistics.totalAssignedActivities')"
+                  />
+                </el-card>
+              </el-col>
+            </el-row>
+
+            <el-card shadow="never" style="margin-top: 16px">
+              <template #header>
+                <span>{{ t('statistics.assignedActivities') }}</span>
+              </template>
+
+              <div
+                v-if="(getEmployeeDetails(row.id)?.activities.length || 0) > 0"
+                class="tag-list"
+              >
+                <el-tag
+                  v-for="assignment in getEmployeeDetails(row.id)?.activities || []"
+                  :key="assignment.activityId"
+                  effect="plain"
+                >
+                  {{ assignment.activity.name }} ({{ translateActivityKind(assignment.activity.kind) }})
+                </el-tag>
+              </div>
+
+              <el-empty
+                v-else
+                :description="t('statistics.noAssignedActivities')"
+                :image-size="72"
+              />
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-card shadow="never" style="margin-top: 16px">
+          <el-tabs v-model="detailsTab">
+            <el-tab-pane name="events" :label="t('statistics.recentEvents')">
+              <div class="employee-events-section">
+                <el-alert
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  class="employee-events-alert"
+                  :title="t('statistics.appearanceSummaryHint')"
+                />
+
+                <div
+                  v-loading="getEmployeeDetails(row.id)?.appearanceSummaryLoading"
+                  class="events-summary-grid"
+                >
+                  <el-card shadow="never" class="appearance-summary-card">
+                    <template #header>
+                      <span>{{ t('statistics.firstAppearance') }}</span>
+                    </template>
+
+                    <div class="appearance-summary-card__value">
+                      {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance?.timestamp || null) }}
+                    </div>
+
+                    <div class="appearance-summary-card__meta">
+                      <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
+                      <el-button
+                        v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance))"
+                      >
+                        {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)) }}
+                      </el-button>
+                      <span v-else>{{ t('common.misc.none') }}</span>
+                    </div>
+                  </el-card>
+
+                  <el-card shadow="never" class="appearance-summary-card">
+                    <template #header>
+                      <span>{{ t('statistics.lastAppearance') }}</span>
+                    </template>
+
+                    <div class="appearance-summary-card__value">
+                      {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance?.timestamp || null) }}
+                    </div>
+
+                    <div class="appearance-summary-card__meta">
+                      <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
+                      <el-button
+                        v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance))"
+                      >
+                        {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)) }}
+                      </el-button>
+                      <span v-else>{{ t('common.misc.none') }}</span>
+                    </div>
+                  </el-card>
+                </div>
+
+                <div class="employee-events-toolbar">
+                  <span class="employee-events-toolbar__label">{{ t('statistics.eventTypeFilter') }}</span>
+                  <el-radio-group
+                    :model-value="getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN'"
+                    size="small"
+                    @change="handleEventsTypeFilterChange(row.id, $event)"
+                  >
+                    <el-radio-button label="ALL">{{ t('common.placeholders.all') }}</el-radio-button>
+                    <el-radio-button label="IN">{{ t('enums.eventType.IN') }}</el-radio-button>
+                    <el-radio-button label="OUT">{{ t('enums.eventType.OUT') }}</el-radio-button>
+                  </el-radio-group>
+                </div>
+              </div>
+
+              <template v-if="!isMobile">
+                <el-table
+                  v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                  v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                  :data="getVisibilityPeriodRows(row.id)"
+                  style="width: 100%"
+                >
+                  <el-table-column
+                    :label="t('common.labels.period')"
+                    min-width="300"
+                    sortable
+                    :sort-method="compareVisibilityPeriodStart"
+                  >
+                    <template #default="{ row: periodRow }">
+                      <div class="period-line">
+                        <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(periodRow.startTime) }}</el-tag>
+                        <el-icon class="period-line__arrow"><Right /></el-icon>
+                        <el-tag :type="periodRow.isOpen ? 'success' : 'warning'" effect="plain">
+                          {{ periodRow.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(periodRow.endTime)}` }}
+                        </el-tag>
+                      </div>
+                      <div class="period-line__date">{{ formatDateTime(periodRow.startTime) }}</div>
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column
+                    :label="t('events.duration')"
+                    width="140"
+                    sortable
+                    :sort-method="compareVisibilityPeriodDuration"
+                  >
+                    <template #default="{ row: periodRow }">
+                      {{ formatDurationSeconds(periodRow.durationSeconds) }}
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column :label="t('events.camera')" min-width="180">
+                    <template #default="{ row: periodRow }">
+                      {{ formatVisibilityPeriodCamera(periodRow) }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+
+                <el-table
+                  v-else-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                  v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                  :data="getRawEventRows(row.id)"
+                  style="width: 100%"
+                >
+                  <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
+                  <el-table-column
+                    :label="t('common.labels.time')"
+                    min-width="220"
+                    sortable
+                    :sort-method="compareEventTime"
+                  >
+                    <template #default="{ row: eventRow }">
+                      {{ formatDateTime(eventRow.timestamp) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column
+                    :label="t('events.type')"
+                    width="150"
+                    sortable
+                    :sort-method="compareEventType"
+                  >
+                    <template #default="{ row: eventRow }">
+                      <div class="event-type-cell">
+                        <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
+                          {{ translateEventType(eventRow.type) }}
+                        </el-tag>
+                        <el-button
+                          v-if="hasEventDetectionEvidence(eventRow)"
+                          link
+                          type="primary"
+                          class="activity-evidence-link"
+                          @click.stop="openEventDetectionEvidence(eventRow)"
+                        >
+                          {{ t('statistics.viewDetectionEvidence', { count: getEventDetectionEvidenceFrames(eventRow).length }) }}
+                        </el-button>
+                      </div>
+                    </template>
+                  </el-table-column>
+                  <el-table-column :label="t('events.camera')" min-width="180">
+                    <template #default="{ row: eventRow }">
+                      <el-button
+                        v-if="eventRow.camera?.id"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(eventRow.camera)"
+                      >
+                        {{ formatCameraDisplay(eventRow.camera) }}
+                      </el-button>
+                      <span v-else>
+                        {{ formatCameraDisplay(eventRow.camera) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </template>
+              <template v-else>
+                <div
+                  v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                  v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                  class="mobile-card-list"
+                  data-test="mobile-period-cards"
+                >
+                  <div v-for="periodRow in getVisibilityPeriodRows(row.id)" :key="periodRow.id" class="mobile-item-card">
+                    <div class="period-line">
+                      <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(periodRow.startTime) }}</el-tag>
+                      <el-icon class="period-line__arrow"><Right /></el-icon>
+                      <el-tag :type="periodRow.isOpen ? 'success' : 'warning'" effect="plain">
+                        {{ periodRow.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(periodRow.endTime)}` }}
+                      </el-tag>
+                    </div>
+                    <div class="mobile-item-card__meta">
+                      <span>{{ formatDateTime(periodRow.startTime) }}</span>
+                      <span>{{ t('events.duration') }}: {{ formatDurationSeconds(periodRow.durationSeconds) }}</span>
+                    </div>
+                    <div class="mobile-item-card__meta">
+                      <span>{{ t('events.camera') }}: {{ formatVisibilityPeriodCamera(periodRow) }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  v-else-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
+                  v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                  class="mobile-card-list"
+                  data-test="mobile-event-cards"
+                >
+                  <div v-for="eventRow in getRawEventRows(row.id)" :key="eventRow.id" class="mobile-item-card">
+                    <div class="mobile-item-card__head">
+                      <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
+                        {{ translateEventType(eventRow.type) }}
+                      </el-tag>
+                      <span class="mobile-item-card__time">{{ formatDateTime(eventRow.timestamp) }}</span>
+                    </div>
+                    <div class="mobile-item-card__meta">
+                      <el-button
+                        v-if="eventRow.camera?.id"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(eventRow.camera)"
+                      >
+                        {{ formatCameraDisplay(eventRow.camera) }}
+                      </el-button>
+                      <span v-else>{{ formatCameraDisplay(eventRow.camera) }}</span>
+                      <el-button
+                        v-if="hasEventDetectionEvidence(eventRow)"
+                        link
+                        type="primary"
+                        class="activity-evidence-link"
+                        @click.stop="openEventDetectionEvidence(eventRow)"
+                      >
+                        {{ t('statistics.viewDetectionEvidence', { count: getEventDetectionEvidenceFrames(eventRow).length }) }}
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <div v-if="(getEmployeeDetails(row.id)?.eventsTotal || 0) > 0" class="detail-pagination">
+                <el-pagination
+                  :current-page="getEmployeeDetails(row.id)?.eventsPage || 1"
+                  :page-size="getEmployeeDetails(row.id)?.eventsPageSize || DEFAULT_EVENTS_PAGE_SIZE"
+                  :page-sizes="DETAIL_PAGE_SIZES"
+                  :total="getEmployeeDetails(row.id)?.eventsTotal || 0"
+                  :layout="detailPaginationLayout"
+                  :size="detailPaginationSize"
+                  :pager-count="isMobile ? 5 : 7"
+                  @current-change="handleEventsPageChange(row.id, $event)"
+                  @size-change="handleEventsPageSizeChange(row.id, $event)"
+                />
+              </div>
+
+              <el-empty
+                v-else
+                v-loading="getEmployeeDetails(row.id)?.eventsLoading"
+                :description="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' ? t('events.noVisibilityPeriods') : t('statistics.noEvents')"
+                :image-size="72"
+              />
+            </el-tab-pane>
+
+            <el-tab-pane name="intervals" :label="t('statistics.activityIntervals')">
+              <el-table
+                v-if="!isMobile && (getEmployeeDetails(row.id)?.intervals.length || 0) > 0"
+                v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
+                :data="getEmployeeDetails(row.id)?.intervals || []"
+                style="width: 100%"
+              >
+                <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
+                <el-table-column
+                  :label="t('common.labels.activity')"
+                  min-width="220"
+                  sortable
+                  :sort-method="compareIntervalActivity"
+                >
+                  <template #default="{ row: intervalRow }">
+                    <div class="interval-activity-cell">
+                      <span>{{ intervalRow.activity?.name || intervalRow.activityId }}</span>
+                      <el-button
+                        v-if="hasIntervalEvidence(intervalRow)"
+                        link
+                        type="primary"
+                        class="activity-evidence-link"
+                        @click.stop="openIntervalEvidence(intervalRow)"
+                      >
+                        {{ t('statistics.viewActivityEvidence', { count: getIntervalEvidenceFrames(intervalRow).length }) }}
+                      </el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  :label="t('statistics.startTime')"
+                  min-width="180"
+                  sortable
+                  :sort-method="compareIntervalStart"
+                >
+                  <template #default="{ row: intervalRow }">
+                    {{ formatDateTime(intervalRow.startTime) }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  :label="t('statistics.endTime')"
+                  min-width="180"
+                  sortable
+                  :sort-method="compareIntervalEnd"
+                >
+                  <template #default="{ row: intervalRow }">
+                    {{ formatDateTime(intervalRow.endTime) }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  :label="t('statistics.duration')"
+                  width="110"
+                  sortable
+                  :sort-method="compareIntervalDuration"
+                >
+                  <template #default="{ row: intervalRow }">
+                    {{ formatDuration(intervalRow.startTime, intervalRow.endTime) }}
+                  </template>
+                </el-table-column>
+                <el-table-column
+                  :label="t('statistics.confidence')"
+                  width="110"
+                  sortable
+                  :sort-method="compareIntervalConfidence"
+                >
+                  <template #default="{ row: intervalRow }">
+                    {{ intervalRow.confidence?.toFixed?.(2) ?? intervalRow.confidence }}
+                  </template>
+                </el-table-column>
+                <el-table-column :label="t('statistics.cameras')" min-width="180">
+                  <template #default="{ row: intervalRow }">
+                    <div
+                      v-if="(intervalRow.confirmedCameraIds || []).length > 0"
+                      class="camera-link-list"
+                    >
+                      <el-button
+                        v-for="camera in getIntervalCameras(intervalRow.confirmedCameraIds || [])"
+                        :key="camera.id"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(camera)"
+                      >
+                        {{ formatCameraDisplay(camera) }}
+                      </el-button>
+                    </div>
+                    <span v-else>{{ t('common.misc.none') }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <div
+                v-else-if="isMobile && (getEmployeeDetails(row.id)?.intervals.length || 0) > 0"
+                v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
+                class="mobile-card-list"
+                data-test="mobile-interval-cards"
+              >
+                <article
+                  v-for="intervalRow in getEmployeeDetails(row.id)?.intervals || []"
+                  :key="intervalRow.id"
+                  class="mobile-item-card interval-card"
+                >
+                  <div class="mobile-item-card__head">
+                    <strong class="interval-card__activity">{{ intervalRow.activity?.name || intervalRow.activityId }}</strong>
+                    <el-tag type="primary" effect="plain" size="small">
+                      {{ formatDuration(intervalRow.startTime, intervalRow.endTime) }}
+                    </el-tag>
+                  </div>
+                  <div class="interval-card__time">{{ formatTimeRange(intervalRow.startTime, intervalRow.endTime) }}</div>
+                  <div class="mobile-item-card__meta">
+                    <span>{{ t('statistics.confidence') }}: {{ formatEvidenceScore(intervalRow.confidence) }}</span>
+                    <template v-if="(intervalRow.confirmedCameraIds || []).length > 0">
+                      <el-button
+                        v-for="camera in getIntervalCameras(intervalRow.confirmedCameraIds || [])"
+                        :key="camera.id"
+                        link
+                        type="primary"
+                        class="camera-link"
+                        @click.stop="openCameraStream(camera)"
+                      >
+                        {{ formatCameraDisplay(camera) }}
+                      </el-button>
+                    </template>
+                  </div>
+                  <template v-if="hasIntervalEvidence(intervalRow)">
+                    <div class="interval-card__frames" data-test="interval-frames-strip">
+                      <button
+                        v-for="(frame, index) in getIntervalPreviewFrames(intervalRow)"
+                        :key="`${frame.url}-${index}`"
+                        type="button"
+                        class="interval-card__frame"
+                        @click.stop="openIntervalEvidence(intervalRow)"
+                      >
+                        <img
+                          :src="frame.url"
+                          :alt="t('statistics.activityEvidenceFrameAlt', { index: index + 1 })"
+                          loading="lazy"
+                        >
+                      </button>
+                    </div>
+                    <div class="interval-card__frames-footer">
+                      <span v-if="getIntervalPreviewFrames(intervalRow).length > 2" class="scroll-hint">
+                        {{ t('statistics.swipeHint') }}
+                      </span>
+                      <el-button
+                        type="primary"
+                        plain
+                        size="small"
+                        class="interval-card__evidence-button"
+                        data-test="interval-evidence-button"
+                        @click.stop="openIntervalEvidence(intervalRow)"
+                      >
+                        {{ t('statistics.viewActivityEvidence', { count: getIntervalEvidenceFrames(intervalRow).length }) }}
+                      </el-button>
+                    </div>
+                  </template>
+                </article>
+              </div>
+
+              <div v-if="(getEmployeeDetails(row.id)?.intervalsTotal || 0) > 0" class="detail-pagination">
+                <el-pagination
+                  :current-page="getEmployeeDetails(row.id)?.intervalsPage || 1"
+                  :page-size="getEmployeeDetails(row.id)?.intervalsPageSize || DEFAULT_INTERVALS_PAGE_SIZE"
+                  :page-sizes="DETAIL_PAGE_SIZES"
+                  :total="getEmployeeDetails(row.id)?.intervalsTotal || 0"
+                  :layout="detailPaginationLayout"
+                  :size="detailPaginationSize"
+                  :pager-count="isMobile ? 5 : 7"
+                  @current-change="handleIntervalsPageChange(row.id, $event)"
+                  @size-change="handleIntervalsPageSizeChange(row.id, $event)"
+                />
+              </div>
+
+              <el-empty
+                v-else
+                v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
+                :description="t('statistics.noActivityIntervals')"
+                :image-size="72"
+              />
+            </el-tab-pane>
+          </el-tabs>
+        </el-card>
+      </div>
+    </DefineEmployeeDetails>
+
     <el-page-header class="page-header">
       <template #content>
         <h1 class="page-title">{{ t('statistics.title') }}</h1>
@@ -1351,7 +1841,7 @@ function formatEvidenceScore(value?: number): string {
         </template>
 
         <el-table
-          v-if="displayEmployees.length > 0"
+          v-if="!isMobile && displayEmployees.length > 0"
           v-loading="employeesLoading"
           class="employee-stats-table"
           :data="displayEmployees"
@@ -1364,422 +1854,7 @@ function formatEvidenceScore(value?: number): string {
         >
           <el-table-column type="expand">
             <template #default="{ row }">
-              <div v-loading="getEmployeeDetails(row.id)?.loading" class="employee-expand">
-                <el-alert
-                  v-if="getEmployeeDetails(row.id)?.error"
-                  :title="getEmployeeDetails(row.id)?.error || t('statistics.employeeLoadError')"
-                  type="error"
-                  show-icon
-                  :closable="false"
-                  style="margin-bottom: 16px"
-                />
-
-                <el-row :gutter="16">
-                  <el-col :xs="24" :lg="9">
-                    <el-card shadow="never">
-                      <div class="employee-summary">
-                        <el-avatar :src="row.photoUrl" :size="96">
-                          <el-icon :size="42"><User /></el-icon>
-                        </el-avatar>
-
-                        <div class="employee-summary__meta">
-                          <div class="employee-summary__name">{{ row.name }}</div>
-
-                          <div class="employee-summary__tags">
-                            <el-tag :type="getEmployeePresence(row.id)?.present ? 'success' : 'info'">
-                              {{ getEmployeePresence(row.id)?.present ? t('statistics.present') : t('statistics.absent') }}
-                            </el-tag>
-                            <el-tag type="primary" effect="plain">ID: {{ row.id }}</el-tag>
-                          </div>
-                        </div>
-                      </div>
-
-                      <el-descriptions :column="1" border style="margin-top: 16px">
-                        <el-descriptions-item :label="t('statistics.lastEvent')">
-                          <span v-if="getEmployeePresence(row.id)?.lastEventType">
-                            {{ translateEventType(getEmployeePresence(row.id)?.lastEventType || '') }}
-                          </span>
-                          <span v-else>{{ t('common.misc.none') }}</span>
-                        </el-descriptions-item>
-                        <el-descriptions-item :label="t('statistics.lastEventTime')">
-                          {{ formatDateTime(getEmployeePresence(row.id)?.lastEventTime || null) }}
-                        </el-descriptions-item>
-                        <el-descriptions-item :label="t('statistics.assignedActivities')">
-                          {{ getEmployeeDetails(row.id)?.activities.length || 0 }}
-                        </el-descriptions-item>
-                      </el-descriptions>
-                    </el-card>
-                  </el-col>
-
-                  <el-col :xs="24" :lg="15">
-                    <el-row :gutter="12">
-                      <el-col :xs="24" :sm="8">
-                        <el-card shadow="hover">
-                          <el-statistic
-                            :value="getEmployeeDetails(row.id)?.eventsTotal || 0"
-                            :title="t('statistics.totalEvents')"
-                          />
-                        </el-card>
-                      </el-col>
-
-                      <el-col :xs="24" :sm="8">
-                        <el-card shadow="hover">
-                          <el-statistic
-                            :value="getEmployeeDetails(row.id)?.intervalsTotal || 0"
-                            :title="t('statistics.totalActivityIntervals')"
-                          />
-                        </el-card>
-                      </el-col>
-
-                      <el-col :xs="24" :sm="8">
-                        <el-card shadow="hover">
-                          <el-statistic
-                            :value="getEmployeeDetails(row.id)?.activities.length || 0"
-                            :title="t('statistics.totalAssignedActivities')"
-                          />
-                        </el-card>
-                      </el-col>
-                    </el-row>
-
-                    <el-card shadow="never" style="margin-top: 16px">
-                      <template #header>
-                        <span>{{ t('statistics.assignedActivities') }}</span>
-                      </template>
-
-                      <div
-                        v-if="(getEmployeeDetails(row.id)?.activities.length || 0) > 0"
-                        class="tag-list"
-                      >
-                        <el-tag
-                          v-for="assignment in getEmployeeDetails(row.id)?.activities || []"
-                          :key="assignment.activityId"
-                          effect="plain"
-                        >
-                          {{ assignment.activity.name }} ({{ translateActivityKind(assignment.activity.kind) }})
-                        </el-tag>
-                      </div>
-
-                      <el-empty
-                        v-else
-                        :description="t('statistics.noAssignedActivities')"
-                        :image-size="72"
-                      />
-                    </el-card>
-                  </el-col>
-                </el-row>
-
-                <el-card shadow="never" style="margin-top: 16px">
-                  <el-tabs>
-                    <el-tab-pane :label="t('statistics.recentEvents')">
-                      <div class="employee-events-section">
-                        <el-alert
-                          type="info"
-                          :closable="false"
-                          show-icon
-                          class="employee-events-alert"
-                          :title="t('statistics.appearanceSummaryHint')"
-                        />
-
-                        <div
-                          v-loading="getEmployeeDetails(row.id)?.appearanceSummaryLoading"
-                          class="events-summary-grid"
-                        >
-                          <el-card shadow="never" class="appearance-summary-card">
-                            <template #header>
-                              <span>{{ t('statistics.firstAppearance') }}</span>
-                            </template>
-
-                            <div class="appearance-summary-card__value">
-                              {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance?.timestamp || null) }}
-                            </div>
-
-                            <div class="appearance-summary-card__meta">
-                              <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
-                              <el-button
-                                v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)"
-                                link
-                                type="primary"
-                                class="camera-link"
-                                @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance))"
-                              >
-                                {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.firstAppearance)) }}
-                              </el-button>
-                              <span v-else>{{ t('common.misc.none') }}</span>
-                            </div>
-                          </el-card>
-
-                          <el-card shadow="never" class="appearance-summary-card">
-                            <template #header>
-                              <span>{{ t('statistics.lastAppearance') }}</span>
-                            </template>
-
-                            <div class="appearance-summary-card__value">
-                              {{ formatDateTime(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance?.timestamp || null) }}
-                            </div>
-
-                            <div class="appearance-summary-card__meta">
-                              <span class="appearance-summary-card__meta-label">{{ t('events.camera') }}</span>
-                              <el-button
-                                v-if="getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)"
-                                link
-                                type="primary"
-                                class="camera-link"
-                                @click.stop="openCameraStream(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance))"
-                              >
-                                {{ formatCameraDisplay(getAppearanceCamera(getEmployeeDetails(row.id)?.appearanceSummary?.lastAppearance)) }}
-                              </el-button>
-                              <span v-else>{{ t('common.misc.none') }}</span>
-                            </div>
-                          </el-card>
-                        </div>
-
-                        <div class="employee-events-toolbar">
-                          <span class="employee-events-toolbar__label">{{ t('statistics.eventTypeFilter') }}</span>
-                          <el-radio-group
-                            :model-value="getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN'"
-                            size="small"
-                            @change="handleEventsTypeFilterChange(row.id, $event)"
-                          >
-                            <el-radio-button label="ALL">{{ t('common.placeholders.all') }}</el-radio-button>
-                            <el-radio-button label="IN">{{ t('enums.eventType.IN') }}</el-radio-button>
-                            <el-radio-button label="OUT">{{ t('enums.eventType.OUT') }}</el-radio-button>
-                          </el-radio-group>
-                        </div>
-                      </div>
-
-                      <el-table
-                        v-if="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' && (getEmployeeDetails(row.id)?.events.length || 0) > 0"
-                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        :data="getVisibilityPeriodRows(row.id)"
-                        style="width: 100%"
-                      >
-                        <el-table-column
-                          :label="t('common.labels.period')"
-                          min-width="300"
-                          sortable
-                          :sort-method="compareVisibilityPeriodStart"
-                        >
-                          <template #default="{ row: periodRow }">
-                            <div class="period-line">
-                              <el-tag type="success">{{ translateEventType('IN') }} {{ formatClock(periodRow.startTime) }}</el-tag>
-                              <el-icon class="period-line__arrow"><Right /></el-icon>
-                              <el-tag :type="periodRow.isOpen ? 'success' : 'warning'" effect="plain">
-                                {{ periodRow.isOpen ? t('events.now') : `${translateEventType('OUT')} ${formatClock(periodRow.endTime)}` }}
-                              </el-tag>
-                            </div>
-                            <div class="period-line__date">{{ formatDateTime(periodRow.startTime) }}</div>
-                          </template>
-                        </el-table-column>
-
-                        <el-table-column
-                          :label="t('events.duration')"
-                          width="140"
-                          sortable
-                          :sort-method="compareVisibilityPeriodDuration"
-                        >
-                          <template #default="{ row: periodRow }">
-                            {{ formatDurationSeconds(periodRow.durationSeconds) }}
-                          </template>
-                        </el-table-column>
-
-                        <el-table-column :label="t('events.camera')" min-width="180">
-                          <template #default="{ row: periodRow }">
-                            {{ formatVisibilityPeriodCamera(periodRow) }}
-                          </template>
-                        </el-table-column>
-                      </el-table>
-
-                      <el-table
-                        v-else-if="(getEmployeeDetails(row.id)?.events.length || 0) > 0"
-                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        :data="getRawEventRows(row.id)"
-                        style="width: 100%"
-                      >
-                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
-                        <el-table-column
-                          :label="t('common.labels.time')"
-                          min-width="220"
-                          sortable
-                          :sort-method="compareEventTime"
-                        >
-                          <template #default="{ row: eventRow }">
-                            {{ formatDateTime(eventRow.timestamp) }}
-                          </template>
-                        </el-table-column>
-                        <el-table-column
-                          :label="t('events.type')"
-                          width="150"
-                          sortable
-                          :sort-method="compareEventType"
-                        >
-                          <template #default="{ row: eventRow }">
-                            <div class="event-type-cell">
-                              <el-tag :type="eventRow.type === 'IN' ? 'success' : 'warning'">
-                                {{ translateEventType(eventRow.type) }}
-                              </el-tag>
-                              <el-button
-                                v-if="hasEventDetectionEvidence(eventRow)"
-                                link
-                                type="primary"
-                                class="activity-evidence-link"
-                                @click.stop="openEventDetectionEvidence(eventRow)"
-                              >
-                                {{ t('statistics.viewDetectionEvidence', { count: getEventDetectionEvidenceFrames(eventRow).length }) }}
-                              </el-button>
-                            </div>
-                          </template>
-                        </el-table-column>
-                        <el-table-column :label="t('events.camera')" min-width="180">
-                          <template #default="{ row: eventRow }">
-                            <el-button
-                              v-if="eventRow.camera?.id"
-                              link
-                              type="primary"
-                              class="camera-link"
-                              @click.stop="openCameraStream(eventRow.camera)"
-                            >
-                              {{ formatCameraDisplay(eventRow.camera) }}
-                            </el-button>
-                            <span v-else>
-                              {{ formatCameraDisplay(eventRow.camera) }}
-                            </span>
-                          </template>
-                        </el-table-column>
-                      </el-table>
-
-                      <div v-if="(getEmployeeDetails(row.id)?.eventsTotal || 0) > 0" class="detail-pagination">
-                        <el-pagination
-                          :current-page="getEmployeeDetails(row.id)?.eventsPage || 1"
-                          :page-size="getEmployeeDetails(row.id)?.eventsPageSize || DEFAULT_EVENTS_PAGE_SIZE"
-                          :page-sizes="DETAIL_PAGE_SIZES"
-                          :total="getEmployeeDetails(row.id)?.eventsTotal || 0"
-                          layout="total, sizes, prev, pager, next"
-                          @current-change="handleEventsPageChange(row.id, $event)"
-                          @size-change="handleEventsPageSizeChange(row.id, $event)"
-                        />
-                      </div>
-
-                      <el-empty
-                        v-else
-                        v-loading="getEmployeeDetails(row.id)?.eventsLoading"
-                        :description="(getEmployeeDetails(row.id)?.eventsTypeFilter || 'IN') === 'ALL' ? t('events.noVisibilityPeriods') : t('statistics.noEvents')"
-                        :image-size="72"
-                      />
-                    </el-tab-pane>
-
-                    <el-tab-pane :label="t('statistics.activityIntervals')">
-                      <el-table
-                        v-if="(getEmployeeDetails(row.id)?.intervals.length || 0) > 0"
-                        v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
-                        :data="getEmployeeDetails(row.id)?.intervals || []"
-                        style="width: 100%"
-                      >
-                        <el-table-column prop="id" :label="t('common.labels.number')" width="80" sortable />
-                        <el-table-column
-                          :label="t('common.labels.activity')"
-                          min-width="220"
-                          sortable
-                          :sort-method="compareIntervalActivity"
-                        >
-                          <template #default="{ row: intervalRow }">
-                            <div class="interval-activity-cell">
-                              <span>{{ intervalRow.activity?.name || intervalRow.activityId }}</span>
-                              <el-button
-                                v-if="hasIntervalEvidence(intervalRow)"
-                                link
-                                type="primary"
-                                class="activity-evidence-link"
-                                @click.stop="openIntervalEvidence(intervalRow)"
-                              >
-                                {{ t('statistics.viewActivityEvidence', { count: getIntervalEvidenceFrames(intervalRow).length }) }}
-                              </el-button>
-                            </div>
-                          </template>
-                        </el-table-column>
-                        <el-table-column
-                          :label="t('statistics.startTime')"
-                          min-width="180"
-                          sortable
-                          :sort-method="compareIntervalStart"
-                        >
-                          <template #default="{ row: intervalRow }">
-                            {{ formatDateTime(intervalRow.startTime) }}
-                          </template>
-                        </el-table-column>
-                        <el-table-column
-                          :label="t('statistics.endTime')"
-                          min-width="180"
-                          sortable
-                          :sort-method="compareIntervalEnd"
-                        >
-                          <template #default="{ row: intervalRow }">
-                            {{ formatDateTime(intervalRow.endTime) }}
-                          </template>
-                        </el-table-column>
-                        <el-table-column
-                          :label="t('statistics.duration')"
-                          width="110"
-                          sortable
-                          :sort-method="compareIntervalDuration"
-                        >
-                          <template #default="{ row: intervalRow }">
-                            {{ formatDuration(intervalRow.startTime, intervalRow.endTime) }}
-                          </template>
-                        </el-table-column>
-                        <el-table-column
-                          :label="t('statistics.confidence')"
-                          width="110"
-                          sortable
-                          :sort-method="compareIntervalConfidence"
-                        >
-                          <template #default="{ row: intervalRow }">
-                            {{ intervalRow.confidence?.toFixed?.(2) ?? intervalRow.confidence }}
-                          </template>
-                        </el-table-column>
-                        <el-table-column :label="t('statistics.cameras')" min-width="180">
-                          <template #default="{ row: intervalRow }">
-                            <div
-                              v-if="(intervalRow.confirmedCameraIds || []).length > 0"
-                              class="camera-link-list"
-                            >
-                              <el-button
-                                v-for="camera in getIntervalCameras(intervalRow.confirmedCameraIds || [])"
-                                :key="camera.id"
-                                link
-                                type="primary"
-                                class="camera-link"
-                                @click.stop="openCameraStream(camera)"
-                              >
-                                {{ formatCameraDisplay(camera) }}
-                              </el-button>
-                            </div>
-                            <span v-else>{{ t('common.misc.none') }}</span>
-                          </template>
-                        </el-table-column>
-                      </el-table>
-
-                      <div v-if="(getEmployeeDetails(row.id)?.intervalsTotal || 0) > 0" class="detail-pagination">
-                        <el-pagination
-                          :current-page="getEmployeeDetails(row.id)?.intervalsPage || 1"
-                          :page-size="getEmployeeDetails(row.id)?.intervalsPageSize || DEFAULT_INTERVALS_PAGE_SIZE"
-                          :page-sizes="DETAIL_PAGE_SIZES"
-                          :total="getEmployeeDetails(row.id)?.intervalsTotal || 0"
-                          layout="total, sizes, prev, pager, next"
-                          @current-change="handleIntervalsPageChange(row.id, $event)"
-                          @size-change="handleIntervalsPageSizeChange(row.id, $event)"
-                        />
-                      </div>
-
-                      <el-empty
-                        v-else
-                        v-loading="getEmployeeDetails(row.id)?.intervalsLoading"
-                        :description="t('statistics.noActivityIntervals')"
-                        :image-size="72"
-                      />
-                    </el-tab-pane>
-                  </el-tabs>
-                </el-card>
-              </div>
+              <ReuseEmployeeDetails :row="row" />
             </template>
           </el-table-column>
 
@@ -1841,6 +1916,49 @@ function formatEvidenceScore(value?: number): string {
           </el-table-column>
         </el-table>
 
+        <div
+          v-else-if="isMobile && displayEmployees.length > 0"
+          v-loading="employeesLoading"
+          class="mobile-employee-list"
+          data-test="mobile-employee-cards"
+        >
+          <section
+            v-for="employee in mobileEmployees"
+            :key="employee.id"
+            class="mobile-employee"
+            :class="{ 'mobile-employee--active': activeEmployeeId === employee.id }"
+          >
+            <button
+              type="button"
+              class="mobile-employee__header"
+              :aria-expanded="activeEmployeeId === employee.id"
+              data-test="mobile-employee-toggle"
+              @click="toggleMobileEmployee(employee)"
+            >
+              <el-avatar :src="employee.photoUrl" :size="44">
+                <el-icon :size="20"><User /></el-icon>
+              </el-avatar>
+              <span class="mobile-employee__info">
+                <span class="mobile-employee__name">{{ employee.name }}</span>
+                <span class="mobile-employee__last">
+                  <template v-if="getEmployeePresence(employee.id)?.lastEventType">
+                    {{ translateEventType(getEmployeePresence(employee.id)?.lastEventType || '') }} ·
+                  </template>
+                  {{ formatDateTime(getEmployeePresence(employee.id)?.lastEventTime || null) }}
+                </span>
+              </span>
+              <el-tag :type="getEmployeePresence(employee.id)?.present ? 'success' : 'info'" size="small">
+                {{ getEmployeePresence(employee.id)?.present ? t('statistics.present') : t('statistics.absent') }}
+              </el-tag>
+              <el-icon class="mobile-employee__chevron"><ArrowDown /></el-icon>
+            </button>
+
+            <div v-if="activeEmployeeId === employee.id" class="mobile-employee__details">
+              <ReuseEmployeeDetails :row="employee" />
+            </div>
+          </section>
+        </div>
+
         <el-empty
           v-else
           :description="t('statistics.emptyEmployees')"
@@ -1858,6 +1976,7 @@ function formatEvidenceScore(value?: number): string {
       v-model="detectionEvidenceDialogVisible"
       :title="t('statistics.detectionEvidenceTitle')"
       width="920px"
+      :fullscreen="isMobile"
       class="activity-evidence-dialog"
     >
       <div v-if="detectionEvidenceDialogEvent" class="activity-evidence-summary">
@@ -1927,12 +2046,14 @@ function formatEvidenceScore(value?: number): string {
       v-model="evidenceDialogVisible"
       :title="t('statistics.activityEvidenceTitle')"
       width="860px"
+      :fullscreen="isMobile"
       class="activity-evidence-dialog"
     >
       <div v-if="evidenceDialogInterval" class="activity-evidence-summary">
         <div>
           <strong>{{ evidenceDialogInterval.activity?.name || evidenceDialogInterval.activityId }}</strong>
-          <span>
+          <span v-if="isMobile">{{ formatTimeRange(evidenceDialogInterval.startTime, evidenceDialogInterval.endTime) }}</span>
+          <span v-else>
             {{ formatDateTime(evidenceDialogInterval.startTime) }}
             -
             {{ formatDateTime(evidenceDialogInterval.endTime) }}
@@ -2317,9 +2438,227 @@ function formatEvidenceScore(value?: number): string {
   justify-content: flex-end;
 }
 
+/* Мобильные карточки: рендерятся только при isMobile, на компьютерный вид не влияют. */
+.mobile-employee-list,
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mobile-employee {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  overflow: hidden;
+}
+
+.mobile-employee--active {
+  border-color: var(--el-color-primary-light-5);
+}
+
+.mobile-employee__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mobile-employee__info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-employee__name {
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-employee__last {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-employee__chevron {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+  transition: transform 0.2s;
+}
+
+.mobile-employee--active .mobile-employee__chevron {
+  transform: rotate(180deg);
+}
+
+.mobile-employee__details {
+  padding: 0 8px 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.mobile-item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  min-width: 0;
+}
+
+.mobile-item-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mobile-item-card__time {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  text-align: right;
+}
+
+.mobile-item-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.mobile-item-card__meta .el-button + .el-button {
+  margin-left: 0;
+}
+
+.interval-card__activity {
+  min-width: 0;
+  font-size: 15px;
+  color: var(--el-text-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.interval-card__time {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-primary);
+}
+
+/* Лента кадров: горизонтальная прокрутка только внутри карточки, страница не скроллится вбок. */
+.interval-card__frames {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.interval-card__frame {
+  flex: 0 0 auto;
+  width: 112px;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--el-fill-color-dark);
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.interval-card__frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.interval-card__frames-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.interval-card__evidence-button {
+  margin-left: auto;
+}
+
+.scroll-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 @media (max-width: 768px) {
   .page-container {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .page-header {
+    margin-bottom: 12px;
+  }
+
+  .page-container :deep(.el-card__header) {
+    padding: 12px;
+  }
+
+  .page-container :deep(.el-card__body) {
+    padding: 12px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .stats-grid :deep(.el-statistic__head),
+  .employee-expand :deep(.el-statistic__head) {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .stats-grid :deep(.el-statistic__content),
+  .employee-expand :deep(.el-statistic__content) {
+    font-size: 18px;
+  }
+
+  .section-header__actions {
+    width: 100%;
+  }
+
+  .section-header__actions .section-search {
+    flex: 1 1 160px;
+  }
+
+  .employee-summary :deep(.el-avatar) {
+    --el-avatar-size: 64px !important;
+  }
+
+  .activity-evidence-grid {
+    grid-template-columns: 1fr;
   }
 
   .employee-summary {

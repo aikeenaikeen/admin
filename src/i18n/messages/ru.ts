@@ -489,6 +489,7 @@ const ru = {
     noAssignedActivities: 'У сотрудника нет назначенных активностей',
     noEvents: 'Нет событий за выбранный период',
     noActivityIntervals: 'Нет интервалов активностей за выбранный период',
+    swipeHint: 'Листайте кадры →',
     emptyEmployees: 'Сотрудники не найдены',
   },
   companies: {
