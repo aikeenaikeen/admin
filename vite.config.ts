@@ -47,9 +47,14 @@ export default defineConfig({
       },
       // MJPEG camera streams (backend returns relative /streams/... when
       // CAMERA_GATEWAY_PUBLIC_URL is empty).
+      // Подпись в dev не проверяется (это делает nginx админки); токен шлюза
+      // подставляем здесь, браузер его не получает.
       '/streams': {
         target: process.env.CAMERA_GATEWAY_URL || 'http://localhost:4000',
         changeOrigin: true,
+        headers: {
+          'x-gateway-token': process.env.CAMERA_GATEWAY_ACCESS_TOKEN || 'dev-camera-gateway-token',
+        },
       },
     },
   },

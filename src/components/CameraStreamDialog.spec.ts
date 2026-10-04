@@ -55,7 +55,13 @@ beforeEach(() => {
   restoreSrc = () => Object.defineProperty(owner, 'src', descriptor)
   vi.mocked(apiClient.get).mockImplementation(async (url: string) => {
     const id = url.match(/cameras\/(\d+)\//)![1]
-    return { data: { mjpegUrl: `/streams/${id}.mjpg?token=t&preview=1` } }
+    return {
+      data: {
+        mjpegUrl: `/streams/${id}.mjpg?preview=1&exp=100&sig=s${id}`,
+        recognitionUrl: `/video_feed?cameraId=${id}&exp=100&sig=r${id}`,
+        expiresAt: 100,
+      },
+    }
   })
 })
 
@@ -76,7 +82,8 @@ describe('CameraStreamDialog', () => {
     await flushPromises()
 
     const img = wrapper.get('img').element as HTMLImageElement
-    expect(img.getAttribute('src')).toMatch(/^\/streams\/1\.mjpg\?token=t&preview=1&ts=\d+$/)
+    expect(img.getAttribute('src')).toMatch(/^\/streams\/1\.mjpg\?preview=1&exp=100&sig=s1&ts=\d+$/)
+    expect(img.getAttribute('src')).not.toContain('token=')
 
     await wrapper.setProps({ modelValue: false })
     await flushPromises()
@@ -87,14 +94,14 @@ describe('CameraStreamDialog', () => {
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
-  it('cuts the recognition stream (/video_feed) on close', async () => {
+  it('takes the signed recognition url from backend and cuts it on close', async () => {
     const wrapper = createWrapper({ recognition: true })
     await wrapper.setProps({ modelValue: true })
     await flushPromises()
 
     const img = wrapper.get('img').element as HTMLImageElement
-    expect(img.getAttribute('src')).toMatch(/\/video_feed\?cameraId=1&ts=\d+$/)
-    expect(apiClient.get).not.toHaveBeenCalled()
+    expect(apiClient.get).toHaveBeenCalledWith('/api/cameras/1/stream-url')
+    expect(img.getAttribute('src')).toMatch(/\/video_feed\?cameraId=1&exp=100&sig=r1&ts=\d+$/)
 
     await wrapper.setProps({ modelValue: false })
     await flushPromises()
@@ -129,7 +136,7 @@ describe('CameraStreamDialog', () => {
 
     expect(streamWrites(first)).toContain(BLANK)
     expect(wrapper.findAll('img')).toHaveLength(1)
-    expect(wrapper.get('img').attributes('src')).toMatch(/\/video_feed\?cameraId=1/)
+    expect(wrapper.get('img').attributes('src')).toMatch(/\/video_feed\?cameraId=1&exp=100&sig=r1/)
   })
 
   it('cuts the stream on unmount', async () => {
@@ -168,12 +175,25 @@ describe('CameraStreamDialog', () => {
     const wrapper = createWrapper()
     await wrapper.setProps({ modelValue: true })
     await wrapper.setProps({ modelValue: false })
-    resolve({ data: { mjpegUrl: '/streams/1.mjpg?token=t' } })
+    resolve({ data: { mjpegUrl: '/streams/1.mjpg?preview=1&exp=1&sig=old', recognitionUrl: '' } })
     await flushPromises()
 
     await wrapper.setProps({ modelValue: true })
     await flushPromises()
     expect(document.querySelectorAll('img')).toHaveLength(1)
     expect(srcWrites.filter((w) => w.value.startsWith('/streams/'))).toHaveLength(1)
+  })
+
+  it('requests a fresh signed url on every open', async () => {
+    const wrapper = createWrapper()
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    await wrapper.setProps({ modelValue: true, recognition: true })
+    await flushPromises()
+
+    expect(apiClient.get).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('img').attributes('src')).toMatch(/\/video_feed\?cameraId=1&exp=100&sig=r1/)
   })
 })

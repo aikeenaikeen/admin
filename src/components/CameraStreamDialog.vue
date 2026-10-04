@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { Monitor } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import apiClient from '@/api/client'
-import { resolveBaseUrl } from '@/utils/baseUrl'
 import { formatCameraLabel, type CameraDisplayInfo } from '@/utils/camera'
 
 const props = withDefaults(defineProps<{
@@ -61,9 +60,10 @@ function withCacheBust(url: string): string {
   return `${url}${separator}ts=${Date.now()}`
 }
 
-function getRecognitionStreamUrl(cameraId: number): string {
-  const streamBase = resolveBaseUrl((import.meta as any).env?.VITE_RECOGNITION_STREAM_URL)
-  return `${streamBase}/video_feed?cameraId=${cameraId}&ts=${Date.now()}`
+// Подписанный адрес /video_feed?cameraId=..&exp=..&sig=.. выдаёт backend
+// (как и mjpegUrl), ссылка живёт несколько минут: при каждом открытии берём новую.
+function getRecognitionStreamUrl(recognitionUrl: string): string {
+  return withCacheBust(recognitionUrl)
 }
 
 async function loadStream(cameraId: number) {
@@ -73,9 +73,10 @@ async function loadStream(cameraId: number) {
   loading.value = true
 
   try {
+    const { data } = await apiClient.get(`/api/cameras/${cameraId}/stream-url`)
     const nextStreamUrl = props.recognition
-      ? getRecognitionStreamUrl(cameraId)
-      : withCacheBust((await apiClient.get(`/api/cameras/${cameraId}/stream-url`)).data.mjpegUrl)
+      ? getRecognitionStreamUrl(data.recognitionUrl)
+      : withCacheBust(data.mjpegUrl)
 
     if (currentToken !== requestToken.value) {
       return
