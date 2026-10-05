@@ -365,6 +365,8 @@ const ru = {
     deleteSuccess: 'Камера удалена',
     deleteError: 'Не удалось удалить камеру',
     streamUrlError: 'Не удалось получить адрес потока',
+    streamUnavailable: 'Поток недоступен',
+    streamRetry: 'Повторить',
     streamTitleFallback: 'Камера',
     recognitionSwitch: 'Режим распознавания',
     recognitionMode: 'Режим распознавания',
