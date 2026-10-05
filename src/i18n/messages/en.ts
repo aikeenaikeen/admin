@@ -365,6 +365,8 @@ const en = {
     deleteSuccess: 'Camera deleted',
     deleteError: 'Failed to delete camera',
     streamUrlError: 'Failed to get stream address',
+    streamUnavailable: 'Stream unavailable',
+    streamRetry: 'Retry',
     streamTitleFallback: 'Camera',
     recognitionSwitch: 'Recognition mode',
     recognitionMode: 'Recognition mode',

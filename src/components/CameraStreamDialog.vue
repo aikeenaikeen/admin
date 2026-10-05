@@ -32,10 +32,17 @@ const isMobile = useIsMobile()
 // из DOM, отсоединённая картинка может продолжать тянуть поток.
 const BLANK_IMAGE_SRC = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='
 
+// Паузы перед повторным подключением после обрыва потока. Длина массива — сколько
+// попыток подряд делаем, прежде чем показать «Поток недоступен» и кнопку «Повторить».
+const RECONNECT_DELAYS_MS = [2000, 5000, 10000, 10000, 10000]
+
 const loading = ref(false)
 const streamUrl = ref('')
 const requestToken = ref(0)
 const streamImage = ref<HTMLImageElement | null>(null)
+const reconnectAttempts = ref(0)
+const streamUnavailable = ref(false)
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
 const dialogVisible = computed({
   get: () => props.modelValue,
@@ -64,6 +71,7 @@ watch(
       return
     }
 
+    resetReconnect()
     await loadStream(cameraId)
   }
 )
@@ -79,8 +87,11 @@ function getRecognitionStreamUrl(recognitionUrl: string): string {
   return withCacheBust(recognitionUrl)
 }
 
-async function loadStream(cameraId: number) {
+// reconnect = true: повторное подключение после обрыва. Тогда ошибка запроса ссылки
+// не закрывает окно, а считается неудачной попыткой.
+async function loadStream(cameraId: number, reconnect = false) {
   // Смена камеры или режима: сначала закрываем текущий поток, потом открываем новый.
+  clearReconnectTimer()
   stopStream()
   const currentToken = ++requestToken.value
   loading.value = true
@@ -101,13 +112,88 @@ async function loadStream(cameraId: number) {
       return
     }
 
+    if (reconnect) {
+      scheduleReconnect(cameraId)
+      return
+    }
+
     ElMessage.error(t('cameras.streamUrlError'))
     dialogVisible.value = false
   } finally {
-    if (currentToken === requestToken.value) {
+    if (currentToken === requestToken.value && !reconnectTimer) {
       loading.value = false
     }
   }
+}
+
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+}
+
+function resetReconnect() {
+  clearReconnectTimer()
+  reconnectAttempts.value = 0
+  streamUnavailable.value = false
+}
+
+// Подписанная ссылка истекла, шлюз перезапустился или оборвалась сеть: берём у backend
+// свежую ссылку и открываем поток заново. Таймер привязан к requestToken: закрытие окна,
+// смена камеры или режима делают отложенную попытку пустой.
+function scheduleReconnect(cameraId: number) {
+  clearReconnectTimer()
+  stopStream()
+
+  if (reconnectAttempts.value >= RECONNECT_DELAYS_MS.length) {
+    loading.value = false
+    streamUnavailable.value = true
+    return
+  }
+
+  const delay = RECONNECT_DELAYS_MS[reconnectAttempts.value]
+  reconnectAttempts.value += 1
+  const token = requestToken.value
+  loading.value = true
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    if (token !== requestToken.value) {
+      return
+    }
+    void loadStream(cameraId, true)
+  }, delay)
+}
+
+// События от уже заменённой картинки (пустой GIF при обрыве, старая ссылка) игнорируем.
+function isCurrentStreamEvent(event: Event): boolean {
+  const image = event.target as HTMLImageElement | null
+  return Boolean(streamUrl.value) && image?.getAttribute('src') === streamUrl.value
+}
+
+function onStreamError(event: Event) {
+  const cameraId = props.camera?.id
+  if (!cameraId || !isCurrentStreamEvent(event) || reconnectTimer) {
+    return
+  }
+
+  scheduleReconnect(cameraId)
+}
+
+function onStreamLoad(event: Event) {
+  if (isCurrentStreamEvent(event)) {
+    reconnectAttempts.value = 0
+  }
+}
+
+function onRetry() {
+  const cameraId = props.camera?.id
+  if (!cameraId) {
+    return
+  }
+
+  resetReconnect()
+  void loadStream(cameraId)
 }
 
 function stopStream() {
@@ -121,6 +207,7 @@ function stopStream() {
 function resetStream() {
   requestToken.value += 1
   loading.value = false
+  resetReconnect()
   stopStream()
 }
 
@@ -165,7 +252,15 @@ function handleClose() {
         :src="streamUrl"
         :alt="t('cameras.imageAlt')"
         class="stream-image"
+        @load="onStreamLoad"
+        @error="onStreamError"
       />
+      <div v-else-if="streamUnavailable" class="stream-unavailable" data-test="stream-unavailable">
+        <span>{{ t('cameras.streamUnavailable') }}</span>
+        <el-button type="primary" data-test="stream-retry" @click="onRetry">
+          {{ t('cameras.streamRetry') }}
+        </el-button>
+      </div>
     </div>
 
     <el-alert
@@ -200,6 +295,14 @@ function handleClose() {
   max-height: 70vh;
   display: block;
   border-radius: 8px;
+}
+
+.stream-unavailable {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .recognition-hint {

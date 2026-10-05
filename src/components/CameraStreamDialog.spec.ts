@@ -31,6 +31,11 @@ const SwitchStub = defineComponent({
   template: '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
 })
 
+const ButtonStub = defineComponent({
+  emits: ['click'],
+  template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
+})
+
 const camera = (id: number) => ({ id, name: `Cam ${id}`, location: null })
 
 function createWrapper(props: Record<string, unknown> = {}) {
@@ -38,7 +43,7 @@ function createWrapper(props: Record<string, unknown> = {}) {
     props: { modelValue: false, camera: camera(1), ...props },
     attachTo: document.body,
     global: {
-      stubs: { ElDialog: DialogStub, ElTag: passthrough, ElIcon: passthrough, ElAlert: true, ElSwitch: SwitchStub },
+      stubs: { ElDialog: DialogStub, ElTag: passthrough, ElIcon: passthrough, ElAlert: true, ElSwitch: SwitchStub, ElButton: ButtonStub },
       directives: { loading: {} },
     },
   })
@@ -238,5 +243,151 @@ describe('CameraStreamDialog on a phone', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="recognition-switch"]').exists()).toBe(false)
+  })
+})
+
+describe('CameraStreamDialog reconnect', () => {
+  beforeEach(() => {
+    // Только таймеры: flushPromises работает через setImmediate.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function openDialog(props: Record<string, unknown> = {}) {
+    const wrapper = createWrapper(props)
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    return wrapper
+  }
+
+  async function failCurrentImage(wrapper: ReturnType<typeof createWrapper>) {
+    await wrapper.get('img').trigger('error')
+    await flushPromises()
+  }
+
+  async function advance(ms: number) {
+    await vi.advanceTimersByTimeAsync(ms)
+    await flushPromises()
+  }
+
+  it('requests a fresh signed url after an image error and reopens the stream', async () => {
+    const wrapper = await openDialog({ recognition: true })
+    const first = wrapper.get('img').element as HTMLImageElement
+    expect(apiClient.get).toHaveBeenCalledTimes(1)
+
+    await failCurrentImage(wrapper)
+    expect(first.getAttribute('src')).toBe(BLANK)
+    expect(wrapper.find('img').exists()).toBe(false)
+
+    await advance(1999)
+    expect(apiClient.get).toHaveBeenCalledTimes(1)
+
+    await advance(1)
+    expect(apiClient.get).toHaveBeenCalledTimes(2)
+    expect(apiClient.get).toHaveBeenLastCalledWith('/api/cameras/1/stream-url')
+    expect(wrapper.findAll('img')).toHaveLength(1)
+    expect(wrapper.get('img').attributes('src')).toMatch(/\/video_feed\?cameraId=1&exp=100&sig=r1&ts=\d+$/)
+  })
+
+  it('backs off 2s, 5s, 10s and gives up after 5 attempts in a row with a retry button', async () => {
+    const wrapper = await openDialog()
+    const delays = [2000, 5000, 10000, 10000, 10000]
+
+    for (const [index, delay] of delays.entries()) {
+      await failCurrentImage(wrapper)
+      await advance(delay - 1)
+      expect(apiClient.get).toHaveBeenCalledTimes(index + 1)
+      await advance(1)
+      expect(apiClient.get).toHaveBeenCalledTimes(index + 2)
+    }
+
+    await failCurrentImage(wrapper)
+    expect(wrapper.find('img').exists()).toBe(false)
+    expect(wrapper.get('[data-test="stream-unavailable"]').text()).toContain('cameras.streamUnavailable')
+
+    await advance(60000)
+    expect(apiClient.get).toHaveBeenCalledTimes(6)
+
+    await wrapper.get('[data-test="stream-retry"]').trigger('click')
+    await flushPromises()
+    expect(apiClient.get).toHaveBeenCalledTimes(7)
+    expect(wrapper.find('[data-test="stream-unavailable"]').exists()).toBe(false)
+    expect(wrapper.get('img').attributes('src')).toMatch(/^\/streams\/1\.mjpg/)
+
+    // После «Повторить» снова полный набор попыток, начиная с 2 с.
+    await failCurrentImage(wrapper)
+    await advance(2000)
+    expect(apiClient.get).toHaveBeenCalledTimes(8)
+  })
+
+  it('resets the attempt counter once a frame has loaded', async () => {
+    const wrapper = await openDialog()
+
+    await failCurrentImage(wrapper)
+    await advance(2000)
+    await failCurrentImage(wrapper)
+    await advance(5000)
+    expect(apiClient.get).toHaveBeenCalledTimes(3)
+
+    await wrapper.get('img').trigger('load')
+    await failCurrentImage(wrapper)
+    await advance(2000)
+    expect(apiClient.get).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps the dialog open and keeps retrying when the stream-url request fails', async () => {
+    const wrapper = await openDialog()
+    vi.mocked(apiClient.get).mockRejectedValueOnce(new Error('network'))
+
+    await failCurrentImage(wrapper)
+    await advance(2000)
+    expect(apiClient.get).toHaveBeenCalledTimes(2)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.find('img').exists()).toBe(false)
+
+    await advance(5000)
+    expect(apiClient.get).toHaveBeenCalledTimes(3)
+    expect(wrapper.get('img').attributes('src')).toMatch(/^\/streams\/1\.mjpg/)
+  })
+
+  it('does not reconnect after the dialog was closed during the pause', async () => {
+    const wrapper = await openDialog()
+
+    await failCurrentImage(wrapper)
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    await advance(30000)
+
+    expect(apiClient.get).toHaveBeenCalledTimes(1)
+    expect(document.querySelectorAll('img')).toHaveLength(0)
+  })
+
+  it('drops a pending reconnect when the camera changes', async () => {
+    const wrapper = await openDialog()
+
+    await failCurrentImage(wrapper)
+    await wrapper.setProps({ camera: camera(2) })
+    await flushPromises()
+    expect(apiClient.get).toHaveBeenCalledTimes(2)
+
+    await advance(30000)
+    expect(apiClient.get).toHaveBeenCalledTimes(2)
+    expect(wrapper.findAll('img')).toHaveLength(1)
+    expect(wrapper.get('img').attributes('src')).toMatch(/^\/streams\/2\.mjpg/)
+  })
+
+  it('ignores errors from the blanked image when the stream is cut on purpose', async () => {
+    const wrapper = await openDialog()
+    const img = wrapper.get('img').element as HTMLImageElement
+
+    await wrapper.setProps({ modelValue: false })
+    await flushPromises()
+    img.dispatchEvent(new Event('error'))
+    await advance(30000)
+
+    expect(apiClient.get).toHaveBeenCalledTimes(1)
   })
 })
