@@ -227,3 +227,64 @@ describe('Employees on a phone', () => {
     expect(inputs.every((input) => input.attributes('accept') === 'image/*')).toBe(true)
   })
 })
+
+describe('Employee bib number and shift color', () => {
+  const employeesWithBib = [
+    { id: 1, name: 'A', photoUrl: null, bibNumber: '17', shiftColor: 'blue' },
+    { id: 2, name: 'B', photoUrl: null, bibNumber: null, shiftColor: null },
+  ]
+
+  async function remount(isPhone: boolean) {
+    wrapper.unmount()
+    mobile.value = isPhone
+    vi.mocked(apiClient.get).mockImplementation(async (url) => ({
+      data: url === '/api/employees' ? employeesWithBib : [],
+    }))
+    wrapper = createWrapper()
+    await flushPromises()
+  }
+
+  function sentForm() {
+    const [, body] = vi.mocked(apiClient.put).mock.calls[0]
+    return body as FormData
+  }
+
+  it.each([false, true])('shows bib number and shift mark in the list (phone: %s)', async (isPhone) => {
+    await remount(isPhone)
+    expect(wrapper.findAll('[data-test="employee-bib"]')).toHaveLength(1)
+    const shift = wrapper.findAll('[data-test="employee-shift"]')
+    expect(shift).toHaveLength(1)
+    expect(shift[0].classes()).toContain('shift-mark--blue')
+    expect(shift[0].text()).toContain('employees.shiftColors.blue')
+  })
+
+  it('sends both fields on save and empty values to clear them', async () => {
+    await remount(false)
+    vi.mocked(apiClient.put).mockResolvedValue({ data: {} })
+    await editEmployee(0)
+    expect((wrapper.get('input[data-test="bib-number-input"]').element as HTMLInputElement).value).toBe('17')
+    await wrapper.get('input[data-test="bib-number-input"]').setValue(' 21 ')
+    await wrapper.findAll('button').find((b) => b.text() === 'common.actions.save')!.trigger('click')
+    await flushPromises()
+    expect(sentForm().get('bibNumber')).toBe('21')
+    expect(sentForm().get('shiftColor')).toBe('blue')
+
+    vi.mocked(apiClient.put).mockClear()
+    await editEmployee(1)
+    await wrapper.findAll('button').find((b) => b.text() === 'common.actions.save')!.trigger('click')
+    await flushPromises()
+    expect(sentForm().get('bibNumber')).toBe('')
+    expect(sentForm().get('shiftColor')).toBe('')
+  })
+
+  it('explains a duplicate bib number', async () => {
+    await remount(false)
+    vi.mocked(apiClient.put).mockRejectedValueOnce({
+      response: { status: 409, data: { error: 'Bib number is already used', code: 'BIB_NUMBER_TAKEN' } },
+    })
+    await editEmployee(0)
+    await wrapper.findAll('button').find((b) => b.text() === 'common.actions.save')!.trigger('click')
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalledWith('employees.bibNumberTaken')
+  })
+})

@@ -13,11 +13,30 @@ import { useIsMobile } from '@/composables/useIsMobile'
 const { t } = useI18n()
 const isMobile = useIsMobile()
 
+const SHIFT_COLORS = ['red', 'blue', 'green'] as const
+type ShiftColor = (typeof SHIFT_COLORS)[number]
+
 interface Employee {
   id: number
   name: string
+  bibNumber?: string | null
+  shiftColor?: ShiftColor | null
   photoUrl: string | null
   photoUrls?: string[]
+}
+
+function isShiftColor(value: unknown): value is ShiftColor {
+  return typeof value === 'string' && (SHIFT_COLORS as readonly string[]).includes(value)
+}
+
+function shiftColorLabel(color: ShiftColor) {
+  return t(`employees.shiftColors.${color}`)
+}
+
+/** Повторный номер манишки в компании: бэкенд отвечает 409 с кодом. */
+function isBibNumberTaken(error: unknown) {
+  const response = (error as { response?: { status?: number; data?: { code?: string } } })?.response
+  return response?.status === 409 && response.data?.code === 'BIB_NUMBER_TAKEN'
 }
 
 interface EmployeePhoto {
@@ -61,6 +80,8 @@ const editingEmployeePhotoUrl = ref<string | null>(null)
 
 const form = ref({
   name: '',
+  bibNumber: '',
+  shiftColor: '' as ShiftColor | '',
   photo: null as File | null,
   activityIds: [] as number[],
 })
@@ -273,6 +294,9 @@ async function handleSubmit() {
   try {
     const formData = new FormData()
     formData.append('name', form.value.name)
+    // Пустые значения отправляем явно: так бэкенд очищает поле при правке.
+    formData.append('bibNumber', (form.value.bibNumber || '').trim())
+    formData.append('shiftColor', form.value.shiftColor || '')
     if (form.value.photo) {
       formData.append('photo', form.value.photo)
     }
@@ -311,6 +335,10 @@ async function handleSubmit() {
     resetForm()
     await loadEmployees()
   } catch (error) {
+    if (isBibNumberTaken(error)) {
+      ElMessage.error(t('employees.bibNumberTaken'))
+      return
+    }
     ElMessage.error(extractErrorMessage(error, t('employees.saveError')))
   }
 }
@@ -356,6 +384,8 @@ function startEdit(employee: Employee) {
   dialogVisible.value = true
   form.value = {
     name: employee.name,
+    bibNumber: employee.bibNumber ?? '',
+    shiftColor: isShiftColor(employee.shiftColor) ? employee.shiftColor : '',
     photo: null,
     activityIds: [],
   }
@@ -377,7 +407,7 @@ function resetForm() {
   isEditing.value = false
   editingEmployeeId.value = null
   editingEmployeePhotoUrl.value = null
-  form.value = { name: '', photo: null, activityIds: [] }
+  form.value = { name: '', bibNumber: '', shiftColor: '', photo: null, activityIds: [] }
   fileList.value = []
   setPhotoPreview(null)
   resetGallery()
@@ -544,7 +574,21 @@ function onEmployeeAction(action: string, row: Employee) {
               </el-avatar>
               <span class="employee-card__text">
                 <span class="employee-card__name">{{ employee.name }}</span>
-                <span class="employee-card__meta">{{ t('common.labels.number') }} {{ employee.id }}</span>
+                <span class="employee-card__meta">
+                  {{ t('common.labels.number') }} {{ employee.id }}
+                  <span v-if="employee.bibNumber" class="employee-card__bib" data-test="employee-bib">
+                    · {{ t('employees.bibNumberShort', { n: employee.bibNumber }) }}
+                  </span>
+                  <span
+                    v-if="isShiftColor(employee.shiftColor)"
+                    class="shift-mark"
+                    :class="`shift-mark--${employee.shiftColor}`"
+                    data-test="employee-shift"
+                  >
+                    <span class="shift-mark__dot" aria-hidden="true" />
+                    {{ shiftColorLabel(employee.shiftColor) }}
+                  </span>
+                </span>
               </span>
             </button>
             <TableActionsMenu
@@ -571,6 +615,26 @@ function onEmployeeAction(action: string, row: Employee) {
         </el-table-column>
         
         <el-table-column prop="name" :label="t('employees.table.name')" min-width="180" />
+
+        <el-table-column :label="t('employees.table.bibNumber')" width="110">
+          <template #default="{ row }">
+            <span v-if="row.bibNumber" data-test="employee-bib">{{ row.bibNumber }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column :label="t('employees.table.shiftColor')" width="140">
+          <template #default="{ row }">
+            <span
+              v-if="isShiftColor(row.shiftColor)"
+              class="shift-mark"
+              :class="`shift-mark--${row.shiftColor}`"
+              data-test="employee-shift"
+            >
+              <span class="shift-mark__dot" aria-hidden="true" />
+              {{ shiftColorLabel(row.shiftColor) }}
+            </span>
+          </template>
+        </el-table-column>
 
         <el-table-column :label="t('common.labels.actions')" width="112" fixed="right" align="center">
           <template #default="{ row }">
@@ -625,6 +689,34 @@ function onEmployeeAction(action: string, row: Employee) {
       >
         <el-form-item :label="t('employees.dialog.name')" required>
           <el-input v-model="form.name" :placeholder="t('employees.dialog.namePlaceholder')" />
+        </el-form-item>
+
+        <el-form-item :label="t('employees.dialog.bibNumber')">
+          <el-input
+            v-model="form.bibNumber"
+            :placeholder="t('employees.dialog.bibNumberPlaceholder')"
+            maxlength="32"
+            clearable
+            data-test="bib-number-input"
+          />
+        </el-form-item>
+
+        <el-form-item :label="t('employees.dialog.shiftColor')">
+          <el-select
+            v-model="form.shiftColor"
+            clearable
+            :placeholder="t('employees.dialog.shiftColorPlaceholder')"
+            style="width: 100%"
+            data-test="shift-color-select"
+            :value-on-clear="''"
+          >
+            <el-option v-for="color in SHIFT_COLORS" :key="color" :label="shiftColorLabel(color)" :value="color">
+              <span class="shift-mark" :class="`shift-mark--${color}`">
+                <span class="shift-mark__dot" aria-hidden="true" />
+                {{ shiftColorLabel(color) }}
+              </span>
+            </el-option>
+          </el-select>
         </el-form-item>
 
         <el-form-item :label="t('employees.dialog.activities')">
@@ -915,6 +1007,38 @@ function onEmployeeAction(action: string, row: Employee) {
 .employee-card__meta {
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+
+/* Метка смены: цветная точка и подпись. Цвета фиксированные — это цвет манишки, а не тема. */
+.shift-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.shift-mark__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.shift-mark--red .shift-mark__dot {
+  background: #e5484d;
+}
+
+.shift-mark--blue .shift-mark__dot {
+  background: #2f6fed;
+}
+
+.shift-mark--green .shift-mark__dot {
+  background: #2f9e57;
+}
+
+.employee-card__meta .shift-mark {
+  margin-left: 8px;
 }
 
 @media (max-width: 768px) {
