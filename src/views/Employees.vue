@@ -33,10 +33,25 @@ function shiftColorLabel(color: ShiftColor) {
   return t(`employees.shiftColors.${color}`)
 }
 
-/** Повторный номер манишки в компании: бэкенд отвечает 409 с кодом. */
+interface BibErrorResponse {
+  status?: number
+  data?: { code?: string; bibNumber?: string; shiftColor?: string | null }
+}
+
+function bibErrorResponse(error: unknown) {
+  return (error as { response?: BibErrorResponse })?.response
+}
+
+/** Номер уже занят в этой смене компании: бэкенд отвечает 409 с кодом. */
 function isBibNumberTaken(error: unknown) {
-  const response = (error as { response?: { status?: number; data?: { code?: string } } })?.response
+  const response = bibErrorResponse(error)
   return response?.status === 409 && response.data?.code === 'BIB_NUMBER_TAKEN'
+}
+
+/** Номер без цвета смены: бэкенд отвечает 400 с кодом. */
+function isShiftColorRequired(error: unknown) {
+  const response = bibErrorResponse(error)
+  return response?.status === 400 && response.data?.code === 'SHIFT_COLOR_REQUIRED'
 }
 
 interface EmployeePhoto {
@@ -290,7 +305,26 @@ async function loadCompanyActivities() {
   }
 }
 
+/** Номер манишки уникален только внутри смены, поэтому без цвета его не сохранить. */
+const shiftColorRequiredError = computed(() =>
+  form.value.bibNumber.trim() && !form.value.shiftColor ? t('employees.dialog.shiftColorRequired') : ''
+)
+
+function bibNumberTakenMessage(error: unknown) {
+  const data = bibErrorResponse(error)?.data
+  const bibNumber = data?.bibNumber ?? form.value.bibNumber.trim()
+  const shiftColor = data?.shiftColor ?? form.value.shiftColor
+  if (!isShiftColor(shiftColor)) {
+    return t('employees.bibNumberTaken', { n: bibNumber })
+  }
+  return t('employees.bibNumberTakenInShift', { n: bibNumber, shift: t(`employees.shiftColorsIn.${shiftColor}`) })
+}
+
 async function handleSubmit() {
+  if (shiftColorRequiredError.value) {
+    ElMessage.error(shiftColorRequiredError.value)
+    return
+  }
   try {
     const formData = new FormData()
     formData.append('name', form.value.name)
@@ -336,7 +370,11 @@ async function handleSubmit() {
     await loadEmployees()
   } catch (error) {
     if (isBibNumberTaken(error)) {
-      ElMessage.error(t('employees.bibNumberTaken'))
+      ElMessage.error(bibNumberTakenMessage(error))
+      return
+    }
+    if (isShiftColorRequired(error)) {
+      ElMessage.error(t('employees.dialog.shiftColorRequired'))
       return
     }
     ElMessage.error(extractErrorMessage(error, t('employees.saveError')))
@@ -701,7 +739,7 @@ function onEmployeeAction(action: string, row: Employee) {
           />
         </el-form-item>
 
-        <el-form-item :label="t('employees.dialog.shiftColor')">
+        <el-form-item :label="t('employees.dialog.shiftColor')" :error="shiftColorRequiredError">
           <el-select
             v-model="form.shiftColor"
             clearable

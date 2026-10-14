@@ -288,12 +288,19 @@ const ru = {
     savedButActivitiesFailed: 'Сотрудник сохранён, но активности назначить не удалось',
     loadError: 'Не удалось загрузить сотрудников',
     saveError: 'Не удалось сохранить сотрудника',
-    bibNumberTaken: 'Этот номер манишки уже занят другим сотрудником',
+    bibNumberTaken: 'Номер {n} уже занят',
+    bibNumberTakenInShift: 'Номер {n} уже занят в {shift} смене',
     bibNumberShort: 'Манишка {n}',
     shiftColors: {
       red: 'Красный',
       blue: 'Синий',
       green: 'Зелёный',
+    },
+    /** Цвет смены в форме «в … смене». */
+    shiftColorsIn: {
+      red: 'красной',
+      blue: 'синей',
+      green: 'зелёной',
     },
     deleteConfirmText: 'Вы уверены, что хотите удалить этого сотрудника?',
     deleteConfirmTitle: 'Подтверждение',
@@ -322,6 +329,7 @@ const ru = {
       bibNumberPlaceholder: 'Например, 17',
       shiftColor: 'Цвет смены',
       shiftColorPlaceholder: 'Не задан',
+      shiftColorRequired: 'Номер манишки повторяется в разных сменах — выберите цвет смены',
       roleText: 'Должность (текст)',
       rolePlaceholder: 'Необязательно (старое поле)',
       activities: 'Активности',

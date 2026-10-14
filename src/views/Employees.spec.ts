@@ -277,14 +277,46 @@ describe('Employee bib number and shift color', () => {
     expect(sentForm().get('shiftColor')).toBe('')
   })
 
-  it('explains a duplicate bib number', async () => {
+  function clickSave() {
+    return wrapper.findAll('button').find((b) => b.text() === 'common.actions.save')!.trigger('click')
+  }
+
+  it('explains a duplicate bib number in the shift', async () => {
     await remount(false)
     vi.mocked(apiClient.put).mockRejectedValueOnce({
-      response: { status: 409, data: { error: 'Bib number is already used', code: 'BIB_NUMBER_TAKEN' } },
+      response: {
+        status: 409,
+        data: { error: 'Номер 17 уже занят в синей смене', code: 'BIB_NUMBER_TAKEN', bibNumber: '17', shiftColor: 'blue' },
+      },
     })
     await editEmployee(0)
-    await wrapper.findAll('button').find((b) => b.text() === 'common.actions.save')!.trigger('click')
+    await clickSave()
     await flushPromises()
-    expect(ElMessage.error).toHaveBeenCalledWith('employees.bibNumberTaken')
+    expect(ElMessage.error).toHaveBeenCalledWith('employees.bibNumberTakenInShift')
+  })
+
+  it('asks for a shift color when only the bib number is entered', async () => {
+    await remount(false)
+    await editEmployee(1)
+    const shiftItem = () => wrapper.get('[data-test="shift-color-select"]').element.closest('.el-form-item')!
+    expect(shiftItem().classList.contains('is-error')).toBe(false)
+    await wrapper.get('input[data-test="bib-number-input"]').setValue('5')
+    await flushPromises()
+    expect(shiftItem().classList.contains('is-error')).toBe(true)
+    await clickSave()
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalledWith('employees.dialog.shiftColorRequired')
+    expect(apiClient.put).not.toHaveBeenCalled()
+  })
+
+  it('explains the server refusal of a bib number without shift color', async () => {
+    await remount(false)
+    vi.mocked(apiClient.put).mockRejectedValueOnce({
+      response: { status: 400, data: { error: 'Shift color is required', code: 'SHIFT_COLOR_REQUIRED' } },
+    })
+    await editEmployee(0)
+    await clickSave()
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalledWith('employees.dialog.shiftColorRequired')
   })
 })
