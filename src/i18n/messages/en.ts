@@ -288,12 +288,19 @@ const en = {
     savedButActivitiesFailed: 'Employee saved, but activities could not be assigned',
     loadError: 'Failed to load employees',
     saveError: 'Failed to save employee',
-    bibNumberTaken: 'This bib number is already used by another employee',
+    bibNumberTaken: 'Bib {n} is already taken',
+    bibNumberTakenInShift: 'Bib {n} is already taken in the {shift} shift',
     bibNumberShort: 'Bib {n}',
     shiftColors: {
       red: 'Red',
       blue: 'Blue',
       green: 'Green',
+    },
+    /** Цвет смены в форме «в … смене». */
+    shiftColorsIn: {
+      red: 'red',
+      blue: 'blue',
+      green: 'green',
     },
     deleteConfirmText: 'Are you sure you want to delete this employee?',
     deleteConfirmTitle: 'Confirmation',
@@ -322,6 +329,7 @@ const en = {
       bibNumberPlaceholder: 'For example, 17',
       shiftColor: 'Shift color',
       shiftColorPlaceholder: 'Not set',
+      shiftColorRequired: 'Bib numbers repeat across shifts, so choose a shift color',
       roleText: 'Position (text)',
       rolePlaceholder: 'Optional (legacy field)',
       activities: 'Activities',
