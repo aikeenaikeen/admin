@@ -93,11 +93,8 @@ const menuItems = computed(() => {
 
   ]
 
-  if (authStore.isSuperAdmin || authStore.isCompanyAdmin) {
-    items.push({ index: '/labeling', title: t('layout.menu.labeling'), icon: EditPen })
-  }
-
   if (authStore.isSuperAdmin) {
+    items.push({ index: '/labeling', title: t('layout.menu.labeling'), icon: EditPen })
     items.push({ index: '/activities', title: t('layout.menu.activities'), icon: Operation })
     items.push({ index: '/companies', title: t('layout.menu.companies'), icon: OfficeBuilding })
     items.push({ index: '/users', title: t('layout.menu.users'), icon: Setting })
